@@ -5,7 +5,7 @@
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
-            [taoensso.faraday.utils :as utils])
+            [taoensso.faraday.utils :as utils :refer (fmap)])
   (:import  [com.amazonaws.services.dynamodb.model
              AttributeValue
              BatchGetItemRequest
@@ -79,9 +79,9 @@
   "Get the value of an AttributeValue object."
   [attr-value]
   (or (.getS attr-value)
-      (-?>> (.getN attr-value)  to-long)
-      (-?>> (.getNS attr-value) (map to-long) (into #{}))
-      (-?>> (.getSS attr-value) (into #{}))))
+      (some->> (.getN attr-value)  to-long)
+      (some->> (.getNS attr-value) (map to-long) (into #{}))
+      (some->> (.getSS attr-value) (into #{}))))
 
 (defn- key-schema-element
   "Create a KeySchemaElement object."
@@ -184,9 +184,9 @@
   BatchResponse
   (as-map [result]
     {:consumed-capacity-units (.getConsumedCapacityUnits result)
-     :items (-?>> (.getItems result) 
-                  (into []) 
-                  (fmap #(fmap get-value (into {} %))))})
+     :items (some->> (.getItems result)
+                     (into [])
+                     (fmap #(fmap get-value (into {} %))))})
   KeysAndAttributes
   (as-map [result]
     (merge
