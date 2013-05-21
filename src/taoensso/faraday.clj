@@ -5,7 +5,7 @@
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
-            [taoensso.faraday.utils :as utils :refer (fmap)])
+            [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodb.model
              AttributeValue
              BatchGetItemRequest
@@ -32,9 +32,9 @@
              ProvisionedThroughputDescription
              PutItemRequest
              PutRequest
+             QueryRequest
              ResourceNotFoundException
              ScanRequest
-             QueryRequest
              WriteRequest]
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.services.dynamodb.AmazonDynamoDBClient))
@@ -51,59 +51,61 @@
 ;; * Non-PR forks.
 
 ;;;; TODO
-;; * Missing deps.
 ;; * Code walk-through.
+;; * Reflection warnings.
 ;; * Update SDK dep.
 ;; * Update to v2 API.
 ;; * Go through Rotary PRs.
 ;; * Bin support + serialization.
-;; * Docs.
 ;; * Tests!
+;; * Docs.
+;; * Bench.
+
+;;;; Database connection/client
 
 (defn- db-client*
-  "Get a AmazonDynamoDBClient instance for the supplied credentials."
-  [cred]
-  (let [aws-creds (BasicAWSCredentials. (:access-key cred) (:secret-key cred))
-        client (AmazonDynamoDBClient. aws-creds)]
-    (when-let [endpoint (:endpoint cred)]
-      (.setEndpoint client endpoint))
+  "Returns an AmazonDynamoDBClient instance for the supplied IAM credentials."
+  [{:keys [access-key secret-key endpoint] :as creds}]
+  (let [aws-creds (BasicAWSCredentials. access-key secret-key)
+        client    (AmazonDynamoDBClient. aws-creds)]
+    (when endpoint (.setEndpoint client endpoint))
     client))
 
 (def db-client (memoize db-client*))
+
+;;;; Coercions ; TODO ?
 
 (defprotocol AsMap (as-map [x]))
 
 (defn- to-long [x] (Long. x))
 
-(defn- get-value
-  "Get the value of an AttributeValue object."
-  [attr-value]
+(defn- get-value "Returns the value of an AttributeValue object."
+  [attr-value] ; TODO ?
   (or (.getS attr-value)
       (some->> (.getN attr-value)  to-long)
       (some->> (.getNS attr-value) (map to-long) (into #{}))
       (some->> (.getSS attr-value) (into #{}))))
 
-(defn- key-schema-element
-  "Create a KeySchemaElement object."
-  [{key-name :name, key-type :type}]
+(defn- key-schema-element "Returns a new KeySchemaElement object."
+  [{key-name :name key-type :type}]
   (doto (KeySchemaElement.)
     (.setAttributeName (str key-name))
     (.setAttributeType (str/upper-case (name key-type)))))
 
-(defn- key-schema
-  "Create a KeySchema object."
+(defn- key-schema "Returns a new KeySchema object."
   [hash-key & [range-key]]
   (let [schema (KeySchema. (key-schema-element hash-key))]
     (when range-key
       (.setRangeKeyElement schema (key-schema-element range-key)))
     schema))
 
-(defn- provisioned-throughput
-  "Created a ProvisionedThroughput object."
-  [{read-units :read, write-units :write}]
+(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
+  [{read-units :read write-units :write}]
   (doto (ProvisionedThroughput.)
-    (.setReadCapacityUnits (long read-units))
+    (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
+
+;;;; TODO Dev
 
 (defn create-table
   "Create a table in DynamoDB with the given map of properties. The properties
@@ -122,28 +124,26 @@
 
   The throughput is a map with two keys:
     :read  - the provisioned number of reads per second
-    :write - the provisioned number of writes per second"
-  [cred {:keys [name hash-key range-key throughput]}]
+    :write - the provisioned number of writes per second" ; TODO
+  [creds {:keys [name hash-key range-key throughput]}]
   (.createTable
-   (db-client cred)
+   (db-client creds)
    (doto (CreateTableRequest.)
      (.setTableName (str name))
      (.setKeySchema (key-schema hash-key range-key))
-     (.setProvisionedThroughput
-      (provisioned-throughput throughput)))))
+     (.setProvisionedThroughput (provisioned-throughput throughput)))))
 
 (defn update-table
   "Update a table in DynamoDB with the given name. Only the throughput may be
   updated. The throughput values can be increased by no more than a factor of
   two over the current values (e.g. if your read throughput was 20, you could
-  only set it from 1 to 40). See create-table."
-  [cred {:keys [name throughput]}]
+  only set it from 1 to 40). See create-table." ; TODO
+  [creds {:keys [name throughput]}]
   (.updateTable
-   (db-client cred)
+   (db-client creds)
    (doto (UpdateTableRequest.)
      (.setTableName (str name))
-     (.setProvisionedThroughput
-      (provisioned-throughput throughput)))))
+     (.setProvisionedThroughput (provisioned-throughput throughput)))))
 
 (extend-protocol AsMap
   KeySchemaElement
@@ -155,8 +155,8 @@
   KeySchema
   (as-map [schema]
     (merge
-     (if-let [e (.getHashKeyElement schema)]  {:hash-key  (as-map e)} {})
-     (if-let [e (.getRangeKeyElement schema)] {:range-key (as-map e)} {})))
+     (when-let [e (.getHashKeyElement schema)]  {:hash-key  (as-map e)})
+     (when-let [e (.getRangeKeyElement schema)] {:range-key (as-map e)})))
   ProvisionedThroughputDescription
   (as-map [throughput]
     {:read  (.getReadCapacityUnits throughput)
@@ -178,56 +178,54 @@
   (as-map [result]
     {:consumed-capacity-units (.getConsumedCapacityUnits result)})
   BatchWriteItemResult
-  (as-map [result]    
-    {:responses         (fmap as-map (into {} (.getResponses result)))
+  (as-map [result]
+    {:responses         (utils/fmap as-map (into {} (.getResponses result)))
      :unprocessed-items (.getUnprocessedItems result)})
   BatchResponse
   (as-map [result]
     {:consumed-capacity-units (.getConsumedCapacityUnits result)
      :items (some->> (.getItems result)
                      (into [])
-                     (fmap #(fmap get-value (into {} %))))})
+                     (utils/fmap #(utils/fmap get-value (into {} %))))})
   KeysAndAttributes
   (as-map [result]
     (merge
-      (if-let [a (.getAttributesToGet result)] {:attrs (into [] a)} {})
-      (if-let [c (.getConsistentRead result)]  {:consistent c} nil)
-      (if-let [k (.getKeys result)]            {:keys (fmap as-map (into [] k))} {})))
+     (when-let [a (.getAttributesToGet result)] {:attrs (into [] a)})
+     (when-let [c (.getConsistentRead result)]  {:consistent c})
+     (when-let [k (.getKeys result)]            {:keys (utils/fmap as-map (into [] k))})))
   BatchGetItemResult
   (as-map [result]
-    {:responses        (fmap as-map (into {} (.getResponses result)))
-     :unprocessed-keys (fmap as-map (into {} (.getUnprocessedKeys result)))}))
+    {:responses        (utils/fmap as-map (into {} (.getResponses result)))
+     :unprocessed-keys (utils/fmap as-map (into {} (.getUnprocessedKeys result)))}))
 
 (defn describe-table
   "Returns a map describing the table in DynamoDB with the given name, or nil
-  if the table does not exist."
-  [cred name]
-  (try
-    (as-map
-     (.describeTable
-      (db-client cred)
-      (doto (DescribeTableRequest.)
-        (.setTableName name))))
-    (catch ResourceNotFoundException _
-      nil)))
+  if the table doesn't exist."
+  [creds name]
+  (try (as-map
+        (.describeTable
+         (db-client creds)
+         (doto (DescribeTableRequest.)
+           (.setTableName name))))
+       (catch ResourceNotFoundException _)))
 
 (defn ensure-table
   "Creates the table if it does not already exist."
-  [cred {name :name :as properties}]
-  (if-not (describe-table cred name)
-    (create-table cred properties)))
+  [creds {name :name :as properties}]
+  (if-not (describe-table creds name)
+    (create-table creds properties)))
 
 (defn delete-table
   "Delete a table in DynamoDB with the given name."
-  [cred name]
+  [creds name]
   (.deleteTable
-   (db-client cred)
+   (db-client creds)
    (DeleteTableRequest. name)))
 
 (defn list-tables
   "Return a list of tables in DynamoDB."
-  [cred]
-  (-> (db-client cred)
+  [creds]
+  (-> (db-client creds)
       .listTables
       .getTableNames
       seq))
@@ -250,7 +248,7 @@
   "Turn a item in DynamoDB into a Clojure map."
   [item]
   (if item
-    (fmap get-value (into {} item))))
+    (utils/fmap get-value (into {} item))))
 
 (extend-protocol AsMap
   GetItemResult
@@ -259,9 +257,9 @@
 
 (defn put-item
   "Add an item (a Clojure map) to a DynamoDB table."
-  [cred table item]
+  [creds table item]
   (.putItem
-   (db-client cred)
+   (db-client creds)
    (doto (PutItemRequest.)
      (.setTableName table)
      (.setItem
@@ -281,19 +279,19 @@
 
 (defn get-item
   "Retrieve an item from a DynamoDB table by its hash key."
-  [cred table hash-key]
+  [creds table hash-key]
   (as-map
    (.getItem
-    (db-client cred)
+    (db-client creds)
     (doto (GetItemRequest.)
       (.setTableName table)
       (.setKey (item-key {:hash-key hash-key}))))))
 
 (defn delete-item
   "Delete an item from a DynamoDB table by its hash key."
-  [cred table hash-key]
+  [creds table hash-key]
   (.deleteItem
-   (db-client cred)
+   (db-client creds)
    (DeleteItemRequest. table (item-key {:hash-key hash-key}))))
 
 (extend-protocol AsMap
@@ -331,15 +329,15 @@
    key :unprocessed-keys. 
 
    Examples:
-   (batch-get-item cred
+   (batch-get-item creds
      {:users [\"alice\" \"bob\"]
       :posts {:keys [1 2 3]
               :attrs [\"timestamp\" \"subject\"]
               :consistent true}})"
-  [cred requests]
+  [creds requests]
   (as-map
     (.batchGetItem
-      (db-client cred)
+      (db-client creds)
       (doto (BatchGetItemRequest.)
         (.setRequestItems (batch-request-items requests))))))
 
@@ -367,17 +365,17 @@
    guarantees are provided, nor conditional puts.
    
    Example:
-   (batch-write-item cred
+   (batch-write-item creds
      [:put :users {:user-id 1 :username \"sally\"}]
      [:put :users {:user-id 2 :username \"jane\"}]
      [:delete :users {:hash-key 3}])"
-  [cred & requests]
+  [creds & requests]
   (as-map
     (.batchWriteItem
-      (db-client cred)
+      (db-client creds)
       (doto (BatchWriteItemRequest.)
         (.setRequestItems
-         (fmap
+         (utils/fmap
           (fn [reqs]
             (reduce
              #(conj %1 (write-request (first %2) (last %2)))
@@ -411,10 +409,10 @@
     :items    - the list of items returned
     :count    - the count of items matching the query
     :last-key - the last evaluated key (useful for paging) "
-  [cred table & [options]]
+  [creds table & [options]]
   (result-map
    (.scan
-    (db-client cred)
+    (db-client creds)
     (scan-request table options))))
 
 (defn- set-range-condition
@@ -473,9 +471,9 @@
     :items    - the list of items returned
     :count    - the count of items matching the query
     :last-key - the last evaluated key (useful for paging)"
-  [cred table hash-key & range-and-options]
+  [creds table hash-key & range-and-options]
   (let [[range options] (extract-range range-and-options)]
     (result-map
      (.query
-      (db-client cred)
+      (db-client creds)
       (query-request table hash-key range options)))))

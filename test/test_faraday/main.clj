@@ -4,41 +4,41 @@
   ;; (:require [taoensso.faraday :as far]) ; TODO
   )
 
-(def cred {:access-key "",
-           :secret-key ""})
+(def creds {:access-key ""
+            :secret-key ""})
 
 (def table "")
 (def id "")
 (def attr "")
 
 (deftest test-batch-simple
-  (batch-write-item cred
+  (batch-write-item creds
     [:delete table {:hash-key "1"}]
     [:delete table {:hash-key "2"}]
     [:delete table {:hash-key "3"}]
     [:delete table {:hash-key "4"}])
 
-  (batch-write-item cred
+  (batch-write-item creds
     [:put table {id "1" attr "foo"}]
     [:put table {id "2" attr "bar"}]
     [:put table {id "3" attr "baz"}]
     [:put table {id "4" attr "foobar"}])
 
-  (let [result (batch-get-item cred table '("1" "2" "3" "4"))
-        consis (batch-get-item cred {
+  (let [result (batch-get-item creds table '("1" "2" "3" "4"))
+        consis (batch-get-item creds {
                  table {
                    :consistent true
                    :keys ["1" "2" "3" "4"]}})
-        attrs  (batch-get-item cred {
+        attrs  (batch-get-item creds {
                  table {
                    :consistent true
                    :attrs [attr]
                    :keys ["1" "2" "3" "4"]}})
         items  (get-in result [:responses table :items])
-        item-1 (get-item cred table "1")
-        item-2 (get-item cred table "2")
-        item-3 (get-item cred table "3")
-        item-4 (get-item cred table "4")]
+        item-1 (get-item creds table "1")
+        item-2 (get-item creds table "2")
+        item-3 (get-item creds table "3")
+        item-4 (get-item creds table "4")]
 
     (is (= "foo" (item-1 attr)) "batch-write-item :put failed")
     (is (= "bar" (item-2 attr)) "batch-write-item :put failed")
@@ -50,13 +50,13 @@
     (is (= true (some #(= (% attr) "baz") (get-in attrs [:responses table :items]))))
     (is (= true (some #(= (% attr) "foobar") items)))
 
-    (batch-write-item cred
+    (batch-write-item creds
       [:delete table {:hash-key "1"}]
       [:delete table {:hash-key "2"}]
       [:delete table {:hash-key "3"}]
       [:delete table {:hash-key "4"}])
 
-    (is (= nil (get-item cred table "1")) "batch-write-item :delete failed")
-    (is (= nil (get-item cred table "2")) "batch-write-item :delete failed")
-    (is (= nil (get-item cred table "3")) "batch-write-item :delete failed")
-    (is (= nil (get-item cred table "4")) "batch-write-item :delete failed")))
+    (is (= nil (get-item creds table "1")) "batch-write-item :delete failed")
+    (is (= nil (get-item creds table "2")) "batch-write-item :delete failed")
+    (is (= nil (get-item creds table "3")) "batch-write-item :delete failed")
+    (is (= nil (get-item creds table "4")) "batch-write-item :delete failed")))
