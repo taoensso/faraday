@@ -2,7 +2,7 @@
   (:use     [clojure.test]
             [taoensso.faraday])
   (:require [taoensso.faraday :as far]) ; TODO
-  )
+  (:import com.amazonaws.services.dynamodb.model.ConditionalCheckFailedException))
 
 (def creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
             :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")})
@@ -64,3 +64,30 @@
     (is (= nil (get-item creds table "2")) "batch-write-item :delete failed")
     (is (= nil (get-item creds table "3")) "batch-write-item :delete failed")
     (is (= nil (get-item creds table "4")) "batch-write-item :delete failed")))
+
+(deftest conditional-put
+  (batch-write-item creds
+                    [:delete table {:hash-key "42"}]
+                    [:delete table {:hash-key "9"}]
+                    [:delete table {:hash-key "6"}]
+                    [:delete table {:hash-key "23"}])
+  (batch-write-item creds
+                    [:put table {id "42" attr "foo"}]
+                    [:put table {id "6" attr "foobar"}]
+                    [:put table {id "9" attr "foobaz"}])
+
+  ;; Should update item 42 to have attr bar
+  (put-item creds table {id "42" attr "bar"} :expected {attr "foo"})
+  (is (= "bar" ((get-item creds table "42") attr)))
+
+  ;; Should fail to update item 6
+  (is (thrown? ConditionalCheckFailedException (put-item creds table {id "6" attr "baz"} :expected {id false})))
+  (is (not (= "baz" ((get-item creds table "6") attr))))
+
+  ;; Should upate item 9 to have attr baz
+  (put-item creds table {id "9" attr "baz"} :expected {attr "foobaz"})
+  (is (= "baz" ((get-item creds table "9") attr)))
+
+  ;; Should add item 23
+  (put-item creds table {id "23" attr "bar"} :expected {id false})
+  (is (not (= nil (get-item creds table "23")))))

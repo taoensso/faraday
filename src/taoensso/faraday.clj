@@ -22,6 +22,7 @@
              DeleteTableRequest
              DeleteItemRequest
              DeleteRequest
+             ExpectedAttributeValue
              GetItemRequest
              GetItemResult
              Key
@@ -42,10 +43,8 @@
 
 ;;;; TODO Rotary PRs
 ;; * Feature/can update dynamo items (mrgordon)
-;; * Support conditional PUT (BestFriendChris)
 ;; * More flexible key support and additional options from SDK (mrgordon)
 ;; * Added support for binary values (mantree)
-;; * Add support for making conditional put requests (edpaget)
 ;; * Upgrade to use dynamodb v2 api (edpaget)
 ;; * Local secondary indexes (edpaget)
 ;; * Non-PR forks.
@@ -258,9 +257,28 @@
   (as-map [result]
     (item-map (.getItem result))))
 
+(defn- set-expected-value! ; TODO PR
+  "Makes a Put request conditional by setting its expected value"
+  [req expected]
+  (when expected
+    (.setExpected req (utils/fmap #(if (instance? Boolean %)
+                                     (ExpectedAttributeValue. %)
+                                     (ExpectedAttributeValue. (to-attr-value %)))
+                                  expected))))
+
 (defn put-item
-  "Add an item (a Clojure map) to a DynamoDB table."
-  [creds table item]
+  ;;"Add an item (a Clojure map) to a DynamoDB table."
+  "Add an item (a Clojure map) to a DynamoDB table. Optionally accepts
+  a map after :expected that declares expected values of the item in DynamoDB
+  or the Boolean false if they are not expected to be present. If the condition
+  is not met, it fails with a ConditionalCheckFailedException.
+
+  Example: (would not add item if it already exists))
+    (put-item credentials \"table\"
+      {\"id\" 1 \"attr\" \"foo\"}
+      :expected {\"id\" false})"
+  [creds table item & {:keys [expected]}] ; TODO PR
+  ;; [creds table item]
   (.putItem
    (db-client creds)
    (doto (PutItemRequest.)
@@ -268,7 +286,8 @@
      (.setItem
       (into {}
             (for [[k v] item]
-              [(name k) (to-attr-value v)]))))))
+              [(name k) (to-attr-value v)])))
+     (set-expected-value! expected))))
 
 (defn- item-key
   "Create a Key object from a value."
