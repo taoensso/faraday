@@ -2,9 +2,10 @@
   "Clojure DynamoDB client. A fork of Rotary by James Reeves,
   Ref. https://github.com/weavejester/rotary"
   {:author "Peter Taoussanis"}
-  (:require [clojure.string  :as str]
-            [taoensso.timbre :as timbre]
-            [taoensso.nippy  :as nippy])
+  (:require [clojure.string         :as str]
+            [taoensso.timbre        :as timbre]
+            [taoensso.nippy         :as nippy]
+            [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodb.model
              AttributeValue
              BatchGetItemRequest
