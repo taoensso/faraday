@@ -2,7 +2,9 @@
   "Clojure DynamoDB client. A fork of Rotary by James Reeves,
   Ref. https://github.com/weavejester/rotary"
   {:author "Peter Taoussanis"}
-  (:require [clojure.string :as str])
+  (:require [clojure.string  :as str]
+            [taoensso.timbre :as timbre]
+            [taoensso.nippy  :as nippy])
   (:import  [com.amazonaws.services.dynamodb.model
              AttributeValue
              BatchGetItemRequest
@@ -35,6 +37,27 @@
              WriteRequest]
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.services.dynamodb.AmazonDynamoDBClient))
+
+;;;; TODO Rotary PRs
+;; * Added proxy support (cesarpinera)
+;; * Feature/can update dynamo items (mrgordon)
+;; * Support conditional PUT (BestFriendChris)
+;; * More flexible key support and additional options from SDK (mrgordon)
+;; * Added support for binary values (mantree)
+;; * Add support for making conditional put requests (edpaget)
+;; * Upgrade to use dynamodb v2 api (edpaget)
+;; * Local secondary indexes (edpaget)
+;; * Non-PR forks.
+
+;;;; TODO
+;; * Missing deps.
+;; * Code walk-through.
+;; * Update SDK dep.
+;; * Update to v2 API.
+;; * Go through Rotary PRs.
+;; * Bin support + serialization.
+;; * Docs.
+;; * Tests!
 
 (defn- db-client*
   "Get a AmazonDynamoDBClient instance for the supplied credentials."
