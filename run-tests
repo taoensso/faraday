@@ -1,0 +1,12 @@
+#!/bin/bash
+
+if [ ! -f .env ];
+then
+    echo "ABORTING: ./.env file not found!"
+    echo "Please see .env.example."
+    exit 1
+else
+    echo "Using ./.env for DynamoDB IAM creds..."
+    source .env
+    lein with-profile test test
+fi
