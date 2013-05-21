@@ -1,7 +1,7 @@
 (ns test-faraday.main
   (:use [clojure.test]
         [taoensso.faraday])
-  ;; (:require [taoensso.faraday :as faraday]) ; TODO
+  ;; (:require [taoensso.faraday :as far]) ; TODO
   )
 
 (def cred {:access-key "",

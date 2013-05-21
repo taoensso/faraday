@@ -28,7 +28,7 @@ Depend on Faraday in your `project.clj`:
 and `require` the library:
 
 ```clojure
-(ns my-app (:require [taoensso.faraday :as faraday]))
+(ns my-app (:require [taoensso.faraday :as far]))
 ```
 
 ## TODO Documentation
