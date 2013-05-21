@@ -36,11 +36,11 @@
              ResourceNotFoundException
              ScanRequest
              WriteRequest]
+            com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.services.dynamodb.AmazonDynamoDBClient))
 
 ;;;; TODO Rotary PRs
-;; * Added proxy support (cesarpinera)
 ;; * Feature/can update dynamo items (mrgordon)
 ;; * Support conditional PUT (BestFriendChris)
 ;; * More flexible key support and additional options from SDK (mrgordon)
@@ -65,11 +65,14 @@
 
 (defn- db-client*
   "Returns an AmazonDynamoDBClient instance for the supplied IAM credentials."
-  [{:keys [access-key secret-key endpoint] :as creds}]
-  (let [aws-creds (BasicAWSCredentials. access-key secret-key)
-        client    (AmazonDynamoDBClient. aws-creds)]
-    (when endpoint (.setEndpoint client endpoint))
-    client))
+  [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
+  (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+        client-config (ClientConfiguration.)]
+    (when proxy-host (.setProxyHost client-config proxy-host))
+    (when proxy-port (.setProxyPort client-config proxy-port))
+    (let [client (AmazonDynamoDBClient. aws-creds client-config)]
+      (when endpoint (.setEndpoint client endpoint))
+      client)))
 
 (def db-client (memoize db-client*))
 
