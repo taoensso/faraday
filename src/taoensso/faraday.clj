@@ -60,10 +60,10 @@
 ;; * Docs.
 ;; * Bench.
 
-;;;; Database connection/client
+;;;; DynamoDB API objects
 
 (defn- db-client*
-  "Returns an AmazonDynamoDBClient instance for the supplied IAM credentials."
+  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
   [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
   (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
         client-config (ClientConfiguration.)]
@@ -75,17 +75,13 @@
 
 (def db-client (memoize db-client*))
 
-;;;; Coercions ; TODO ?
-
-(defprotocol AsMap (as-map [x]))
-
-(defn- to-long [x] (Long. x))
+(defn- coerce-num [x] (if (.contains x ".") (Double. x) (Long. x)))
 
 (defn- get-value "Returns the value of an AttributeValue object."
-  [attr-value] ; TODO ?
+  [attr-value]
   (or (.getS attr-value)
-      (some->> (.getN attr-value)  to-long)
-      (some->> (.getNS attr-value) (map to-long) (into #{}))
+      (some->> (.getN attr-value)  coerce-num)
+      (some->> (.getNS attr-value) (map coerce-num) (into #{}))
       (some->> (.getSS attr-value) (into #{}))))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
@@ -126,7 +122,7 @@
 
   The throughput is a map with two keys:
     :read  - the provisioned number of reads per second
-    :write - the provisioned number of writes per second" ; TODO
+    :write - the provisioned number of writes per second"
   [creds {:keys [name hash-key range-key throughput]}]
   (.createTable
    (db-client creds)
@@ -139,13 +135,15 @@
   "Update a table in DynamoDB with the given name. Only the throughput may be
   updated. The throughput values can be increased by no more than a factor of
   two over the current values (e.g. if your read throughput was 20, you could
-  only set it from 1 to 40). See create-table." ; TODO
+  only set it from 1 to 40). See create-table."
   [creds {:keys [name throughput]}]
   (.updateTable
    (db-client creds)
    (doto (UpdateTableRequest.)
      (.setTableName (str name))
      (.setProvisionedThroughput (provisioned-throughput throughput)))))
+
+(defprotocol AsMap (as-map [x]))
 
 (extend-protocol AsMap
   KeySchemaElement
@@ -348,7 +346,7 @@
   "Retrieve a batch of items in a single request. DynamoDB limits
    apply - 100 items and 1MB total size limit. Requested items
    which were elided by Amazon are available in the returned map
-   key :unprocessed-keys. 
+   key :unprocessed-keys.
 
    Examples:
    (batch-get-item creds
@@ -367,7 +365,7 @@
   (doto (DeleteRequest.)
     (.setKey (item-key item))))
 
-(defn- put-request [item]  
+(defn- put-request [item]
   (doto (PutRequest.)
     (.setItem
       (into {}
@@ -385,7 +383,7 @@
   "Execute a batch of Puts and/or Deletes in a single request.
    DynamoDB limits apply - 25 items max. No transaction
    guarantees are provided, nor conditional puts.
-   
+
    Example:
    (batch-write-item creds
      [:put :users {:user-id 1 :username \"sally\"}]
