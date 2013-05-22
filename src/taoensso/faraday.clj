@@ -76,18 +76,6 @@
 
 (def db-client (memoize db-client*))
 
-(defn- coerce-num [x] (if (.contains x ".") (Double. x) (Long. x)))
-(defn- coerce-ba  [^ByteBuffer bb] (.array bb))
-
-(defn- get-value "Returns the value of an AttributeValue object."
-  [attr-value]
-  (or (.getS attr-value)
-      (some->> (.getN  attr-value) coerce-num)
-      (some->> (.getB  attr-value) coerce-ba)
-      (some->> (.getSS attr-value) (into #{}))
-      (some->> (.getNS attr-value) (map coerce-num) (into #{}))
-      (some->> (.getBS attr-value) (map coerce-ba)  (into #{}))))
-
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [{key-name :name key-type :type}]
   (doto (KeySchemaElement.)
@@ -106,6 +94,20 @@
   (doto (ProvisionedThroughput.)
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
+
+;;;; Coercions
+
+(defn- coerce-num [x] (if (.contains x ".") (Double. x) (Long. x)))
+(defn- coerce-ba  [^ByteBuffer bb] (.array bb))
+
+(defn- get-value "Returns the value of an AttributeValue object."
+  [attr-value]
+  (or (.getS attr-value)
+      (some->> (.getN  attr-value) coerce-num)
+      (some->> (.getB  attr-value) coerce-ba)
+      (some->> (.getSS attr-value) (into #{}))
+      (some->> (.getNS attr-value) (map coerce-num) (into #{}))
+      (some->> (.getBS attr-value) (map coerce-ba)  (into #{}))))
 
 (defn- set-of [pred s] (and (set? s) (every? pred s)))
 (def ^:private ^:const ba-class (Class/forName "[B"))
