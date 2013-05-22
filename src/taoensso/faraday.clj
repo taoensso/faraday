@@ -97,35 +97,36 @@
 
 ;;;; Coercions
 
-(defn- coerce-num [x] (if (.contains x ".") (Double. x) (Long. x)))
-(defn- coerce-ba  [^ByteBuffer bb] (.array bb))
+(defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
+(defn- bb->ba   [^ByteBuffer bb] (.array bb))
 
-(defn- get-value "Returns the value of an AttributeValue object."
-  [attr-value]
-  (or (.getS attr-value)
-      (some->> (.getN  attr-value) coerce-num)
-      (some->> (.getB  attr-value) coerce-ba)
-      (some->> (.getSS attr-value) (into #{}))
-      (some->> (.getNS attr-value) (map coerce-num) (into #{}))
-      (some->> (.getBS attr-value) (map coerce-ba)  (into #{}))))
+(defn- db-val->clj-val
+  "Returns the Clojure value of given AttributeValue object."
+  [^AttributeValue x]
+  (or (.getS x)
+      (some->> (.getN  x) str->num)
+      (some->> (.getB  x) bb->ba)
+      (some->> (.getSS x) (into #{}))
+      (some->> (.getNS x) (map str->num) (into #{}))
+      (some->> (.getBS x) (map bb->ba)   (into #{}))))
 
 (defn- set-of [pred s] (and (set? s) (every? pred s)))
 (def ^:private ^:const ba-class (Class/forName "[B"))
 (defn- ba? [x] (instance? ba-class x))
 (defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
-(defn- simple-number? [x] (or (instance? Long    x)
-                              (instance? Double  x)
-                              (instance? Integer x)
-                              (instance? Float   x)))
+(defn- simple-num? [x] (or (instance? Long    x)
+                           (instance? Double  x)
+                           (instance? Integer x)
+                           (instance? Float   x)))
 
-(defn- to-attr-value
+(defn- clj-val->db-val
   "Returns an AttributeValue object for given Clojure value."
-  ;; TODO Nippy support
+  ;; TODO Nippy support (will require special marker bin-wrapping)
   ;; TODO More efficient set-type dispatch
   [x]
   (cond
    (string? x)        (doto (AttributeValue.) (.setS x))
-   (simple-number? x) (doto (AttributeValue.) (.setN (str x)))
+   (simple-num? x)    (doto (AttributeValue.) (.setN (str x)))
    (ba?     x)        (doto (AttributeValue.) (.setB (ba-buffer x)))
    (set-of string? x) (doto (AttributeValue.) (.setSS x))
    (set-of number? x) (doto (AttributeValue.) (.setNS (map str x)))
@@ -133,8 +134,8 @@
    (set? x)           (throw (Exception. "Set must contain values of the same type."))
    :else              (throw (Exception. (str "Unknown value type: " (type x))))))
 
-(comment (map to-attr-value ["foo" 10 3.14 (.getBytes "foo")
-                             #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
+(comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
+                                #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
 
 ;;;; TODO Dev
 
@@ -219,7 +220,7 @@
     {:consumed-capacity-units (.getConsumedCapacityUnits result)
      :items (some->> (.getItems result)
                      (into [])
-                     (utils/fmap #(utils/fmap get-value (into {} %))))})
+                     (utils/fmap #(utils/fmap db-val->clj-val (into {} %))))})
   KeysAndAttributes
   (as-map [result]
     (merge
@@ -267,7 +268,7 @@
   "Turn a item in DynamoDB into a Clojure map."
   [item]
   (if item
-    (utils/fmap get-value (into {} item))))
+    (utils/fmap db-val->clj-val (into {} item))))
 
 (extend-protocol AsMap
   GetItemResult
@@ -280,7 +281,7 @@
   (when expected
     (.setExpected req (utils/fmap #(if (instance? Boolean %)
                                      (ExpectedAttributeValue. %)
-                                     (ExpectedAttributeValue. (to-attr-value %)))
+                                     (ExpectedAttributeValue. (clj-val->db-val %)))
                                   expected))))
 
 (defn put-item
@@ -303,7 +304,7 @@
      (.setItem
       (into {}
             (for [[k v] item]
-              [(name k) (to-attr-value v)])))
+              [(name k) (clj-val->db-val v)])))
      (set-expected-value! expected))))
 
 (defn- item-key
@@ -311,9 +312,9 @@
   [{:keys [hash-key range-key]}]
   (let [key (Key.)]
     (when hash-key
-      (.setHashKeyElement key (to-attr-value hash-key)))
+      (.setHashKeyElement key (clj-val->db-val hash-key)))
     (when range-key
-      (.setRangeKeyElement key (to-attr-value range-key)))
+      (.setRangeKeyElement key (clj-val->db-val range-key)))
     key))
 
 (defn get-item
@@ -336,8 +337,8 @@
 (extend-protocol AsMap
   Key
   (as-map [k]
-    {:hash-key  (get-value (.getHashKeyElement k))
-     :range-key (get-value (.getRangeKeyElement k))})
+    {:hash-key  (db-val->clj-val (.getHashKeyElement k))
+     :range-key (db-val->clj-val (.getRangeKeyElement k))})
   nil
   (as-map [_] nil))
 
@@ -389,7 +390,7 @@
     (.setItem
       (into {}
         (for [[id field] item]
-          {(name id) (to-attr-value field)})))))
+          {(name id) (clj-val->db-val field)})))))
 
 (defn- write-request [verb item]
   (let [wr (WriteRequest.)]
@@ -457,7 +458,7 @@
 (defn- set-range-condition
   "Add the range key condition to a QueryRequest object"
   [query-request operator & [range-key range-end]]
-  (let [attribute-list (->> [range-key range-end] (remove nil?) (map to-attr-value))]
+  (let [attribute-list (->> [range-key range-end] (remove nil?) (map clj-val->db-val))]
     (.setRangeKeyCondition query-request
                            (doto (Condition.)
                              (.withComparisonOperator operator)
@@ -473,7 +474,7 @@
 (defn- query-request
   "Create a QueryRequest object."
   [table hash-key range-clause {:keys [order limit after count consistent attrs]}]
-  (let [qr (QueryRequest. table (to-attr-value hash-key))
+  (let [qr (QueryRequest. table (clj-val->db-val hash-key))
         [operator range-key range-end] range-clause]
     (when operator
       (set-range-condition qr (normalize-operator operator) range-key range-end))
