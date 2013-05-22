@@ -35,6 +35,10 @@ and `require` the library:
 
 ## TODO Performance
 
+![Performance comparison chart](https://github.com/ptaoussanis/faraday/raw/master/benchmarks/chart.png)
+
+[Detailed benchmark information](https://docs.google.com/spreadsheet/TODO) is available on Google Docs.
+
 ## Faraday Supports the ClojureWerkz and CDS Project Goals
 
 ClojureWerkz is a growing collection of open-source, batteries-included [Clojure libraries](http://clojurewerkz.org/) that emphasise modern targets, great documentation, and thorough testing.
