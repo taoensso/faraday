@@ -20,3 +20,8 @@
   (fmap* coll f))
 
 (comment (map (partial fmap inc) ['(1 2 3) [1 2 3] {:1 1 :2 2 :3 3} #{1 2 3}]))
+
+(defn keywordize-map [m] (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m))
+
+(comment (keywordize-map nil)
+         (keywordize-map {"akey" "aval" "bkey" "bval"}))
