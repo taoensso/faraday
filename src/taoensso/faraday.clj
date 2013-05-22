@@ -111,6 +111,10 @@
 (def ^:private ^:const ba-class (Class/forName "[B"))
 (defn- ba? [x] (instance? ba-class x))
 (defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
+(defn- simple-number? [x] (or (instance? Long    x)
+                              (instance? Double  x)
+                              (instance? Integer x)
+                              (instance? Float   x)))
 
 (defn- to-attr-value
   "Returns an AttributeValue object for given Clojure value."
@@ -119,7 +123,7 @@
   [x]
   (cond
    (string? x)        (doto (AttributeValue.) (.setS x))
-   (number? x)        (doto (AttributeValue.) (.setN (str x)))
+   (simple-number? x) (doto (AttributeValue.) (.setN (str x)))
    (ba?     x)        (doto (AttributeValue.) (.setB (ba-buffer x)))
    (set-of string? x) (doto (AttributeValue.) (.setSS x))
    (set-of number? x) (doto (AttributeValue.) (.setNS (map str x)))
