@@ -102,6 +102,7 @@
 
 (defn- db-val->clj-val
   "Returns the Clojure value of given AttributeValue object."
+  ;; TODO Nippy support
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
@@ -110,7 +111,7 @@
       (some->> (.getNS x) (map str->num) (into #{}))
       (some->> (.getBS x) (map bb->ba)   (into #{}))))
 
-(defn- set-of [pred s] (and (set? s) (every? pred s)))
+(defn- set-of [pred s] (and (set? s) (seq s) (every? pred s)))
 (def ^:private ^:const ba-class (Class/forName "[B"))
 (defn- ba? [x] (instance? ba-class x))
 (defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
@@ -121,18 +122,21 @@
 
 (defn- clj-val->db-val
   "Returns an AttributeValue object for given Clojure value."
-  ;; TODO Nippy support (will require special marker bin-wrapping)
-  ;; TODO More efficient set-type dispatch
+  ;; TODO Nippy support (will require special marker bin-wrapping), incl.
+  ;; Serialized (boxed) type (should allow empty strings & ANY type of set)
+  ;; Maybe require special wrapper types for writing bins/serialized
   [x]
   (cond
-   (string? x)        (doto (AttributeValue.) (.setS x))
-   (simple-num? x)    (doto (AttributeValue.) (.setN (str x)))
-   (ba?     x)        (doto (AttributeValue.) (.setB (ba-buffer x)))
-   (set-of string? x) (doto (AttributeValue.) (.setSS x))
-   (set-of number? x) (doto (AttributeValue.) (.setNS (map str x)))
-   (set-of ba?     x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
-   (set? x)           (throw (Exception. "Set must contain values of the same type."))
-   :else              (throw (Exception. (str "Unknown value type: " (type x))))))
+   (string? x)          (if (.isEmpty ^String x)
+                          (throw (Exception. "\"\" is not a legal DynamoDB value!"))
+                          (doto (AttributeValue.) (.setS x)))
+   (simple-num? x)        (doto (AttributeValue.) (.setN (str x)))
+   (ba? x)                (doto (AttributeValue.) (.setB (ba-buffer x)))
+   (set-of string? x)     (doto (AttributeValue.) (.setSS x))
+   (set-of simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
+   (set-of ba? x)         (doto (AttributeValue.) (.setBS (map ba-buffer x)))
+   (set? x) (throw (Exception. "Sets must be non-empty & contain values of the same type!"))
+   :else    (throw (Exception. (str "Unknown value type: " (type x))))))
 
 (comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
                                 #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
