@@ -39,7 +39,8 @@
              WriteRequest]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
-            com.amazonaws.services.dynamodb.AmazonDynamoDBClient))
+            com.amazonaws.services.dynamodb.AmazonDynamoDBClient
+            java.nio.ByteBuffer))
 
 ;;;; TODO Rotary PRs
 ;; * Feature/can update dynamo items (mrgordon)
@@ -76,13 +77,16 @@
 (def db-client (memoize db-client*))
 
 (defn- coerce-num [x] (if (.contains x ".") (Double. x) (Long. x)))
+(defn- coerce-ba  [^ByteBuffer bb] (.array bb))
 
 (defn- get-value "Returns the value of an AttributeValue object."
   [attr-value]
   (or (.getS attr-value)
-      (some->> (.getN attr-value)  coerce-num)
+      (some->> (.getN  attr-value) coerce-num)
+      (some->> (.getB  attr-value) coerce-ba)
+      (some->> (.getSS attr-value) (into #{}))
       (some->> (.getNS attr-value) (map coerce-num) (into #{}))
-      (some->> (.getSS attr-value) (into #{}))))
+      (some->> (.getBS attr-value) (map coerce-ba)  (into #{}))))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [{key-name :name key-type :type}]
@@ -102,6 +106,29 @@
   (doto (ProvisionedThroughput.)
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
+
+(defn- set-of [pred s] (and (set? s) (every? pred s)))
+(def ^:private ^:const ba-class (Class/forName "[B"))
+(defn- ba? [x] (instance? ba-class x))
+(defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
+
+(defn- to-attr-value
+  "Returns an AttributeValue object for given Clojure value."
+  ;; TODO Nippy support
+  ;; TODO More efficient set-type dispatch
+  [x]
+  (cond
+   (string? x)        (doto (AttributeValue.) (.setS x))
+   (number? x)        (doto (AttributeValue.) (.setN (str x)))
+   (ba?     x)        (doto (AttributeValue.) (.setB (ba-buffer x)))
+   (set-of string? x) (doto (AttributeValue.) (.setSS x))
+   (set-of number? x) (doto (AttributeValue.) (.setNS (map str x)))
+   (set-of ba?     x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
+   (set? x)           (throw (Exception. "Set must contain values of the same type."))
+   :else              (throw (Exception. (str "Unknown value type: " (type x))))))
+
+(comment (map to-attr-value ["foo" 10 3.14 (.getBytes "foo")
+                             #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
 
 ;;;; TODO Dev
 
@@ -229,20 +256,6 @@
       .listTables
       .getTableNames
       seq))
-
-(defn- set-of [f s]
-  (and (set? s) (every? f s)))
-
-(defn- to-attr-value
-  "Convert a value into an AttributeValue object."
-  [value]
-  (cond
-   (string? value)        (doto (AttributeValue.) (.setS value))
-   (number? value)        (doto (AttributeValue.) (.setN (str value)))
-   (set-of string? value) (doto (AttributeValue.) (.setSS value))
-   (set-of number? value) (doto (AttributeValue.) (.setNS (map str value)))
-   (set? value)    (throw (Exception. "Set must be all numbers or all strings"))
-   :else           (throw (Exception. (str "Unknown value type: " (type value))))))
 
 (defn- item-map
   "Turn a item in DynamoDB into a Clojure map."
