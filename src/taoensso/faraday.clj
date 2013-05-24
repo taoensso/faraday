@@ -33,8 +33,10 @@
              PutItemRequest
              PutRequest
              QueryRequest
+             QueryResult
              ResourceNotFoundException
              ScanRequest
+             ScanResult
              WriteRequest]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
@@ -53,18 +55,19 @@
 
 ;;;; API - object wrappers
 
-(defn- db-client*
+(def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
-  [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
-  (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-        client-config (ClientConfiguration.)]
-    (when proxy-host (.setProxyHost client-config proxy-host))
-    (when proxy-port (.setProxyPort client-config proxy-port))
-    (let [client (AmazonDynamoDBClient. aws-creds client-config)]
-      (when endpoint (.setEndpoint client endpoint))
-      client)))
+  (memoize
+   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
+     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+           client-config (ClientConfiguration.)]
+       (when proxy-host (.setProxyHost client-config proxy-host))
+       (when proxy-port (.setProxyPort client-config proxy-port))
+       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
+         (when endpoint (.setEndpoint client endpoint))
+         client)))))
 
-(def db-client (memoize db-client*))
+(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [key-name key-type]
@@ -142,7 +145,7 @@
 
 (defn- clj-val->db-val
   "Returns an AttributeValue object for given Clojure value."
-  [x]
+  ^AttributeValue [x]
   (cond
    (string? x)          (if (.isEmpty ^String x)
                           (throw (Exception. "\"\" is not a legal DynamoDB value!"))
@@ -204,6 +207,17 @@
      :unprocessed-keys (utils/fmap as-map (into {} (.getUnprocessedKeys result)))})
 
   GetItemResult (as-map [result] (db-map->clj-map (.getItem result)))
+
+  QueryResult
+  (as-map [results] {:items    (map db-map->clj-map (.getItems results))
+                     :count    (.getCount results)
+                     :last-key (as-map (.getLastEvaluatedKey results))})
+
+  ScanResult
+  (as-map [results] {:items    (map db-map->clj-map (.getItems results))
+                     :count    (.getCount results)
+                     :last-key (as-map (.getLastEvaluatedKey results))})
+
   nil (as-map [_] nil))
 
 ;;;; API - tables
@@ -295,12 +309,14 @@
 
 (defn- set-expected-value! ; TODO PR
   "Makes a Put request conditional by setting its expected value"
-  [req expected]
+  [^PutItemRequest req expected]
   (when expected
-    (.setExpected req (utils/fmap #(if (instance? Boolean %)
-                                     (ExpectedAttributeValue. %)
-                                     (ExpectedAttributeValue. (clj-val->db-val %)))
-                                  expected))))
+    (.setExpected req
+      (utils/fmap
+       #(if (instance? Boolean %)
+          (ExpectedAttributeValue. ^Boolean %)
+          (ExpectedAttributeValue. (clj-val->db-val %)))
+       expected))))
 
 (defn put-item
   ;;"Add an item (a Clojure map) to a DynamoDB table."
@@ -442,21 +458,12 @@
 
 ;;;; API - queries & scans
 
-(defn- result-map [results]
-  {:items    (map db-map->clj-map (.getItems results))
-   :count    (.getCount results)
-   :last-key (as-map (.getLastEvaluatedKey results))})
-
 (defn- scan-request
   "Create a ScanRequest object."
   [table {:keys [limit count after]}]
   (let [sr (ScanRequest. table)]
-    (when limit
-      (.setLimit sr (int limit)))
-    (when count
-      (.setCount sr count))
-    (when after
-      (.setExclusiveStartKey sr (item-key after)))
+    (when limit (.setLimit sr (int limit)))
+    (when after (.setExclusiveStartKey sr (item-key after)))
     sr))
 
 (defn scan
@@ -469,7 +476,7 @@
     :count    - the count of items matching the query
     :last-key - the last evaluated key (useful for paging) "
   [creds table & [options]]
-  (result-map
+  (as-map
    (.scan
     (db-client creds)
     (scan-request table options))))
@@ -487,7 +494,7 @@
   [range-key operator & [range-value range-end]]
   (let [attribute-list (->> [range-value range-end] (filter identity) (map clj-val->db-val))]
     {range-key (doto (Condition.)
-                 (.setComparisonOperator operator)
+                 (.setComparisonOperator ^String operator)
                  (.setAttributeValueList attribute-list))}))
 
 (defn- normalize-operator
@@ -514,7 +521,6 @@
     (when attrs      (.setAttributesToGet qr (map name attrs)))
     (when order      (.setScanIndexForward qr (not= order :desc)))
     (when limit      (.setLimit qr (int limit)))
-    (when count      (.setCount qr count))
     (when consistent (.setConsistentRead qr consistent))
     (when after      (.setExclusiveStartKey qr (item-key after)))
     (when index      (.setIndexName qr index))
@@ -543,7 +549,7 @@
     :last-key - the last evaluated key (useful for paging)"
   [creds table hash-key & range-and-options]
   (let [[range options] (extract-range range-and-options)]
-    (result-map
+    (as-map
      (.query
       (db-client creds)
       (query-request table hash-key range options)))))

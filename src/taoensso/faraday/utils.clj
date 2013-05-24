@@ -50,4 +50,4 @@
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
-(def ucname (comp str/upper-case name))
+(defn ucname ^String [x] (str/upper-case (name x)))
