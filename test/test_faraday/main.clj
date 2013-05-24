@@ -15,18 +15,22 @@
                      :hash-key   {:name id :type :s}
                      :throughput {:write 1 :read 1}})
 
-(deftest test-batch-simple
+(defn setup-table
+  []
   (batch-write-item creds
-    [:delete table {:hash-key "1"}]
-    [:delete table {:hash-key "2"}]
-    [:delete table {:hash-key "3"}]
-    [:delete table {:hash-key "4"}])
+    [:delete table {id "1"}]
+    [:delete table {id "2"}]
+    [:delete table {id "3"}]
+    [:delete table {id "4"}])
 
   (batch-write-item creds
     [:put table {id "1" attr "foo"}]
     [:put table {id "2" attr "bar"}]
     [:put table {id "3" attr "baz"}]
-    [:put table {id "4" attr "foobar"}])
+    [:put table {id "4" attr "foobar"}]))
+
+(deftest test-batch-simple
+  (setup-table)
 
   (let [;; result (batch-get-item creds table '("1" "2" "3" "4")) ; TODO PR
         consis (batch-get-item creds {
