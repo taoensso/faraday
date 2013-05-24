@@ -61,7 +61,7 @@
 ;; * Docs.
 ;; * Bench.
 
-;;;; DynamoDB API objects
+;;;; API - core objects
 
 (defn- db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
@@ -95,14 +95,17 @@
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
 
-;;;; Coercions
+;;;; Coercion - values
+
+;; TODO Nippy support (will require special marker bin-wrapping), incl.
+;; Serialized (boxed) type (should allow empty strings & ANY type of set)
+;; Maybe require special wrapper types for writing bins/serialized
 
 (defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- bb->ba   [^ByteBuffer bb] (.array bb))
 
 (defn- db-val->clj-val
   "Returns the Clojure value of given AttributeValue object."
-  ;; TODO Nippy support
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
@@ -122,9 +125,6 @@
 
 (defn- clj-val->db-val
   "Returns an AttributeValue object for given Clojure value."
-  ;; TODO Nippy support (will require special marker bin-wrapping), incl.
-  ;; Serialized (boxed) type (should allow empty strings & ANY type of set)
-  ;; Maybe require special wrapper types for writing bins/serialized
   [x]
   (cond
    (string? x)          (if (.isEmpty ^String x)
@@ -139,9 +139,85 @@
    :else    (throw (Exception. (str "Unknown value type: " (type x))))))
 
 (comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
-                                #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
+                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
 
-;;;; TODO Dev
+;;;; Coercion - objects
+
+(defn- db-map->clj-map [x] (when x (utils/fmap db-val->clj-val (into {} x))))
+
+(defprotocol AsMap (as-map [x]))
+
+(extend-protocol AsMap
+  KeySchemaElement
+  (as-map [element]
+    {:name (.getAttributeName element)
+     :type (-> (.getAttributeType element)
+               (str/lower-case)
+               (keyword))})
+
+  KeySchema
+  (as-map [schema]
+    (merge
+     (when-let [e (.getHashKeyElement schema)]  {:hash-key  (as-map e)})
+     (when-let [e (.getRangeKeyElement schema)] {:range-key (as-map e)})))
+
+  ProvisionedThroughputDescription
+  (as-map [throughput]
+    {:read  (.getReadCapacityUnits throughput)
+     :write (.getWriteCapacityUnits throughput)
+     :last-decrease (.getLastDecreaseDateTime throughput)
+     :last-increase (.getLastIncreaseDateTime throughput)})
+
+  DescribeTableResult
+  (as-map [result]
+    (let [table (.getTable result)]
+      {:name          (.getTableName table)
+       :creation-date (.getCreationDateTime table)
+       :item-count    (.getItemCount table)
+       :key-schema    (as-map (.getKeySchema table))
+       :throughput    (as-map (.getProvisionedThroughput table))
+       :status        (-> (.getTableStatus table)
+                          (str/lower-case)
+                          (keyword))}))
+
+  BatchWriteResponse
+  (as-map [result]
+    {:consumed-capacity-units (.getConsumedCapacityUnits result)})
+
+  BatchWriteItemResult
+  (as-map [result]
+    {:responses         (utils/fmap as-map (into {} (.getResponses result)))
+     :unprocessed-items (.getUnprocessedItems result)})
+
+  BatchResponse
+  (as-map [result]
+    {:consumed-capacity-units (.getConsumedCapacityUnits result)
+     :items (some->> (.getItems result)
+                     (into [])
+                     (utils/fmap #(utils/fmap db-val->clj-val (into {} %))))})
+
+  KeysAndAttributes
+  (as-map [result]
+    (merge
+     (when-let [a (.getAttributesToGet result)] {:attrs (into [] a)})
+     (when-let [c (.getConsistentRead result)]  {:consistent c})
+     (when-let [k (.getKeys result)]            {:keys (utils/fmap as-map (into [] k))})))
+
+  BatchGetItemResult
+  (as-map [result]
+    {:responses        (utils/fmap as-map (into {} (.getResponses result)))
+     :unprocessed-keys (utils/fmap as-map (into {} (.getUnprocessedKeys result)))})
+
+  GetItemResult (as-map [result] (db-map->clj-map (.getItem result)))
+
+  Key
+  (as-map [k]
+    {:hash-key  (db-val->clj-val (.getHashKeyElement k))
+     :range-key (db-val->clj-val (.getRangeKeyElement k))})
+
+  nil (as-map [_] nil))
+
+;;;; API - tables
 
 (defn create-table
   "Create a table in DynamoDB with the given map of properties. The properties
@@ -181,61 +257,6 @@
      (.setTableName (str name))
      (.setProvisionedThroughput (provisioned-throughput throughput)))))
 
-(defprotocol AsMap (as-map [x]))
-
-(extend-protocol AsMap
-  KeySchemaElement
-  (as-map [element]
-    {:name (.getAttributeName element)
-     :type (-> (.getAttributeType element)
-               (str/lower-case)
-               (keyword))})
-  KeySchema
-  (as-map [schema]
-    (merge
-     (when-let [e (.getHashKeyElement schema)]  {:hash-key  (as-map e)})
-     (when-let [e (.getRangeKeyElement schema)] {:range-key (as-map e)})))
-  ProvisionedThroughputDescription
-  (as-map [throughput]
-    {:read  (.getReadCapacityUnits throughput)
-     :write (.getWriteCapacityUnits throughput)
-     :last-decrease (.getLastDecreaseDateTime throughput)
-     :last-increase (.getLastIncreaseDateTime throughput)})
-  DescribeTableResult
-  (as-map [result]
-    (let [table (.getTable result)]
-      {:name          (.getTableName table)
-       :creation-date (.getCreationDateTime table)
-       :item-count    (.getItemCount table)
-       :key-schema    (as-map (.getKeySchema table))
-       :throughput    (as-map (.getProvisionedThroughput table))
-       :status        (-> (.getTableStatus table)
-                          (str/lower-case)
-                          (keyword))}))
-  BatchWriteResponse
-  (as-map [result]
-    {:consumed-capacity-units (.getConsumedCapacityUnits result)})
-  BatchWriteItemResult
-  (as-map [result]
-    {:responses         (utils/fmap as-map (into {} (.getResponses result)))
-     :unprocessed-items (.getUnprocessedItems result)})
-  BatchResponse
-  (as-map [result]
-    {:consumed-capacity-units (.getConsumedCapacityUnits result)
-     :items (some->> (.getItems result)
-                     (into [])
-                     (utils/fmap #(utils/fmap db-val->clj-val (into {} %))))})
-  KeysAndAttributes
-  (as-map [result]
-    (merge
-     (when-let [a (.getAttributesToGet result)] {:attrs (into [] a)})
-     (when-let [c (.getConsistentRead result)]  {:consistent c})
-     (when-let [k (.getKeys result)]            {:keys (utils/fmap as-map (into [] k))})))
-  BatchGetItemResult
-  (as-map [result]
-    {:responses        (utils/fmap as-map (into {} (.getResponses result)))
-     :unprocessed-keys (utils/fmap as-map (into {} (.getUnprocessedKeys result)))}))
-
 (defn describe-table
   "Returns a map describing the table in DynamoDB with the given name, or nil
   if the table doesn't exist."
@@ -268,16 +289,7 @@
       .getTableNames
       seq))
 
-(defn- item-map
-  "Turn a item in DynamoDB into a Clojure map."
-  [item]
-  (if item
-    (utils/fmap db-val->clj-val (into {} item))))
-
-(extend-protocol AsMap
-  GetItemResult
-  (as-map [result]
-    (item-map (.getItem result))))
+;;;; API - items
 
 (defn- set-expected-value! ; TODO PR
   "Makes a Put request conditional by setting its expected value"
@@ -338,13 +350,7 @@
    (db-client creds)
    (DeleteItemRequest. table (item-key {:hash-key hash-key}))))
 
-(extend-protocol AsMap
-  Key
-  (as-map [k]
-    {:hash-key  (db-val->clj-val (.getHashKeyElement k))
-     :range-key (db-val->clj-val (.getRangeKeyElement k))})
-  nil
-  (as-map [_] nil))
+;;;; API - batch ops
 
 (defn- batch-item-keys [request-or-keys]
   (for [key (:keys request-or-keys request-or-keys)]
@@ -427,8 +433,10 @@
              (partition 3 (flatten reqs))))
           (group-by #(name (second %)) requests)))))))
 
+;;;; API - queries & scans
+
 (defn- result-map [results]
-  {:items    (map item-map (.getItems results))
+  {:items    (map db-map->clj-map (.getItems results))
    :count    (.getCount results)
    :last-key (as-map (.getLastEvaluatedKey results))})
 
