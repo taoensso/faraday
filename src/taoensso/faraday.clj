@@ -30,6 +30,8 @@
              ;; KeySchema
              KeySchemaElement
              KeysAndAttributes
+             LocalSecondaryIndex
+             Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
              PutItemRequest
@@ -103,8 +105,26 @@
     (.setAttributeName key-name)
     (.setAttributeType (str/upper-case (name key-type)))))
 
-(defn- attribute-definitions "Returns a new vector of AttributeDefinition objects."
+(defn- attribute-definitions "Returns a vector of AttributeDefinition objects."
   [defs] (mapv attribute-definition defs))
+
+(defn- create-projection "Returns a new Projection object."
+  [projection & [included-attrs]]
+  (let [pr (Projection.)]
+    (.setProjectionType pr (str/upper-case (name projection)))
+    (when included-attrs (.setNonKeyAttributes pr included-attrs))
+    pr))
+
+(defn- local-index "Returns a new LocalSecondaryIndex object."
+  [hash-key {:keys [name range-key projection included-attrs]
+             :or   {projection :all}}]
+  (doto (LocalSecondaryIndex.)
+    (.setIndexName  name)
+    (.setKeySchema  (key-schema hash-key range-key))
+    (.setProjection (create-projection projection included-attrs))))
+
+(defn- local-indexes "Returns a vector of LocalSecondaryIndexes objects."
+  [hash-key indexes] (mapv (partial local-index hash-key) indexes))
 
 ;;;; Coercion - values
 
@@ -225,7 +245,6 @@
     :read  - the provisioned number of reads per second
     :write - the provisioned number of writes per second
 
-  ;; TODO +
   The indexes vector is a vector of maps with keys:
     :name           - the name of the Local Secondary Index (required)
     :range-key      - a map that defines the range key name and type (required)
@@ -233,19 +252,18 @@
       :all, :keys_only, :include (optional - default is :keys-only)
     :included-attrs - a vector of attribute names when :projection is :include
                       (optional)"
-  [creds {:keys [name hash-key range-key throughput]}] ;; TODO +indexes
+  [creds {:keys [name hash-key range-key throughput indexes]}]
   (.createTable
    (db-client creds)
    (let [defined-attrs (->> (conj [] hash-key range-key)
-                              ;; (concat (map #(:range-key %) indexes))
+                            (concat (map #(:range-key %) indexes))
                             (filter identity))]
      (doto (CreateTableRequest.)
        (.setTableName (str name))
        (.setKeySchema (key-schema hash-key range-key))
        (.setAttributeDefinitions (attribute-definitions defined-attrs))
        (.setProvisionedThroughput (provisioned-throughput throughput))
-       ;; (.setLocalSecondaryIndexes (local-indexes hash-key indexes))
-       ))))
+       (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
 
 (defn update-table
   "Update a table in DynamoDB with the given name. Only the throughput may be
@@ -535,7 +553,7 @@
 
 (defn- query-request
   "Create a QueryRequest object."
-  [table hash-key range-clause {:keys [order limit after count consistent attrs]}] ;; TODO +index
+  [table hash-key range-clause {:keys [order limit after count consistent attrs index]}]
   (let [qr (QueryRequest.)
         hash-clause (set-hash-condition hash-key)
         [range-key operator range-value range-end] range-clause
@@ -553,7 +571,7 @@
     (when count      (.setCount qr count))
     (when consistent (.setConsistentRead qr consistent))
     (when after      (.setExclusiveStartKey qr (item-key after)))
-    ;; (when index      (.setIndexName qr index)) ; TODO
+    (when index      (.setIndexName qr index))
     qr))
 
 (defn- extract-range [[range options]]
@@ -592,7 +610,7 @@
     :limit - the maximum number of items to return
     :after - only return results after this key
     :consistent - return a consistent read if logical true
-;;    :index - the secondary index to query ; TODO
+    :index - the secondary index to query
 
   The items are returned as a map with the following keys:
     :items - the list of items returned
