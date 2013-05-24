@@ -32,7 +32,7 @@
 (deftest test-batch-simple
   (setup-table)
 
-  (let [;; result (batch-get-item creds table '("1" "2" "3" "4")) ; TODO PR
+  (let [result (batch-get-item cred table '("1" "2" "3" "4"))
         consis (batch-get-item creds {
                  table {
                    :consistent true
@@ -42,7 +42,7 @@
                    :consistent true
                    :attrs [attr]
                    :keys ["1" "2" "3" "4"]}})
-        ;; items  (get-in result [:responses table :items]) ; TODO PR
+        items  (get-in result [:responses table :items])
         item-1 (get-item creds table "1")
         item-2 (get-item creds table "2")
         item-3 (get-item creds table "3")
@@ -53,10 +53,10 @@
     (is (= "baz" (item-3 attr)) "batch-write-item :put failed")
     (is (= "foobar" (item-4 attr)) "batch-write-item :put failed")
 
-    ;; (is (= true (some #(= (% attr) "foo") items))) ; TODO PR
+    (is (= true (some #(= (% attr) "foo") items)))
     (is (= true (some #(= (% attr) "bar") (get-in consis [:responses table :items]))))
     (is (= true (some #(= (% attr) "baz") (get-in attrs [:responses table :items]))))
-    ;; (is (= true (some #(= (% attr) "foobar") items))) ; TODO PR
+    (is (= true (some #(= (% attr) "foobar") items)))
 
     (batch-write-item creds
       [:delete table {:hash-key "1"}]
