@@ -11,12 +11,12 @@
 (def id    "test-id")
 (def attr  "test-attr")
 
-(ensure-table creds {:name       table
-                     :hash-key   {:name id :type :s}
-                     :throughput {:write 1 :read 1}})
-
-(defn setup-table
+(defn setup-table!
   []
+  (ensure-table creds {:name       table
+                       :hash-key   {:name id :type :s}
+                       :throughput {:write 1 :read 1}})
+
   (batch-write-item creds
     [:delete table {id "1"}]
     [:delete table {id "2"}]
@@ -30,24 +30,24 @@
     [:put table {id "4" attr "foobar"}]))
 
 (deftest test-batch-simple
-  (setup-table)
+  (setup-table!)
 
   (let [result
-        (batch-get-item
-         creds {table {:key-name "test-id"
-                       :keys ["1" "2" "3" "4"]
-                       :consistent true}})
+        (batch-get-item creds
+          {table {:key-name "test-id"
+                  :keys ["1" "2" "3" "4"]
+                  :consistent true}})
         consis
-        (batch-get-item
-         creds {table {:key-name "test-id"
-                       :keys ["1" "2" "3" "4"]
-                       :consistent true}})
+        (batch-get-item creds
+          {table {:key-name "test-id"
+                  :keys ["1" "2" "3" "4"]
+                  :consistent true}})
         attrs
-        (batch-get-item
-         creds {table {:key-name "test-id"
-                       :keys ["1" "2" "3" "4"]
-                       :consistent true
-                       :attrs [attr]}})
+        (batch-get-item creds
+          {table {:key-name "test-id"
+                  :keys ["1" "2" "3" "4"]
+                  :consistent true
+                  :attrs [attr]}})
 
         items  (get-in result [:responses table])
         item-1 (get-item creds table {id "1"})
@@ -55,9 +55,9 @@
         item-3 (get-item creds table {id "3"})
         item-4 (get-item creds table {id "4"})]
 
-    (is (= "foo" (item-1 attr)) "batch-write-item :put failed")
-    (is (= "bar" (item-2 attr)) "batch-write-item :put failed")
-    (is (= "baz" (item-3 attr)) "batch-write-item :put failed")
+    (is (= "foo"    (item-1 attr)) "batch-write-item :put failed")
+    (is (= "bar"    (item-2 attr)) "batch-write-item :put failed")
+    (is (= "baz"    (item-3 attr)) "batch-write-item :put failed")
     (is (= "foobar" (item-4 attr)) "batch-write-item :put failed")
 
     (is (= true (some #(= (% attr) "foo") items)))
@@ -77,20 +77,18 @@
     (is (= nil (get-item creds table {id "4"})) "batch-write-item :delete failed")))
 
 (deftest conditional-put
-  (batch-write-item
-   creds
+  (batch-write-item creds
    [:delete table {id "42"}]
    [:delete table {id "9"}]
    [:delete table {id "6"}]
    [:delete table {id "23"}])
 
-  (batch-write-item
-   creds
+  (batch-write-item creds
    [:put table {id "42" attr "foo"}]
-   [:put table {id "6" attr "foobar"}]
-   [:put table {id "9" attr "foobaz"}])
+   [:put table {id "6"  attr "foobar"}]
+   [:put table {id "9"  attr "foobaz"}])
 
-  ;; ;; Should update item 42 to have attr bar
+  ;; Should update item 42 to have attr bar
   (put-item creds table {id "42" attr "bar"} :expected {attr "foo"})
   (is (= "bar" ((get-item creds table {id "42"}) attr)))
 
