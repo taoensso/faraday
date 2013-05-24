@@ -11,7 +11,7 @@ Current [semantic](http://semver.org/) version:
 Faraday is a fork of [Rotary](https://github.com/weavejester/rotary) by James Reaves. Why fork? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
 
 ## What's In The Box?
- * Small, simple, **up-to-date API**.
+ * Small, simple, **up-to-date API** (pull requests welcome!).
  * **Good performance**.
  * Flexible, high-performance **binary-safe serialization** using [Nippy](https://github.com/ptaoussanis/nippy).
 

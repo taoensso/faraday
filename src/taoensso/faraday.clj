@@ -45,13 +45,15 @@
 
 ;;;; TODO
 ;; * Code walk-through.
-;; * Reflection warnings.
 ;; * Go through Rotary PRs.
 ;; * Go through Rotary non-PR forks.
 ;; * Nippy support.
 ;; * Further tests.
 ;; * Docs!
 ;; * Benching.
+;; * Parallel scans.
+;; * Async API.
+;; * Auto throughput adjusting.
 
 ;;;; API - object wrappers
 
@@ -116,6 +118,9 @@
   [hash-key indexes] (mapv (partial local-index hash-key) indexes))
 
 ;;;; Coercion - values
+
+;; TODO see http://goo.gl/hOzhR and http://goo.gl/NSY3Z for types supported by
+;; the Java SDK! (incl. Date, Long, BigDecimal, BigInteger, ...).
 
 ;; TODO Nippy support (will require special marker bin-wrapping), incl.
 ;; Serialized (boxed) type (should allow empty strings & ANY type of set)
