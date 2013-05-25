@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.0.2-SNAPSHOT"] ; WARNING: Still VERY experimental!
+[com.taoensso/faraday "0.0.3-SNAPSHOT"] ; WARNING: Still VERY experimental!
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -22,7 +22,7 @@ Faraday is a fork of [Rotary](https://github.com/weavejester/rotary) by James Re
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.0.2-SNAPSHOT"]
+[com.taoensso/faraday "0.0.3-SNAPSHOT"]
 ```
 
 and `require` the library:
