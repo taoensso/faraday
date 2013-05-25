@@ -139,7 +139,6 @@
       (some->> (.getNS x) (map str->num) (into #{}))
       (some->> (.getBS x) (map bb->ba)   (into #{}))))
 
-(defn- set-of [pred s] (and (set? s) (seq s) (every? pred s)))
 (def ^:private ^:const ba-class (Class/forName "[B"))
 (defn- ba? [x] (instance? ba-class x))
 (defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
@@ -152,16 +151,26 @@
   "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
   (cond
-   (string? x)          (if (.isEmpty ^String x)
-                          (throw (Exception. "\"\" is not a legal DynamoDB value!"))
-                          (doto (AttributeValue.) (.setS x)))
-   (simple-num? x)        (doto (AttributeValue.) (.setN (str x)))
-   (ba? x)                (doto (AttributeValue.) (.setB (ba-buffer x)))
-   (set-of string? x)     (doto (AttributeValue.) (.setSS x))
-   (set-of simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
-   (set-of ba? x)         (doto (AttributeValue.) (.setBS (map ba-buffer x)))
-   (set? x) (throw (Exception. "Sets must be non-empty & contain values of the same type!"))
-   :else    (throw (Exception. (str "Unknown value type: " (type x))))))
+   (string? x)
+   (if (.isEmpty ^String x)
+     (throw (Exception. "Invalid DynamoDB value: \"\""))
+     (doto (AttributeValue.) (.setS x)))
+
+   (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
+   (ba? x)         (doto (AttributeValue.) (.setB (ba-buffer x)))
+
+   (set? x)
+   (if (empty? x)
+     (throw (Exception. "Invalid DynamoDB value: empty set"))
+     (cond
+      (every? string?     x) (doto (AttributeValue.) (.setSS x))
+      (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
+      (every? ba?         x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
+      :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
+                                    " or more than one type")))))
+
+   :else (throw (Exception. (str "Unknown value type: " (type x) "."
+                                 " Wrap with `serialize`?")))))
 
 (comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
                                #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
