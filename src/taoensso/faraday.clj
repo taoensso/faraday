@@ -8,6 +8,7 @@
             [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeValue
+             AttributeValueUpdate ;;+
              AttributeDefinition
              BatchGetItemRequest
              BatchGetItemResult
@@ -20,8 +21,9 @@
              DescribeTableResult
              DeleteTableRequest
              DeleteItemRequest
+             DeleteItemResult ;;+
              DeleteRequest
-             ExpectedAttributeValue
+             ExpectedAttributeValue ;;++
              GetItemRequest
              GetItemResult
              KeySchemaElement
@@ -31,12 +33,15 @@
              ProvisionedThroughput
              ProvisionedThroughputDescription
              PutItemRequest
+             PutItemResult ;;+
              PutRequest
              QueryRequest
-             QueryResult
+             QueryResult ;;++
              ResourceNotFoundException
              ScanRequest
              ScanResult
+             UpdateItemRequest ;;+
+             UpdateTableRequest ;;+
              WriteRequest]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
@@ -129,8 +134,7 @@
 (defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- bb->ba   [^ByteBuffer bb] (.array bb))
 
-(defn- db-val->clj-val
-  "Returns the Clojure value of given AttributeValue object."
+(defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
@@ -147,8 +151,7 @@
                            (instance? Integer x)
                            (instance? Float   x)))
 
-(defn- clj-val->db-val
-  "Returns an AttributeValue object for given Clojure value."
+(defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
   (cond
    (string? x)
@@ -177,62 +180,70 @@
 
 ;;;; Coercion - objects
 
-(defn- db-map->clj-map [x] (when x (utils/fmap db-val->clj-val (into {} x))))
-
 (defprotocol AsMap (as-map [x]))
 
+(defn- db-map->clj-map [x] (when x (utils/fmap db-val->clj-val (into {} x))))
+
+(defmacro ^:private am-item-result [result get-form]
+  `(when-let [get-form# ~get-form]
+     (with-meta (db-map->clj-map get-form#)
+       {:consumed-capacity (.getConsumedCapacity ~result)})))
+
+(defmacro ^:private am-query|scan-result [result]
+  `(let [result# ~result]
+     {:items (map db-map->clj-map (.getItems result#))
+      :count (.getCount result#)
+      :consumed-capacity (.getConsumedCapacity result#)
+      :last-key (as-map (.getLastEvaluatedKey result#))}))
+
 (extend-protocol AsMap
-
-  java.util.ArrayList (as-map [alist] (into [] (map as-map alist)))
-  java.util.HashMap   (as-map [hmap] (utils/fmap as-map (into {} hmap)))
-  AttributeValue      (as-map [aval] (db-val->clj-val aval))
-  KeySchemaElement    (as-map [element] {:name (.getAttributeName element)})
-
-  ProvisionedThroughputDescription
-  (as-map [throughput] {:read  (.getReadCapacityUnits throughput)
-                        :write (.getWriteCapacityUnits throughput)
-                        :last-decrease (.getLastDecreaseDateTime throughput)
-                        :last-increase (.getLastIncreaseDateTime throughput)})
-
-  DescribeTableResult
-  (as-map [result] (let [table (.getTable result)]
-                     {:name          (.getTableName table)
-                      :creation-date (.getCreationDateTime table)
-                      :item-count    (.getItemCount table)
-                      :key-schema    (as-map (.getKeySchema table))
-                      :throughput    (as-map (.getProvisionedThroughput table))
-                      :status        (-> (.getTableStatus table)
-                                         (str/lower-case)
-                                         (keyword))}))
-
-  BatchWriteItemResult
-  (as-map [result] {:unprocessed-items (into {} (.getUnprocessedItems result))})
-
+  nil                 (as-map [_] nil)
+  java.util.ArrayList (as-map [a] (into [] (map as-map a)))
+  java.util.HashMap   (as-map [m] (utils/fmap as-map (into {} m)))
+  AttributeValue      (as-map [v] (db-val->clj-val v))
+  KeySchemaElement    (as-map [e] {:name (.getAttributeName e)})
+  GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
+  PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
+  DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
+  QueryResult         (as-map [r] (am-query|scan-result r))
+  ScanResult          (as-map [r] (am-query|scan-result r))
   KeysAndAttributes
   (as-map [result]
     (merge
      (when-let [a (.getAttributesToGet result)] {:attrs (into [] a)})
-     (when-let [c (.getConsistentRead result)]  {:consistent c})
-     (when-let [k (.getKeys result)]            {:keys (utils/fmap as-map (into [] k))})))
+     (when-let [c (.getConsistentRead  result)] {:consistent c})
+     (when-let [k (.getKeys            result)] {:keys (utils/fmap as-map (into [] k))})))
+
+  ;; TODO CreateTableResult, ListTablesResult, UpdateItemResult, UpdateTableResult
 
   BatchGetItemResult
   (as-map [result]
-    {:responses        (utils/fmap as-map (into {} (.getResponses result)))
-     :unprocessed-keys (utils/fmap as-map (into {} (.getUnprocessedKeys result)))})
+    {:responses         (utils/fmap as-map (into {} (.getResponses result)))
+     :unprocessed-keys  (utils/fmap as-map (into {} (.getUnprocessedKeys result)))
+     :consumed-capacity (.getConsumedCapacity result)})
+  BatchWriteItemResult
+  (as-map [result] {:unprocessed-items (into {} (.getUnprocessedItems result))
+                    :consumed-capacity (.getConsumedCapacity result)})
 
-  GetItemResult (as-map [result] (db-map->clj-map (.getItem result)))
+  DescribeTableResult
+  (as-map [result]
+    (let [table (.getTable result)]
+      {:name          (.getTableName table)
+       :creation-date (.getCreationDateTime table)
+       :item-count    (.getItemCount table)
+       :size-bytes    (.getTableSizeBytes table)
+       :key-schema    (as-map (.getKeySchema table))
+       :throughput    (as-map (.getProvisionedThroughput table))
+       ;; :indexes    (as-map (.getLocalSecondaryIndexes table)) ; TODO
+       :status        (-> (.getTableStatus table) (str/lower-case) (keyword))}))
 
-  QueryResult
-  (as-map [results] {:items    (map db-map->clj-map (.getItems results))
-                     :count    (.getCount results)
-                     :last-key (as-map (.getLastEvaluatedKey results))})
+  ;; LocalSecondaryIndexDescription ; TODO
 
-  ScanResult
-  (as-map [results] {:items    (map db-map->clj-map (.getItems results))
-                     :count    (.getCount results)
-                     :last-key (as-map (.getLastEvaluatedKey results))})
-
-  nil (as-map [_] nil))
+  ProvisionedThroughputDescription
+  (as-map [throughput] {:read          (.getReadCapacityUnits    throughput)
+                        :write         (.getWriteCapacityUnits   throughput)
+                        :last-decrease (.getLastDecreaseDateTime throughput)
+                        :last-increase (.getLastIncreaseDateTime throughput)}))
 
 ;;;; API - tables
 
@@ -318,6 +329,8 @@
       .listTables
       .getTableNames
       seq))
+
+;;;; TODO Code walk-through below
 
 ;;;; API - items
 
