@@ -2,7 +2,14 @@
   (:use     [clojure.test]
             [taoensso.faraday])
   (:require [taoensso.faraday :as far]) ; TODO
-  (:import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException))
+  (:import [com.amazonaws.services.dynamodbv2.model
+            ConditionalCheckFailedException
+            ;; InternalServerErrorException
+            ;; ItemCollectionSizeLimitExceededException
+            ;; LimitExceededException
+            ;; ProvisionedThroughputExceededException
+            ;; ResourceInUseException
+            ResourceNotFoundException]))
 
 ;; TODO LOTS of tests still outstanding (PRs welcome!!)
 

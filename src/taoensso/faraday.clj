@@ -9,27 +9,32 @@
             [taoensso.nippy         :as nippy]
             [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodbv2.model
+             AttributeDefinition
              AttributeValue
              AttributeValueUpdate
-             AttributeDefinition
              BatchGetItemRequest
              BatchGetItemResult
              BatchWriteItemRequest
              BatchWriteItemResult
              Condition
+             ;; ConsumedCapacity
              CreateTableRequest
-             UpdateTableRequest
-             DescribeTableRequest
-             DescribeTableResult
-             DeleteTableRequest
+             ;; CreateTableResult
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
+             DeleteTableRequest
+             ;; DeleteTableResult
+             DescribeTableRequest
+             DescribeTableResult
              ExpectedAttributeValue
              GetItemRequest
              GetItemResult
-             KeySchemaElement
+             ;; ItemCollectionMetrics
              KeysAndAttributes
+             KeySchemaElement
+             ;; ListTablesRequest
+             ;; ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
              Projection
@@ -40,13 +45,21 @@
              PutRequest
              QueryRequest
              QueryResult
-             ResourceNotFoundException
              ScanRequest
              ScanResult
+             ;; TableDescription
              UpdateItemRequest
              UpdateItemResult
              UpdateTableRequest
-             WriteRequest]
+             ;; UpdateTableResult
+             WriteRequest
+             ;; ConditionalCheckFailedException
+             ;; InternalServerErrorException
+             ;; ItemCollectionSizeLimitExceededException
+             ;; LimitExceededException
+             ;; ProvisionedThroughputExceededException
+             ;; ResourceInUseException
+             ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
