@@ -21,12 +21,8 @@
 
 (comment (map (partial fmap inc) ['(1 2 3) [1 2 3] {:1 1 :2 2 :3 3} #{1 2 3}]))
 
-(defmacro time-ns
-  "Returns number of nanoseconds it takes to execute body."
-  [& body]
-  `(let [t0# (System/nanoTime)]
-     ~@body
-     (- (System/nanoTime) t0#)))
+(defmacro time-ns "Returns number of nanoseconds it takes to execute body."
+  [& body] `(let [t0# (System/nanoTime)] ~@body (- (System/nanoTime) t0#)))
 
 (defmacro bench
   "Repeatedly executes form and returns time taken to complete execution."
@@ -45,5 +41,5 @@
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
-(def enum* (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
+(def  enum* (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
 (defn enum ^String [x] (enum* x))

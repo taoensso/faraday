@@ -1,6 +1,5 @@
 (ns taoensso.faraday
-  "Clojure DynamoDB client. A fork of Rotary by James Reeves.
-
+  "Clojure DynamoDB client. Adapted from Rotary by James Reeves.
   Ref. https://github.com/weavejester/rotary (Rotary),
        http://goo.gl/22QGA (DynamoDBv2 API)"
   {:author "Peter Taoussanis"}
@@ -9,28 +8,34 @@
             [taoensso.nippy         :as nippy]
             [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodbv2.model
+             AttributeDefinition
              AttributeValue
              AttributeValueUpdate
-             AttributeDefinition
              BatchGetItemRequest
              BatchGetItemResult
              BatchWriteItemRequest
              BatchWriteItemResult
              Condition
+             ;; ConsumedCapacity
              CreateTableRequest
-             UpdateTableRequest
-             DescribeTableRequest
-             DescribeTableResult
-             DeleteTableRequest
+             ;; CreateTableResult
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
+             DeleteTableRequest
+             ;; DeleteTableResult
+             DescribeTableRequest
+             DescribeTableResult
              ExpectedAttributeValue
              GetItemRequest
              GetItemResult
-             KeySchemaElement
+             ;; ItemCollectionMetrics
              KeysAndAttributes
+             KeySchemaElement
+             ;; ListTablesRequest
+             ;; ListTablesResult
              LocalSecondaryIndex
+             LocalSecondaryIndexDescription
              Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
@@ -39,35 +44,39 @@
              PutRequest
              QueryRequest
              QueryResult
-             ResourceNotFoundException
              ScanRequest
              ScanResult
+             ;; TableDescription
              UpdateItemRequest
+             UpdateItemResult
              UpdateTableRequest
-             WriteRequest]
+             ;; UpdateTableResult
+             WriteRequest
+             ;; ConditionalCheckFailedException
+             ;; InternalServerErrorException
+             ;; ItemCollectionSizeLimitExceededException
+             ;; LimitExceededException
+             ;; ProvisionedThroughputExceededException
+             ;; ResourceInUseException
+             ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Code walk-through.
-;; * Go through Rotary PRs.
-;; * Go through Rotary non-PR forks.
-;; * Nippy support.
-;; * More consistent string/keyword-ization.
+;; * Finish up code walk-through.
+;; * Go through Rotary PRs, non-PR forks.
+;; * Consistent string/keyword-ization.
+;; * Nippy support (`serialized`, `binary`) types with marked bin data.
+;; * README docs.
+;; * Benchmarks.
 ;; * Further tests.
-;; * Docs!
-;; * Benching.
 ;; * Parallel scans.
 ;; * Async API.
 ;; * Auto throughput adjusting.
 
 ;;;; Coercion - values
-
-;; TODO Nippy support (will require special marker bin-wrapping), incl.
-;; Serialized (boxed) type (should allow empty strings & ANY type of set)
-;; Maybe require special wrapper types for writing bins/serialized
 
 (defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- bb->ba   [^ByteBuffer bb] (.array bb))
@@ -146,7 +155,7 @@
 
 (defn- key-schema "Returns a new KeySchema object."
   [hash-key & [range-key]]
-  (let [schema (key-schema-element (:name hash-key) :hash)]
+  (let [schema [(key-schema-element (:name hash-key) :hash)]]
     (if range-key
       (conj schema (key-schema-element (:name range-key) :range))
       schema)))
@@ -157,7 +166,7 @@
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
 
-(defn- attribute-definitions "Returns a vector of new AttributeDefinition objects."
+(defn- attribute-definitions "[{:name _ :type _}] -> [AttributeDefinition]"
   [defs]
   (mapv
    (fn [{key-name :name key-type :type :as def}]
@@ -166,7 +175,8 @@
        (.setAttributeType (utils/enum key-type))))
    defs))
 
-(defn- local-indexes "Returns a vector of new LocalSecondaryIndexes objects."
+(defn- local-indexes
+  "[{:name _ :range-key _ :projection _}] -> [LocalSecondaryIndex]"
   [hash-key indexes]
   (mapv
    (fn [{index-name :name
@@ -177,7 +187,7 @@
        (.setIndexName  (name index-name))
        (.setKeySchema  (key-schema hash-key range-key))
        (.setProjection
-        (let [pr (Projection.)
+        (let [pr    (Projection.)
               ptype (if (vector? projection) :include projection)]
           (.setProjectionType pr (utils/enum ptype))
           (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
@@ -185,13 +195,14 @@
    indexes))
 
 (defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
-  [expected]
-  (utils/fmap
-   #(case %
-      (true  ::exists)     (ExpectedAttributeValue. true) ;; TODO Valid?
-      (false ::not-exists) (ExpectedAttributeValue. false)
-      (ExpectedAttributeValue. (clj-val->db-val %)))
-   expected))
+  [e-vals]
+  (when (seq e-vals)
+    (utils/fmap
+     #(case %
+        (true  ::exists)     (ExpectedAttributeValue. true)
+        (false ::not-exists) (ExpectedAttributeValue. false)
+        (ExpectedAttributeValue. (clj-val->db-val %)))
+     e-vals)))
 
 ;;;; Coercion - objects
 
@@ -218,67 +229,76 @@
   GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
   PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
   DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
+  UpdateItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
   QueryResult         (as-map [r] (am-query|scan-result r))
   ScanResult          (as-map [r] (am-query|scan-result r))
   KeysAndAttributes
-  (as-map [result]
+  (as-map [x]
     (merge
-     (when-let [a (.getAttributesToGet result)] {:attrs (into [] a)})
-     (when-let [c (.getConsistentRead  result)] {:consistent c})
-     (when-let [k (.getKeys            result)] {:keys (utils/fmap as-map (into [] k))})))
+     (when-let [a (.getAttributesToGet x)] {:attrs (into [] a)})
+     (when-let [c (.getConsistentRead  x)] {:consistent c})
+     (when-let [k (.getKeys            x)] {:keys (utils/fmap as-map (into [] k))})))
 
-  ;; TODO CreateTableResult, ListTablesResult, UpdateItemResult, UpdateTableResult
+  ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult, Projection
 
   BatchGetItemResult
-  (as-map [result]
-    {:responses         (utils/fmap as-map (into {} (.getResponses result)))
-     :unprocessed-keys  (utils/fmap as-map (into {} (.getUnprocessedKeys result)))
-     :consumed-capacity (.getConsumedCapacity result)})
+  (as-map [r]
+    {:responses         (utils/fmap as-map (into {} (.getResponses r)))
+     :unprocessed-keys  (utils/fmap as-map (into {} (.getUnprocessedKeys r)))
+     :consumed-capacity (.getConsumedCapacity r)})
   BatchWriteItemResult
-  (as-map [result] {:unprocessed-items (into {} (.getUnprocessedItems result))
-                    :consumed-capacity (.getConsumedCapacity result)})
+  (as-map [r] {:unprocessed-items (into {} (.getUnprocessedItems r))
+               :consumed-capacity (.getConsumedCapacity r)})
 
   DescribeTableResult
-  (as-map [result]
-    (let [table (.getTable result)]
-      {:name          (.getTableName table)
-       :creation-date (.getCreationDateTime table)
-       :item-count    (.getItemCount table)
-       :size-bytes    (.getTableSizeBytes table)
-       :key-schema    (as-map (.getKeySchema table))
-       :throughput    (as-map (.getProvisionedThroughput table))
-       ;; :indexes    (as-map (.getLocalSecondaryIndexes table)) ; TODO
-       :status        (-> (.getTableStatus table) (str/lower-case) (keyword))}))
+  (as-map [r]
+    (let [t (.getTable r)]
+      {:name          (.getTableName t)
+       :creation-date (.getCreationDateTime t)
+       :item-count    (.getItemCount t)
+       :size          (.getTableSizeBytes t)
+       :key-schema    (as-map (.getKeySchema t))
+       :throughput    (as-map (.getProvisionedThroughput t))
+       :indexes       (as-map (.getLocalSecondaryIndexes t))
+       :status        (-> (.getTableStatus t) (str/lower-case) (keyword))}))
 
-  ;; LocalSecondaryIndexDescription ; TODO
+  LocalSecondaryIndexDescription
+  (as-map [d]
+    {:name       (.getIndexName d)
+     :size       (.getIndexSizeBytes d)
+     :item-count (.getItemCount d)
+     :key-schema (as-map (.getKeySchema d))
+     :projection (as-map (.getProjection d))})
 
   ProvisionedThroughputDescription
-  (as-map [throughput] {:read          (.getReadCapacityUnits    throughput)
-                        :write         (.getWriteCapacityUnits   throughput)
-                        :last-decrease (.getLastDecreaseDateTime throughput)
-                        :last-increase (.getLastIncreaseDateTime throughput)}))
+  (as-map [d]
+    {:read                (.getReadCapacityUnits d)
+     :write               (.getWriteCapacityUnits d)
+     :last-decrease       (.getLastDecreaseDateTime d)
+     :last-increase       (.getLastIncreaseDateTime d)
+     :num-decreases-today (.getNumberOfDecreasesToday d)}))
 
 ;;;; API - tables
 
 (defn create-table
   "Creates a table with the given map of options:
     :name       - (required) table name.
-    :throughput - (required) {:read <units> :write <units>}.
-    :hash-key   - (required) {:name <> :type <#{:s :n :ss :ns :b :bs}>}.
-    :range-key  - (optional) {:name <> :type <#{:s :n :ss :ns :b :bs}>}.
-    :indexes    - (optional) [{:name <> :range-key <>
-                               :projection <#{:all :keys-only [<attr1> ...]}>}]"
+    :throughput - (required) {:read units :write units}.
+    :hash-key   - (required) {:name _ :type #{:s :n :ss :ns :b :bs}}.
+    :range-key  - (optional) {:name _ :type #{:s :n :ss :ns :b :bs}}.
+    :indexes    - (optional) [{:name _ :range-key _
+                               :projection #{:all :keys-only [attr1 ...]}}]"
   [creds {table-name :name
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
   (.createTable (db-client creds)
-   (let [defined-attrs (->> (conj [] hash-key range-key)
-                            (concat (map #(:range-key %) indexes))
-                            (filter identity))]
+   (let [attr-defs (->> (conj [] hash-key range-key)
+                        (concat (map :range-key indexes))
+                        (filter identity))]
      (doto (CreateTableRequest.)
        (.setTableName (name table-name))
        (.setKeySchema (key-schema hash-key range-key))
-       (.setAttributeDefinitions  (attribute-definitions defined-attrs))
+       (.setAttributeDefinitions  (attribute-definitions attr-defs))
        (.setProvisionedThroughput (provisioned-throughput throughput))
        (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
 
@@ -287,7 +307,7 @@
   [creds table]
   (try (as-map (.describeTable (db-client creds)
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
-       (catch ResourceNotFoundException _)))
+       (catch ResourceNotFoundException _ nil)))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
@@ -308,47 +328,67 @@
   (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name))))
 
 (defn list-tables "Returns a list of tables." ; TODO Keywordize?
-  [creds] (-> (db-client creds) (.listTables) (.getTableNames) seq))
+  [creds] (-> (db-client creds) (.listTables) (.getTableNames) (seq)))
 
 ;;;; API - items
 
 (defn put-item
-  "Adds an item (Clojure map) to a table.
-
-  Options:
+  "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
                   {\"my-attr\" \"expected-value\"}
                   {\"my-attr\" true\"}  ; Attr must exist
                   {\"my-attr\" false\"} ; Attr must not exist"
-  [creds table item & {:keys [return expected]
-                       :or   {return :none}}]
+  [creds table item & [{:keys [return expected]
+                        :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
     (doto (PutItemRequest.)
-      (.setTableName table)
-      (.setItem (into {} (for [[k v] item] [(name k) (clj-val->db-val v)])))
-      (.setExpected (when expected (expected-values expected)))
+      (.setTableName    (name table))
+      (.setItem         (clj-item->db-item item))
+      (.setExpected     (expected-values expected))
       (.setReturnValues (utils/enum return))))))
 
-;;;; TODO Continue code walk-through below
+(defn delete-item
+  "Deletes an item from a table by its hash key, {attr match-value}.
+  See `put-item` for option docs."
+  [creds table hash-key & [{:keys [return expected]
+                            :or   {return :none}}]]
+  (as-map
+   (.deleteItem (db-client creds)
+     (doto (DeleteItemRequest.)
+       (.setTableName    (name table))
+       (.setKey          (clj-item->db-item hash-key))
+       (.setExpected     (expected-values expected))
+       (.setReturnValues (utils/enum return))))))
 
 (defn get-item
-  "Retrieves an item from a table by its hash key."
-  ;; TODO hash-key should be specified as a map of {:attr-name value}. Huh??
-  [creds table hash-key]
+  "Retrieves an item from a table by its hash key, {attr match-value}."
+  [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
-      (.setTableName table)
-      (.setKey (clj-item->db-item hash-key))))))
+      (.setTableName      (name table))
+      (.setKey            (clj-item->db-item hash-key))
+      (.setConsistentRead  consistent?)
+      (.setAttributesToGet attrs-to-get)))))
 
-(defn delete-item
-  "Deletes an item from a table by its hash key."
-  [creds table hash-key]
-  (.deleteItem (db-client creds)
-   (DeleteItemRequest. table (clj-item->db-item hash-key))))
+(defn update-item
+  "Updates an item in a table by its hash key, {attr match-value}.
+  See `put-item` for option docs."
+  [creds table hash-key update-map & [{:keys [return expected]
+                                       :or   {return :none}}]]
+  (as-map
+   (.updateItem (db-client creds)
+     (doto (UpdateItemRequest.)
+       (.setTableName        (name table))
+       (.setKey              (clj-item->db-item hash-key))
+       (.setAttributeUpdates nil) ; TODO
+       (.setExpected         (expected-values expected))
+       (.setReturnValues     (utils/enum return))))))
+
+;;;; TODO Continue code walk-through below
 
 ;;;; API - batch ops
 
