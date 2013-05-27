@@ -176,11 +176,7 @@
        (.setProjection (projection projection included-attrs))))
    indexes))
 
-(defn- expected-values
-  "Returns a map of attribute/ExpectedAttributeValue pairs from a map of
-  attribute/condition pairs: {\"my-attr\" \"expected-value\"}, etc.
-
-  All conditions must be met for operation to succeed."
+(defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
   [expected]
   (utils/fmap
    #(case %
@@ -334,39 +330,27 @@
 
 ;;;; API - items
 
-(defn- set-expected-value! ; TODO PR
-  "Makes a Put request conditional by setting its expected value"
-  [^PutItemRequest req expected]
-  (when expected
-    (.setExpected req
-      (utils/fmap
-       #(if (instance? Boolean %)
-          (ExpectedAttributeValue. ^Boolean %)
-          (ExpectedAttributeValue. (clj-val->db-val %)))
-       expected))))
-
 (defn put-item
-  ;;"Add an item (a Clojure map) to a DynamoDB table."
-  "Add an item (a Clojure map) to a DynamoDB table. Optionally accepts
-  a map after :expected that declares expected values of the item in DynamoDB
-  or the Boolean false if they are not expected to be present. If the condition
-  is not met, it fails with a ConditionalCheckFailedException.
+  "Adds an item (Clojure map) to a DynamoDB table.
 
-  Example: (would not add item if it already exists))
-    (put-item credentials \"table\"
-      {\"id\" 1 \"attr\" \"foo\"}
-      :expected {\"id\" false})"
-  [creds table item & {:keys [expected]}] ; TODO PR
-  ;; [creds table item]
-  (.putItem
-   (db-client creds)
-   (doto (PutItemRequest.)
-     (.setTableName table)
-     (.setItem
-      (into {}
-            (for [[k v] item]
-              [(name k) (clj-val->db-val v)])))
-     (set-expected-value! expected))))
+  Options:
+    :expected - a map of attribute/condition pairs, all of which must be met for
+                the operation to succeed. e.g.:
+                  {\"my-attr\" \"expected-value\"}
+                  {\"my-attr\" true\"}  ; Attr must exist
+                  {\"my-attr\" false\"} ; Attr must not exist
+
+    :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}"
+  [creds table item & {:keys [expected return]
+                       :or   {return :none}}]
+  (as-map
+   (.putItem
+    (db-client creds)
+    (doto (PutItemRequest.)
+      (.setTableName table)
+      (.setItem (into {} (for [[k v] item] [(name k) (clj-val->db-val v)])))
+      (.setExpected (when expected (expected-values expected)))
+      (.setReturnValues (utils/enum return))))))
 
 ;; (defn- item-key
 ;;   "Create a Key object from a value."

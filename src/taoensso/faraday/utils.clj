@@ -51,3 +51,6 @@
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
 (defn ucname ^String [x] (str/upper-case (name x)))
+
+(def enum* (memoize (fn [x] (-> (ucname x) (str/replace "-" "_")))))
+(defn enum ^String [x] (enum* x))
