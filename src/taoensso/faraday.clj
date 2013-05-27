@@ -287,7 +287,7 @@
   [creds table]
   (try (as-map (.describeTable (db-client creds)
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
-       (catch ResourceNotFoundException _)))
+       (catch ResourceNotFoundException _ nil)))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
