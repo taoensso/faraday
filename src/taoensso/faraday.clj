@@ -146,7 +146,7 @@
 
 (defn- key-schema "Returns a new KeySchema object."
   [hash-key & [range-key]]
-  (let [schema (key-schema-element (:name hash-key) :hash)]
+  (let [schema [(key-schema-element (:name hash-key) :hash)]]
     (if range-key
       (conj schema (key-schema-element (:name range-key) :range))
       schema)))
