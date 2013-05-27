@@ -8,7 +8,7 @@
             [taoensso.faraday.utils :as utils])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeValue
-             AttributeValueUpdate ;;+
+             AttributeValueUpdate
              AttributeDefinition
              BatchGetItemRequest
              BatchGetItemResult
@@ -21,9 +21,9 @@
              DescribeTableResult
              DeleteTableRequest
              DeleteItemRequest
-             DeleteItemResult ;;+
+             DeleteItemResult
              DeleteRequest
-             ExpectedAttributeValue ;;++
+             ExpectedAttributeValue
              GetItemRequest
              GetItemResult
              KeySchemaElement
@@ -33,15 +33,15 @@
              ProvisionedThroughput
              ProvisionedThroughputDescription
              PutItemRequest
-             PutItemResult ;;+
+             PutItemResult
              PutRequest
              QueryRequest
-             QueryResult ;;++
+             QueryResult
              ResourceNotFoundException
              ScanRequest
              ScanResult
-             UpdateItemRequest ;;+
-             UpdateTableRequest ;;+
+             UpdateItemRequest
+             UpdateTableRequest
              WriteRequest]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
@@ -95,32 +95,33 @@
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
 
-(defn- attribute-definition "Returns a new AttributeDefinition objects."
-  [{key-name :name key-type :type :as def}]
-  (doto (AttributeDefinition.)
-    (.setAttributeName key-name)
-    (.setAttributeType (utils/ucname key-type))))
+(defn- attribute-definitions "Returns a vector of new AttributeDefinition objects."
+  [defs]
+  (mapv
+   (fn [{key-name :name key-type :type :as def}]
+     (doto (AttributeDefinition.)
+       (.setAttributeName key-name)
+       (.setAttributeType (utils/ucname key-type))))
+   defs))
 
-(defn- attribute-definitions "Returns a vector of AttributeDefinition objects."
-  [defs] (mapv attribute-definition defs))
-
-(defn- create-projection "Returns a new Projection object."
+(defn- projection "Returns a new Projection object."
   [projection & [included-attrs]]
   (let [pr (Projection.)]
     (.setProjectionType pr (utils/ucname projection))
     (when included-attrs (.setNonKeyAttributes pr included-attrs))
     pr))
 
-(defn- local-index "Returns a new LocalSecondaryIndex object."
-  [hash-key {:keys [name range-key projection included-attrs]
-             :or   {projection :all}}]
-  (doto (LocalSecondaryIndex.)
-    (.setIndexName  name)
-    (.setKeySchema  (key-schema hash-key range-key))
-    (.setProjection (create-projection projection included-attrs))))
-
-(defn- local-indexes "Returns a vector of LocalSecondaryIndexes objects."
-  [hash-key indexes] (mapv (partial local-index hash-key) indexes))
+(defn- local-indexes "Returns a vector of new LocalSecondaryIndexes objects."
+  [hash-key indexes]
+  (mapv
+   (fn [{:keys [name range-key projection included-attrs]
+        :or   {projection :all}
+        :as   index}]
+     (doto (LocalSecondaryIndex.)
+       (.setIndexName  name)
+       (.setKeySchema  (key-schema hash-key range-key))
+       (.setProjection (projection projection included-attrs))))
+   indexes))
 
 ;;;; Coercion - values
 
