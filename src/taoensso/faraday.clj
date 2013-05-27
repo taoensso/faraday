@@ -31,6 +31,7 @@
              KeySchemaElement
              KeysAndAttributes
              LocalSecondaryIndex
+             LocalSecondaryIndexDescription
              Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
@@ -230,7 +231,7 @@
      (when-let [c (.getConsistentRead  result)] {:consistent c})
      (when-let [k (.getKeys            result)] {:keys (utils/fmap as-map (into [] k))})))
 
-  ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult
+  ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult, Projection
 
   BatchGetItemResult
   (as-map [result]
@@ -247,13 +248,19 @@
       {:name          (.getTableName table)
        :creation-date (.getCreationDateTime table)
        :item-count    (.getItemCount table)
-       :size-bytes    (.getTableSizeBytes table)
+       :size          (.getTableSizeBytes table)
        :key-schema    (as-map (.getKeySchema table))
        :throughput    (as-map (.getProvisionedThroughput table))
-       ;; :indexes    (as-map (.getLocalSecondaryIndexes table)) ; TODO
+       :indexes       (as-map (.getLocalSecondaryIndexes table))
        :status        (-> (.getTableStatus table) (str/lower-case) (keyword))}))
 
-  ;; LocalSecondaryIndexDescription ; TODO
+  LocalSecondaryIndexDescription
+  (as-map [idx]
+    {:name       (.getIndexName idx)
+     :size       (.getIndexSizeBytes idx)
+     :item-count (.getItemCount idx)
+     :key-schema (as-map (.getKeySchame idx))
+     :projection (as-map (.getProjection idx))})
 
   ProvisionedThroughputDescription
   (as-map [throughput]
