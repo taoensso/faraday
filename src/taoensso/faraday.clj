@@ -43,6 +43,7 @@
              ScanRequest
              ScanResult
              UpdateItemRequest
+             UpdateItemResult
              UpdateTableRequest
              WriteRequest]
             com.amazonaws.ClientConfiguration
@@ -186,12 +187,13 @@
 
 (defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
   [expected]
-  (utils/fmap
-   #(case %
-      (true  ::exists)     (ExpectedAttributeValue. true)
-      (false ::not-exists) (ExpectedAttributeValue. false)
-      (ExpectedAttributeValue. (clj-val->db-val %)))
-   expected))
+  (when (seq expected)
+    (utils/fmap
+     #(case %
+        (true  ::exists)     (ExpectedAttributeValue. true)
+        (false ::not-exists) (ExpectedAttributeValue. false)
+        (ExpectedAttributeValue. (clj-val->db-val %)))
+     expected)))
 
 ;;;; Coercion - objects
 
@@ -218,6 +220,7 @@
   GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
   PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
   DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
+  UpdateItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
   QueryResult         (as-map [r] (am-query|scan-result r))
   ScanResult          (as-map [r] (am-query|scan-result r))
   KeysAndAttributes
@@ -227,7 +230,7 @@
      (when-let [c (.getConsistentRead  result)] {:consistent c})
      (when-let [k (.getKeys            result)] {:keys (utils/fmap as-map (into [] k))})))
 
-  ;; TODO CreateTableResult, ListTablesResult, UpdateItemResult, UpdateTableResult
+  ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult
 
   BatchGetItemResult
   (as-map [result]
@@ -327,28 +330,50 @@
   (as-map
    (.putItem (db-client creds)
     (doto (PutItemRequest.)
-      (.setTableName table)
-      (.setItem      (clj-item->db-item item))
-      (.setExpected  (when expected (expected-values expected)))
+      (.setTableName    (name table))
+      (.setItem         (clj-item->db-item item))
+      (.setExpected     (expected-values expected))
       (.setReturnValues (utils/enum return))))))
 
-;;;; TODO Continue code walk-through below
+(defn delete-item
+  "Deletes an item from a table by its hash key, {<attr> <match-value>}.
+  See `put-item` for option docs."
+  [creds table hash-key & [{:keys [return expected]
+                            :or   {return :none}}]]
+  (as-map
+   (.deleteItem (db-client creds)
+     (doto (DeleteItemRequest.)
+       (.setTableName    (name table))
+       (.setKey          (clj-item->db-item hash-key))
+       (.setExpected     (expected-values expected))
+       (.setReturnValues (utils/enum return))))))
 
 (defn get-item
-  "Retrieves an item from a table by its hash key."
-  ;; TODO hash-key should be specified as a map of {:attr-name value}. Huh??
-  [creds table hash-key]
+  "Retrieves an item from a table by its hash key, {<attr> <match-value>}."
+  [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
-      (.setTableName table)
-      (.setKey (clj-item->db-item hash-key))))))
+      (.setTableName      (name table))
+      (.setKey            (clj-item->db-item hash-key))
+      (.setConsistentRead  consistent?)
+      (.setAttributesToGet attrs-to-get)))))
 
-(defn delete-item
-  "Deletes an item from a table by its hash key."
-  [creds table hash-key]
-  (.deleteItem (db-client creds)
-   (DeleteItemRequest. table (clj-item->db-item hash-key))))
+(defn update-item
+  "Updates an item in a table by its hash key, {<attr> <match-value>}.
+  See `put-item` for option docs."
+  [creds table hash-key update-map & [{:keys [return expected]
+                                       :or   {return :none}}]]
+  (as-map
+   (.updateItem (db-client creds)
+     (doto (UpdateItemRequest.)
+       (.setTableName        (name table))
+       (.setKey              (clj-item->db-item hash-key))
+       (.setAttributeUpdates nil) ; TODO
+       (.setExpected         (expected-values expected))
+       (.setReturnValues     (utils/enum return))))))
+
+;;;; TODO Continue code walk-through below
 
 ;;;; API - batch ops
 
