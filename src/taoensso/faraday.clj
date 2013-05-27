@@ -253,10 +253,12 @@
   ;; LocalSecondaryIndexDescription ; TODO
 
   ProvisionedThroughputDescription
-  (as-map [throughput] {:read          (.getReadCapacityUnits    throughput)
-                        :write         (.getWriteCapacityUnits   throughput)
-                        :last-decrease (.getLastDecreaseDateTime throughput)
-                        :last-increase (.getLastIncreaseDateTime throughput)}))
+  (as-map [throughput]
+    {:read                (.getReadCapacityUnits      throughput)
+     :write               (.getWriteCapacityUnits     throughput)
+     :last-decrease       (.getLastDecreaseDateTime   throughput)
+     :last-increase       (.getLastIncreaseDateTime   throughput)
+     :num-decreases-today (.getNumberOfDecreasesToday throughput)}))
 
 ;;;; API - tables
 
