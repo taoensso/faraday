@@ -15,6 +15,8 @@ Faraday is a fork of [Rotary](https://github.com/weavejester/rotary) by James Re
  * **Good performance**.
  * Flexible, high-performance **binary-safe serialization** using [Nippy](https://github.com/ptaoussanis/nippy).
 
+It's still (very) early days. There's a lot of rough edges, but most of them are relatively superficial and will be ironed out as the lib sees Real-World-Use™. Again, since I'm still only evaluating DynamoDB myself: **pull requests, bug reports, and/or suggestions are very, very welcome**!
+
 ## Getting Started
 
 ### Leiningen
