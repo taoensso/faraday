@@ -21,11 +21,6 @@
 
 (comment (map (partial fmap inc) ['(1 2 3) [1 2 3] {:1 1 :2 2 :3 3} #{1 2 3}]))
 
-(defn keywordize-map [m] (reduce-kv (fn [m k v] (assoc m (keyword k) v)) {} m))
-
-(comment (keywordize-map nil)
-         (keywordize-map {"akey" "aval" "bkey" "bval"}))
-
 (defmacro time-ns
   "Returns number of nanoseconds it takes to execute body."
   [& body]
@@ -50,7 +45,5 @@
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
-(defn ucname ^String [x] (str/upper-case (name x)))
-
-(def enum* (memoize (fn [x] (-> (ucname x) (str/replace "-" "_")))))
+(def enum* (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
 (defn enum ^String [x] (enum* x))
