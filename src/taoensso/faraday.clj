@@ -60,6 +60,62 @@
 ;; * Async API.
 ;; * Auto throughput adjusting.
 
+;;;; Coercion - values
+
+;; TODO see http://goo.gl/hOzhR and http://goo.gl/NSY3Z for types supported by
+;; the Java SDK! (incl. Date, Long, BigDecimal, BigInteger, ...).
+
+;; TODO Nippy support (will require special marker bin-wrapping), incl.
+;; Serialized (boxed) type (should allow empty strings & ANY type of set)
+;; Maybe require special wrapper types for writing bins/serialized
+
+(defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
+(defn- bb->ba   [^ByteBuffer bb] (.array bb))
+
+(defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
+  [^AttributeValue x]
+  (or (.getS x)
+      (some->> (.getN  x) str->num)
+      (some->> (.getB  x) bb->ba)
+      (some->> (.getSS x) (into #{}))
+      (some->> (.getNS x) (map str->num) (into #{}))
+      (some->> (.getBS x) (map bb->ba)   (into #{}))))
+
+(def ^:private ^:const ba-class (Class/forName "[B"))
+(defn- ba? [x] (instance? ba-class x))
+(defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
+(defn- simple-num? [x] (or (instance? Long    x)
+                           (instance? Double  x)
+                           (instance? Integer x)
+                           (instance? Float   x)))
+
+(defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
+  ^AttributeValue [x]
+  (cond
+   (string? x)
+   (if (.isEmpty ^String x)
+     (throw (Exception. "Invalid DynamoDB value: \"\""))
+     (doto (AttributeValue.) (.setS x)))
+
+   (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
+   (ba? x)         (doto (AttributeValue.) (.setB (ba-buffer x)))
+
+   (set? x)
+   (if (empty? x)
+     (throw (Exception. "Invalid DynamoDB value: empty set"))
+     (cond
+      (every? string?     x) (doto (AttributeValue.) (.setSS x))
+      (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
+      (every? ba?         x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
+      :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
+                                    " or more than one type")))))
+
+   :else (throw (Exception. (str "Unknown value type: " (type x) "."
+                                 " Wrap with `serialize`?")))))
+
+(comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
+                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
+
 ;;;; API - object wrappers
 
 (def ^:private db-client*
@@ -123,61 +179,18 @@
        (.setProjection (projection projection included-attrs))))
    indexes))
 
-;;;; Coercion - values
+(defn- expected-values
+  "Returns a map of attribute/ExpectedAttributeValue pairs from a map of
+  attribute/condition pairs: {\"my-attr\" \"expected-value\"}, etc.
 
-;; TODO see http://goo.gl/hOzhR and http://goo.gl/NSY3Z for types supported by
-;; the Java SDK! (incl. Date, Long, BigDecimal, BigInteger, ...).
-
-;; TODO Nippy support (will require special marker bin-wrapping), incl.
-;; Serialized (boxed) type (should allow empty strings & ANY type of set)
-;; Maybe require special wrapper types for writing bins/serialized
-
-(defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
-(defn- bb->ba   [^ByteBuffer bb] (.array bb))
-
-(defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
-  [^AttributeValue x]
-  (or (.getS x)
-      (some->> (.getN  x) str->num)
-      (some->> (.getB  x) bb->ba)
-      (some->> (.getSS x) (into #{}))
-      (some->> (.getNS x) (map str->num) (into #{}))
-      (some->> (.getBS x) (map bb->ba)   (into #{}))))
-
-(def ^:private ^:const ba-class (Class/forName "[B"))
-(defn- ba? [x] (instance? ba-class x))
-(defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
-(defn- simple-num? [x] (or (instance? Long    x)
-                           (instance? Double  x)
-                           (instance? Integer x)
-                           (instance? Float   x)))
-
-(defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
-  ^AttributeValue [x]
-  (cond
-   (string? x)
-   (if (.isEmpty ^String x)
-     (throw (Exception. "Invalid DynamoDB value: \"\""))
-     (doto (AttributeValue.) (.setS x)))
-
-   (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (ba? x)         (doto (AttributeValue.) (.setB (ba-buffer x)))
-
-   (set? x)
-   (if (empty? x)
-     (throw (Exception. "Invalid DynamoDB value: empty set"))
-     (cond
-      (every? string?     x) (doto (AttributeValue.) (.setSS x))
-      (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
-      (every? ba?         x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
-      :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
-                                    " or more than one type")))))
-
-   :else (throw (Exception. (str "Unknown value type: " (type x) "."
-                                 " Wrap with `serialize`?")))))
-
-(comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
-                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
+  All conditions must be met for operation to succeed."
+  [expected]
+  (utils/fmap
+   #(case %
+      (true  ::exists)     (ExpectedAttributeValue. true) ;; TODO Valid?
+      (false ::not-exists) (ExpectedAttributeValue. false)
+      (ExpectedAttributeValue. (clj-val->db-val %)))
+   expected))
 
 ;;;; Coercion - objects
 
