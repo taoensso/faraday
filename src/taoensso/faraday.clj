@@ -62,9 +62,6 @@
 
 ;;;; Coercion - values
 
-;; TODO see http://goo.gl/hOzhR and http://goo.gl/NSY3Z for types supported by
-;; the Java SDK! (incl. Date, Long, BigDecimal, BigInteger, ...).
-
 ;; TODO Nippy support (will require special marker bin-wrapping), incl.
 ;; Serialized (boxed) type (should allow empty strings & ANY type of set)
 ;; Maybe require special wrapper types for writing bins/serialized
@@ -259,6 +256,8 @@
                         :last-decrease (.getLastDecreaseDateTime throughput)
                         :last-increase (.getLastIncreaseDateTime throughput)}))
 
+;;;; TODO Code walk-through below
+
 ;;;; API - tables
 
 (defn create-table
@@ -323,28 +322,15 @@
            (.setTableName name))))
        (catch ResourceNotFoundException _)))
 
-(defn ensure-table
-  "Creates the table if it does not already exist."
+(defn ensure-table "Creates the table if it does not already exist."
   [creds {name :name :as properties}]
-  (if-not (describe-table creds name)
-    (create-table creds properties)))
+  (if-not (describe-table creds name) (create-table creds properties)))
 
-(defn delete-table
-  "Delete a table in DynamoDB with the given name."
-  [creds name]
-  (.deleteTable
-   (db-client creds)
-   (DeleteTableRequest. name)))
+(defn delete-table "Deletes a table in DynamoDB with the given name."
+  [creds name] (.deleteTable (db-client creds) (DeleteTableRequest. name)))
 
-(defn list-tables
-  "Return a list of tables in DynamoDB."
-  [creds]
-  (-> (db-client creds)
-      .listTables
-      .getTableNames
-      seq))
-
-;;;; TODO Code walk-through below
+(defn list-tables "Returns a list of tables in DynamoDB."
+  [creds] (-> (db-client creds) (.listTables) (.getTableNames) seq))
 
 ;;;; API - items
 
