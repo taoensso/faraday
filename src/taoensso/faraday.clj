@@ -65,23 +65,18 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Code walk-through.
-;; * Go through Rotary PRs.
-;; * Go through Rotary non-PR forks.
-;; * Nippy support.
-;; * More consistent string/keyword-ization.
+;; * Finish up code walk-through.
+;; * Go through Rotary PRs, non-PR forks.
+;; * Consistent string/keyword-ization.
+;; * Nippy support (`serialized`, `binary`) types with marked bin data.
+;; * README docs.
+;; * Benchmarks.
 ;; * Further tests.
-;; * Docs!
-;; * Benching.
 ;; * Parallel scans.
 ;; * Async API.
 ;; * Auto throughput adjusting.
 
 ;;;; Coercion - values
-
-;; TODO Nippy support (will require special marker bin-wrapping), incl.
-;; Serialized (boxed) type (should allow empty strings & ANY type of set)
-;; Maybe require special wrapper types for writing bins/serialized
 
 (defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- bb->ba   [^ByteBuffer bb] (.array bb))
