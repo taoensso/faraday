@@ -4,6 +4,8 @@
   (:require [taoensso.faraday :as far]) ; TODO
   (:import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException))
 
+;; TODO LOTS of tests still outstanding (PRs welcome!!)
+
 (def creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
             :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")})
 
@@ -89,18 +91,18 @@
    [:put table {id "9"  attr "foobaz"}])
 
   ;; Should update item 42 to have attr bar
-  (put-item creds table {id "42" attr "bar"} :expected {attr "foo"})
+  (put-item creds table {id "42" attr "bar"} {:expected {attr "foo"}})
   (is (= "bar" ((get-item creds table {id "42"}) attr)))
 
   ;; Should fail to update item 6
   (is (thrown? ConditionalCheckFailedException
-               (put-item creds table {id "6" attr "baz"} :expected {id false})))
+               (put-item creds table {id "6" attr "baz"} {:expected {id false}})))
   (is (not (= "baz" ((get-item creds table {id "6"}) attr))))
 
   ;; Should upate item 9 to have attr baz
-  (put-item creds table {id "9" attr "baz"} :expected {attr "foobaz"})
+  (put-item creds table {id "9" attr "baz"} {:expected {attr "foobaz"}})
   (is (= "baz" ((get-item creds table {id "9"}) attr)))
 
   ;; Should add item 23
-  (put-item creds table {id "23" attr "bar"} :expected {id false})
+  (put-item creds table {id "23" attr "bar"} {:expected {id false}})
   (is (not (= nil (get-item creds table {id "23"})))))

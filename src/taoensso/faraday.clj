@@ -177,7 +177,7 @@
        (.setIndexName  (name index-name))
        (.setKeySchema  (key-schema hash-key range-key))
        (.setProjection
-        (let [pr (Projection.)
+        (let [pr    (Projection.)
               ptype (if (vector? projection) :include projection)]
           (.setProjectionType pr (utils/enum ptype))
           (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
@@ -188,7 +188,7 @@
   [expected]
   (utils/fmap
    #(case %
-      (true  ::exists)     (ExpectedAttributeValue. true) ;; TODO Valid?
+      (true  ::exists)     (ExpectedAttributeValue. true)
       (false ::not-exists) (ExpectedAttributeValue. false)
       (ExpectedAttributeValue. (clj-val->db-val %)))
    expected))
@@ -274,13 +274,13 @@
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
   (.createTable (db-client creds)
-   (let [defined-attrs (->> (conj [] hash-key range-key)
-                            (concat (map #(:range-key %) indexes))
-                            (filter identity))]
+   (let [attr-defs (->> (conj [] hash-key range-key)
+                        (concat (map #(:range-key %) indexes))
+                        (filter identity))]
      (doto (CreateTableRequest.)
        (.setTableName (name table-name))
        (.setKeySchema (key-schema hash-key range-key))
-       (.setAttributeDefinitions  (attribute-definitions defined-attrs))
+       (.setAttributeDefinitions  (attribute-definitions attr-defs))
        (.setProvisionedThroughput (provisioned-throughput throughput))
        (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
 
@@ -310,28 +310,26 @@
   (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name))))
 
 (defn list-tables "Returns a list of tables." ; TODO Keywordize?
-  [creds] (-> (db-client creds) (.listTables) (.getTableNames) seq))
+  [creds] (-> (db-client creds) (.listTables) (.getTableNames) (seq)))
 
 ;;;; API - items
 
 (defn put-item
-  "Adds an item (Clojure map) to a table.
-
-  Options:
+  "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
                   {\"my-attr\" \"expected-value\"}
                   {\"my-attr\" true\"}  ; Attr must exist
                   {\"my-attr\" false\"} ; Attr must not exist"
-  [creds table item & {:keys [return expected]
-                       :or   {return :none}}]
+  [creds table item & [{:keys [return expected]
+                        :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
     (doto (PutItemRequest.)
       (.setTableName table)
-      (.setItem (into {} (for [[k v] item] [(name k) (clj-val->db-val v)])))
-      (.setExpected (when expected (expected-values expected)))
+      (.setItem      (clj-item->db-item item))
+      (.setExpected  (when expected (expected-values expected)))
       (.setReturnValues (utils/enum return))))))
 
 ;;;; TODO Continue code walk-through below
