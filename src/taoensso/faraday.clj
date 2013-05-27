@@ -166,24 +166,22 @@
        (.setAttributeType (utils/enum key-type))))
    defs))
 
-(defn- projection "Returns a new Projection object."
-  [projection & [included-attrs]]
-  (let [pr (Projection.)]
-    (.setProjectionType pr (utils/enum projection))
-    (when included-attrs (.setNonKeyAttributes pr included-attrs))
-    pr))
-
 (defn- local-indexes "Returns a vector of new LocalSecondaryIndexes objects."
   [hash-key indexes]
   (mapv
    (fn [{index-name :name
-        :keys [range-key projection included-attrs]
+        :keys [range-key projection]
         :or   {projection :all}
         :as   index}]
      (doto (LocalSecondaryIndex.)
        (.setIndexName  (name index-name))
        (.setKeySchema  (key-schema hash-key range-key))
-       (.setProjection (projection projection included-attrs))))
+       (.setProjection
+        (let [pr (Projection.)
+              ptype (if (vector? projection) :include projection)]
+          (.setProjectionType pr (utils/enum ptype))
+          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
+          pr))))
    indexes))
 
 (defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
@@ -269,7 +267,7 @@
     :hash-key   - (required) {:name <> :type <#{:s :n :ss :ns :b :bs}>}.
     :range-key  - (optional) {:name <> :type <#{:s :n :ss :ns :b :bs}>}.
     :indexes    - (optional) [{:name <> :range-key <>
-                               :projection <#{:all :keys-only [attrs ...]}>}]"
+                               :projection <#{:all :keys-only [<attr1> ...]}>}]"
   [creds {table-name :name
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
