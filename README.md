@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.0.3-SNAPSHOT"] ; WARNING: Still VERY experimental!
+[com.taoensso/faraday "0.0.4"] ; WARNING: Still VERY experimental!
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -24,7 +24,7 @@ It's still (very) early days. There's a lot of rough edges, but most of them are
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.0.3-SNAPSHOT"]
+[com.taoensso/faraday "0.0.4"]
 ```
 
 and `require` the library:
