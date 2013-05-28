@@ -77,15 +77,15 @@
 
 ;;;; Coercion - values
 
-(deftype Serialized [wrapped-value])
-(defn serialize [x] (Serialized. x))
+(deftype Frozen [value])
+(defn freeze [x] (Frozen. x))
 
 (def ^:private ^:const ba-class (Class/forName "[B"))
-(defn- serialize?  [x] (or (instance? Serialized x) (instance? ba-class x)))
-(defn- clj->bb     [x] (ByteBuffer/wrap (nippy/freeze-to-bytes
-                                         (if (instance? Serialized x)
-                                           (.wrapped-value ^Serialized x) x))))
-(defn- bb->clj     [^ByteBuffer bb] (nippy/thaw-from-bytes (.array bb)))
+(defn- freeze?     [x] (or (instance? Frozen x) (instance? ba-class x)))
+(defn- freeze*     [x] (ByteBuffer/wrap (nippy/freeze-to-bytes
+                                         (if (instance? Frozen x)
+                                           (.value ^Frozen x) x))))
+(defn- thaw        [^ByteBuffer bb] (nippy/thaw-from-bytes (.array bb)))
 (defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- simple-num? [x] (or (instance? Long    x)
                            (instance? Double  x)
@@ -96,10 +96,10 @@
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
-      (some->> (.getB  x) bb->clj)
+      (some->> (.getB  x) thaw)
       (some->> (.getSS x) (into #{}))
       (some->> (.getNS x) (map str->num) (into #{}))
-      (some->> (.getBS x) (map bb->clj)   (into #{}))))
+      (some->> (.getBS x) (map thaw)     (into #{}))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -110,7 +110,7 @@
      (doto (AttributeValue.) (.setS x)))
 
    (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (serialize?  x) (doto (AttributeValue.) (.setB (clj->bb x)))
+   (freeze?     x) (doto (AttributeValue.) (.setB (freeze* x)))
 
    (set? x)
    (if (empty? x)
@@ -118,12 +118,12 @@
      (cond
       (every? string?     x) (doto (AttributeValue.) (.setSS x))
       (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
-      (every? serialize?  x) (doto (AttributeValue.) (.setBS (map clj->bb x)))
+      (every? freeze?     x) (doto (AttributeValue.) (.setBS (map freeze* x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
    :else (throw (Exception. (str "Unknown value type: " (type x) "."
-                                 " Wrap with `serialize`?")))))
+                                 " See `freeze` for serialization.")))))
 
 (comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
                                #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))

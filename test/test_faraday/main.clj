@@ -108,6 +108,6 @@
 
 (deftest serialization
   (let [data (dissoc nippy/stress-data :bytes)]
-    (far/put-item creds table {id "nippy" attr (far/serialize data)})
+    (far/put-item creds table {id "nippy" attr (far/freeze data)})
     (is (= (far/get-item creds table {id "nippy"}) {id "nippy" attr data})
         "Nippy (serialized) stress data survives round-trip")))
