@@ -8,9 +8,9 @@
 (def creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
             :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")})
 
-(def table "test-faraday.main")
-(def id    "test-id")
-(def attr  "test-attr")
+(def table :test-faraday.main)
+(def id    :test-id)
+(def attr  :test-attr)
 
 (defn setup-table!
   []
@@ -35,17 +35,17 @@
 
   (let [result
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true}})
         consis
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true}})
         attrs
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true
                   :attrs [attr]}})

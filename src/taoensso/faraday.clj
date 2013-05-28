@@ -65,9 +65,11 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
+;; * Can probably drop `fmap` altogether?
+;; * Docstrings: "key|table-name" -> :key|table-name.
+;; * hash-key -> prim-key?
 ;; * Finish up code walk-through.
 ;; * Go through Rotary PRs, non-PR forks.
-;; * Consistent string/keyword-ization.
 ;; * README docs.
 ;; * Benchmarks.
 ;; * Further tests.
@@ -126,13 +128,11 @@
                                  " See `freeze` for serialization.")))))
 
 (comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
-                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}]))
+                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}
+                               (freeze {:a :A})]))
 
-(defn- db-item->clj-item [x] ; TODO Keywordize keys?
-  (reduce-kv (fn [m k v] (assoc m k (db-val->clj-val v))) {} (into {} x)))
-
-(defn- clj-item->db-item [m]
-  (reduce-kv (fn [m k v] (assoc m (name k) (clj-val->db-val v))) {} m))
+(def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
+(def clj-item->db-item (partial utils/name-map    clj-val->db-val))
 
 ;;;; API - object wrappers
 
@@ -200,11 +200,10 @@
 (defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
   [e-vals]
   (when (seq e-vals)
-    (utils/fmap
-     #(case %
-        (true  ::exists)     (ExpectedAttributeValue. true)
-        (false ::not-exists) (ExpectedAttributeValue. false)
-        (ExpectedAttributeValue. (clj-val->db-val %)))
+    (utils/name-map
+     #(case % (true  ::exists)     (ExpectedAttributeValue. true)
+              (false ::not-exists) (ExpectedAttributeValue. false)
+              (ExpectedAttributeValue. (clj-val->db-val %)))
      e-vals)))
 
 ;;;; Coercion - objects
@@ -218,17 +217,19 @@
 
 (defmacro ^:private am-query|scan-result [result]
   `(let [result# ~result]
-     {:items (map db-item->clj-item (.getItems result#))
+     {:items (mapv db-item->clj-item (.getItems result#))
       :count (.getCount result#)
       :consumed-capacity (.getConsumedCapacity result#)
       :last-key (as-map (.getLastEvaluatedKey result#))}))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
-  java.util.ArrayList (as-map [a] (into [] (map as-map a)))
-  java.util.HashMap   (as-map [m] (utils/fmap as-map (into {} m)))
+  java.util.ArrayList (as-map [a] (mapv as-map a))
+  ;;java.util.HashMap   (as-map [m] (utils/keyword-map m))
+  java.util.HashMap   (as-map [m] (utils/keyword-map as-map m))
   AttributeValue      (as-map [v] (db-val->clj-val v))
-  KeySchemaElement    (as-map [e] {:name (.getAttributeName e)})
+  KeySchemaElement    (as-map [e] {:name (keyword (.getAttributeName e))
+                                   :type (utils/un-enum (.getKeyType e))})
   GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
   PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
   DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
@@ -238,20 +239,26 @@
   KeysAndAttributes
   (as-map [x]
     (merge
-     (when-let [a (.getAttributesToGet x)] {:attrs (into [] a)})
+     (when-let [a (.getAttributesToGet x)] {:attrs (mapv keyword a)})
      (when-let [c (.getConsistentRead  x)] {:consistent c})
-     (when-let [k (.getKeys            x)] {:keys (utils/fmap as-map (into [] k))})))
+     (when-let [k (.getKeys            x)] {:keys (mapv as-map k)})
+     ;;(when-let [k (.getKeys x)] {:keys (mapv db-item->clj-item k)})
+     ))
 
   ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult, Projection
 
   BatchGetItemResult
   (as-map [r]
-    {:responses         (utils/fmap as-map (into {} (.getResponses r)))
-     :unprocessed-keys  (utils/fmap as-map (into {} (.getUnprocessedKeys r)))
+    {;; Map<String,List<Map<String,AttributeValue>>
+     :responses         (utils/keyword-map as-map (.getResponses       r))
+     ;; Map<String,KeysAndAttributes>
+     :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
   BatchWriteItemResult
-  (as-map [r] {:unprocessed-items (into {} (.getUnprocessedItems r))
-               :consumed-capacity (.getConsumedCapacity r)})
+  (as-map [r]
+    {;; Map<String,List<WriteRequest>>
+     :unprocessed-items (utils/keyword-map as-map (.getUnprocessedItems r))
+     :consumed-capacity (.getConsumedCapacity r)})
 
   DescribeTableResult
   (as-map [r]
@@ -263,7 +270,7 @@
        :key-schema    (as-map (.getKeySchema t))
        :throughput    (as-map (.getProvisionedThroughput t))
        :indexes       (as-map (.getLocalSecondaryIndexes t))
-       :status        (-> (.getTableStatus t) (str/lower-case) (keyword))}))
+       :status        (utils/un-enum (.getTableStatus t))}))
 
   LocalSecondaryIndexDescription
   (as-map [d]
@@ -330,8 +337,8 @@
   [creds table-name]
   (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name))))
 
-(defn list-tables "Returns a list of tables." ; TODO Keywordize?
-  [creds] (-> (db-client creds) (.listTables) (.getTableNames) (seq)))
+(defn list-tables "Returns a list of tables."
+  [creds] (->> (db-client creds) (.listTables) (.getTableNames) (mapv keyword)))
 
 ;;;; API - items
 
@@ -347,11 +354,11 @@
                         :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
-    (doto (PutItemRequest.)
-      (.setTableName    (name table))
-      (.setItem         (clj-item->db-item item))
-      (.setExpected     (expected-values expected))
-      (.setReturnValues (utils/enum return))))))
+     (doto (PutItemRequest.)
+       (.setTableName    (name table))
+       (.setItem         (clj-item->db-item item))
+       (.setExpected     (expected-values expected))
+       (.setReturnValues (utils/enum return))))))
 
 (defn delete-item
   "Deletes an item from a table by its hash key, {attr match-value}.
@@ -402,16 +409,12 @@
 (defn- keys-and-attrs [{:keys [attrs consistent] :as request}]
   (let [kaa (KeysAndAttributes.)]
     (.setKeys kaa (batch-item-keys request))
-    (when attrs
-      (.setAttributesToGet kaa attrs))
-    (when consistent
-      (.setConsistentRead kaa consistent))
+    (when attrs      (.setAttributesToGet kaa (mapv name attrs)))
+    (when consistent (.setConsistentRead  kaa consistent))
     kaa))
 
 (defn- batch-request-items [requests]
-  (into {}
-    (for [[k v] requests]
-      [(name k) (keys-and-attrs v)])))
+  (into {} (for [[k v] requests] [(name k) (keys-and-attrs v)])))
 
 (defn batch-get-item
   "Retrieve a batch of items in a single request. DynamoDB limits
@@ -441,14 +444,13 @@
   (doto (PutRequest.)
     (.setItem
       (into {}
-        (for [[id field] item]
-          {(name id) (clj-val->db-val field)})))))
+        (for [[k v] item]
+          {(name k) (clj-val->db-val v)})))))
 
 (defn- write-request [verb item]
   (let [wr (WriteRequest.)]
-    (case verb
-      :delete (.setDeleteRequest wr (delete-request item))
-      :put    (.setPutRequest wr (put-request item)))
+    (case verb :delete (.setDeleteRequest wr (delete-request item))
+               :put    (.setPutRequest    wr (put-request    item)))
     wr))
 
 (defn batch-write-item
@@ -469,7 +471,7 @@
          (utils/fmap
           (fn [reqs]
             (reduce
-             #(conj %1 (write-request (first %2) (last %2)))
+             (fn [v [verb table item]] (conj v (write-request verb item)))
              []
              (partition 3 (flatten reqs))))
           (group-by #(name (second %)) requests)))))))

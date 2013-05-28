@@ -41,5 +41,15 @@
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
-(def  enum* (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
+(defn map-kvs [kf vf m]
+  (let [m (if (instance? java.util.HashMap m) (into {} m) m)]
+    (persistent! (reduce-kv (fn [m k v] (assoc! m (kf k) (if vf (vf v) v)))
+                            (transient {}) m))))
+
+(defn keyword-map ([m] (keyword-map nil m)) ([vf m] (map-kvs keyword vf m)))
+(defn name-map    ([m] (name-map    nil m)) ([vf m] (map-kvs name    vf m)))
+
+(def  enum*   (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
+(def  un-enum (memoize (fn [e] (-> e (str/lower-case) (str/replace "_" "-")
+                                  (keyword)))))
 (defn enum ^String [x] (enum* x))
