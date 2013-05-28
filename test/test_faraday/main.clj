@@ -1,14 +1,6 @@
 (ns test-faraday.main
   (:use     [clojure.test])
-  (:require [taoensso.faraday :as far])
-  (:import  [com.amazonaws.services.dynamodbv2.model
-             ConditionalCheckFailedException
-             ;; InternalServerErrorException
-             ;; ItemCollectionSizeLimitExceededException
-             ;; LimitExceededException
-             ;; ProvisionedThroughputExceededException
-             ;; ResourceInUseException
-             ResourceNotFoundException]))
+  (:require [taoensso.faraday :as far]))
 
 ;; TODO LOTS of tests still outstanding (PRs welcome!!)
 
@@ -101,8 +93,8 @@
   (is (= "bar" ((far/get-item creds table {id "42"}) attr)))
 
   ;; Should fail to update item 6
-  (is (thrown? ConditionalCheckFailedException
-               (far/put-item creds table {id "6" attr "baz"} {:expected {id false}})))
+  (is (thrown? #=(far/ex :conditional-check-failed)
+        (far/put-item creds table {id "6" attr "baz"} {:expected {id false}})))
   (is (not= "baz" ((far/get-item creds table {id "6"}) attr)))
 
   ;; Should upate item 9 to have attr baz

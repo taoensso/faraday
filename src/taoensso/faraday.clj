@@ -52,12 +52,12 @@
              UpdateTableRequest
              ;; UpdateTableResult
              WriteRequest
-             ;; ConditionalCheckFailedException
-             ;; InternalServerErrorException
-             ;; ItemCollectionSizeLimitExceededException
-             ;; LimitExceededException
-             ;; ProvisionedThroughputExceededException
-             ;; ResourceInUseException
+             ConditionalCheckFailedException
+             InternalServerErrorException ;+
+             ItemCollectionSizeLimitExceededException ;+
+             LimitExceededException ;+
+             ProvisionedThroughputExceededException ;+
+             ResourceInUseException ;+
              ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
@@ -565,4 +565,15 @@
   (let [[range options] (extract-range range-and-options)]
     (as-map
      (.query (db-client creds)
-      (query-request table hash-key range options)))))
+       (query-request table hash-key range options)))))
+
+;;;; API - exceptions
+
+(def ^:const ex "Use #=(ex _) for `try` blocks, etc."
+  {:conditional-check-failed            ConditionalCheckFailedException
+   :internal-server-error               InternalServerErrorException
+   :item-collection-size-limit-exceeded ItemCollectionSizeLimitExceededException
+   :limit-exceeded                      LimitExceededException
+   :provisioned-throughput-exceeded     ProvisionedThroughputExceededException
+   :resource-in-use                     ResourceInUseException
+   :resource-not-found                  ResourceNotFoundException})
