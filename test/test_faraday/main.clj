@@ -1,23 +1,16 @@
 (ns test-faraday.main
   (:use     [clojure.test])
-  (:require [taoensso.faraday :as far])
-  (:import  [com.amazonaws.services.dynamodbv2.model
-             ConditionalCheckFailedException
-             ;; InternalServerErrorException
-             ;; ItemCollectionSizeLimitExceededException
-             ;; LimitExceededException
-             ;; ProvisionedThroughputExceededException
-             ;; ResourceInUseException
-             ResourceNotFoundException]))
+  (:require [taoensso.faraday :as far]
+            [taoensso.nippy   :as nippy]))
 
 ;; TODO LOTS of tests still outstanding (PRs welcome!!)
 
 (def creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
             :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")})
 
-(def table "test-faraday.main")
-(def id    "test-id")
-(def attr  "test-attr")
+(def table :test-faraday.main)
+(def id    :test-id)
+(def attr  :test-attr)
 
 (defn setup-table!
   []
@@ -42,17 +35,17 @@
 
   (let [result
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true}})
         consis
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true}})
         attrs
         (far/batch-get-item creds
-          {table {:key-name "test-id"
+          {table {:key-name id
                   :keys ["1" "2" "3" "4"]
                   :consistent true
                   :attrs [attr]}})
@@ -101,8 +94,8 @@
   (is (= "bar" ((far/get-item creds table {id "42"}) attr)))
 
   ;; Should fail to update item 6
-  (is (thrown? ConditionalCheckFailedException
-               (far/put-item creds table {id "6" attr "baz"} {:expected {id false}})))
+  (is (thrown? #=(far/ex :conditional-check-failed)
+        (far/put-item creds table {id "6" attr "baz"} {:expected {id false}})))
   (is (not= "baz" ((far/get-item creds table {id "6"}) attr)))
 
   ;; Should upate item 9 to have attr baz
@@ -112,3 +105,9 @@
   ;; Should add item 23
   (far/put-item creds table {id "23" attr "bar"} {:expected {id false}})
   (is (not= nil (far/get-item creds table {id "23"}))))
+
+(deftest serialization
+  (let [data (dissoc nippy/stress-data :bytes)]
+    (far/put-item creds table {id "nippy" attr (far/freeze data)})
+    (is (= (far/get-item creds table {id "nippy"}) {id "nippy" attr data})
+        "Nippy (serialized) stress data survives round-trip")))
