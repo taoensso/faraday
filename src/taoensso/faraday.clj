@@ -77,14 +77,6 @@
 
 ;;;; Coercion - values
 
-;; TODO Should thawing (like freezing) perhaps be manual?
-;; Cons:
-;;   * Requires manual thawing (obviously).
-;; Pros:
-;;   * Avoid unwanted wrapping of binary data.
-;;   * Backwards-compatible with pre-existing db's binary data.
-;;   * More amenable to future changes.
-
 (deftype Serialized [wrapped-value])
 (defn serialize [x] (Serialized. x))
 
@@ -141,37 +133,6 @@
 
 (defn- clj-item->db-item [m]
   (reduce-kv (fn [m k v] (assoc m (name k) (clj-val->db-val v))) {} m))
-
-(comment ; TODO Temp/dev
-  (defn- ba->bb   [^bytes ba] (ByteBuffer/wrap ba))
-  (defn- ba->bb ^ByteBuffer [^bytes ba type]
-    (let [ba-size (alength ba)]
-      (doto (ByteBuffer/allocate (inc ba-size))
-        (.put (case type :bytes (byte 0) :nippy (byte 1)
-                    (throw (Exception. "Invalid wrapping type!"))))
-        (.put ba 0 ba-size))))
-
-  (defn- bb->ba ^bytes [^ByteBuffer bb]
-
-    (let [data (.getBytes (apply str (range 1000)))]
-      (println "---")
-      (time (dotimes [_ 10000] (ba-buffer data)))
-      (time (dotimes [_ 10000] (wrap-ba data :bytes)))
-      (time (dotimes [_ 10000] (ba-buffer (nippy/freeze-to-bytes data))))
-      (time (dotimes [_ 10000] (wrap-ba   (nippy/freeze-to-bytes data) :bytes))))
-
-    (String. (.array (.get (.flip (wrap-ba (.getBytes "foo bar baz") :nippy)))))
-
-    (let [bb (.flip (wrap-ba (.getBytes "foo bar baz" "UTF-8") :nippy))]
-      (.get bb)
-      (.position bb)
-      (.slice bb)
-      ;;(.array bb)
-      (String. (.array bb) "UTF-8")
-      ;;(String. (.array (.slice bb)) "UTF-8")
-      )
-
-    (wrap-ba (.getBytes "foo bar baz") :nippy)))
 
 ;;;; API - object wrappers
 
