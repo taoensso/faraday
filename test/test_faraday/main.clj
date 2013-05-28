@@ -1,6 +1,7 @@
 (ns test-faraday.main
   (:use     [clojure.test])
-  (:require [taoensso.faraday :as far]))
+  (:require [taoensso.faraday :as far]
+            [taoensso.nippy   :as nippy]))
 
 ;; TODO LOTS of tests still outstanding (PRs welcome!!)
 
@@ -104,3 +105,9 @@
   ;; Should add item 23
   (far/put-item creds table {id "23" attr "bar"} {:expected {id false}})
   (is (not= nil (far/get-item creds table {id "23"}))))
+
+(deftest serialization
+  (let [data (dissoc nippy/stress-data :bytes)]
+    (far/put-item creds table {id "nippy" attr (far/serialize data)})
+    (is (= (far/get-item creds table {id "nippy"}) {id "nippy" attr data})
+        "Nippy (serialized) stress data survives round-trip")))

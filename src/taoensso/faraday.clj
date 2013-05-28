@@ -68,7 +68,6 @@
 ;; * Finish up code walk-through.
 ;; * Go through Rotary PRs, non-PR forks.
 ;; * Consistent string/keyword-ization.
-;; * Nippy support (`serialized`, `binary`) types with marked bin data.
 ;; * README docs.
 ;; * Benchmarks.
 ;; * Further tests.
@@ -78,25 +77,37 @@
 
 ;;;; Coercion - values
 
-(defn- str->num [^String s] (if (.contains s ".") (Double. s) (Long. s)))
-(defn- bb->ba   [^ByteBuffer bb] (.array bb))
+;; TODO Should thawing (like freezing) perhaps be manual?
+;; Cons:
+;;   * Requires manual thawing (obviously).
+;; Pros:
+;;   * Avoid unwanted wrapping of binary data.
+;;   * Backwards-compatible with pre-existing db's binary data.
+;;   * More amenable to future changes.
+
+(deftype Serialized [wrapped-value])
+(defn serialize [x] (Serialized. x))
+
+(def ^:private ^:const ba-class (Class/forName "[B"))
+(defn- serialize?  [x] (or (instance? Serialized x) (instance? ba-class x)))
+(defn- clj->bb     [x] (ByteBuffer/wrap (nippy/freeze-to-bytes
+                                         (if (instance? Serialized x)
+                                           (.wrapped-value ^Serialized x) x))))
+(defn- bb->clj     [^ByteBuffer bb] (nippy/thaw-from-bytes (.array bb)))
+(defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
+(defn- simple-num? [x] (or (instance? Long    x)
+                           (instance? Double  x)
+                           (instance? Integer x)
+                           (instance? Float   x)))
 
 (defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
-      (some->> (.getB  x) bb->ba)
+      (some->> (.getB  x) bb->clj)
       (some->> (.getSS x) (into #{}))
       (some->> (.getNS x) (map str->num) (into #{}))
-      (some->> (.getBS x) (map bb->ba)   (into #{}))))
-
-(def ^:private ^:const ba-class (Class/forName "[B"))
-(defn- ba? [x] (instance? ba-class x))
-(defn- ba-buffer [^bytes ba] (ByteBuffer/wrap ba))
-(defn- simple-num? [x] (or (instance? Long    x)
-                           (instance? Double  x)
-                           (instance? Integer x)
-                           (instance? Float   x)))
+      (some->> (.getBS x) (map bb->clj)   (into #{}))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -107,7 +118,7 @@
      (doto (AttributeValue.) (.setS x)))
 
    (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (ba? x)         (doto (AttributeValue.) (.setB (ba-buffer x)))
+   (serialize?  x) (doto (AttributeValue.) (.setB (clj->bb x)))
 
    (set? x)
    (if (empty? x)
@@ -115,7 +126,7 @@
      (cond
       (every? string?     x) (doto (AttributeValue.) (.setSS x))
       (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
-      (every? ba?         x) (doto (AttributeValue.) (.setBS (map ba-buffer x)))
+      (every? serialize?  x) (doto (AttributeValue.) (.setBS (map clj->bb x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
@@ -130,6 +141,37 @@
 
 (defn- clj-item->db-item [m]
   (reduce-kv (fn [m k v] (assoc m (name k) (clj-val->db-val v))) {} m))
+
+(comment ; TODO Temp/dev
+  (defn- ba->bb   [^bytes ba] (ByteBuffer/wrap ba))
+  (defn- ba->bb ^ByteBuffer [^bytes ba type]
+    (let [ba-size (alength ba)]
+      (doto (ByteBuffer/allocate (inc ba-size))
+        (.put (case type :bytes (byte 0) :nippy (byte 1)
+                    (throw (Exception. "Invalid wrapping type!"))))
+        (.put ba 0 ba-size))))
+
+  (defn- bb->ba ^bytes [^ByteBuffer bb]
+
+    (let [data (.getBytes (apply str (range 1000)))]
+      (println "---")
+      (time (dotimes [_ 10000] (ba-buffer data)))
+      (time (dotimes [_ 10000] (wrap-ba data :bytes)))
+      (time (dotimes [_ 10000] (ba-buffer (nippy/freeze-to-bytes data))))
+      (time (dotimes [_ 10000] (wrap-ba   (nippy/freeze-to-bytes data) :bytes))))
+
+    (String. (.array (.get (.flip (wrap-ba (.getBytes "foo bar baz") :nippy)))))
+
+    (let [bb (.flip (wrap-ba (.getBytes "foo bar baz" "UTF-8") :nippy))]
+      (.get bb)
+      (.position bb)
+      (.slice bb)
+      ;;(.array bb)
+      (String. (.array bb) "UTF-8")
+      ;;(String. (.array (.slice bb)) "UTF-8")
+      )
+
+    (wrap-ba (.getBytes "foo bar baz") :nippy)))
 
 ;;;; API - object wrappers
 
