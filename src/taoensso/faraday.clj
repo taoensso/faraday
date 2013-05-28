@@ -76,7 +76,21 @@
 ;; * Async API.
 ;; * Auto throughput adjusting.
 
+;;;; API - exceptions
+
+(def ^:const ex "DynamoDB API exceptions. Use #=(ex _) for `try` blocks, etc."
+  {:conditional-check-failed            ConditionalCheckFailedException
+   :internal-server-error               InternalServerErrorException
+   :item-collection-size-limit-exceeded ItemCollectionSizeLimitExceededException
+   :limit-exceeded                      LimitExceededException
+   :provisioned-throughput-exceeded     ProvisionedThroughputExceededException
+   :resource-in-use                     ResourceInUseException
+   :resource-not-found                  ResourceNotFoundException})
+
 ;;;; Coercion - values
+
+;; TODO Consider alternative approaches to freezing that would _not_ serialize
+;; unwrapped binary data; this is too presumptuous.
 
 (deftype Frozen [value])
 (defn freeze [x] (Frozen. x))
@@ -244,9 +258,9 @@
   QueryResult         (as-map [r] (am-query|scan-result r))
   ScanResult          (as-map [r] (am-query|scan-result r))
 
-  CreateTableResult   (as-map [r]) ; TODO
-  UpdateTableResult   (as-map [r]) ; TODO
-  DeleteTableResult   (as-map [r]) ; TODO
+  CreateTableResult   (as-map [r] r) ; TODO
+  UpdateTableResult   (as-map [r] r) ; TODO
+  DeleteTableResult   (as-map [r] r) ; TODO
 
   BatchGetItemResult
   (as-map [r]
@@ -284,6 +298,16 @@
 
 ;;;; API - tables
 
+(defn list-tables "Returns a list of tables."
+  [creds] (->> (db-client creds) (.listTables) (.getTableNames) (mapv keyword)))
+
+(defn describe-table
+  "Returns a map describing a table, or nil if the table doesn't exist."
+  [creds table]
+  (try (as-map (.describeTable (db-client creds)
+                (doto (DescribeTableRequest.) (.setTableName (name table)))))
+       (catch ResourceNotFoundException _ nil)))
+
 (defn create-table
   "Creates a table with the given map of options:
     :name       - (required) table name.
@@ -295,23 +319,17 @@
   [creds {table-name :name
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
-  (.createTable (db-client creds)
-   (let [attr-defs (->> (conj [] hash-key range-key)
-                        (concat (map :range-key indexes))
-                        (filter identity))]
-     (doto (CreateTableRequest.)
-       (.setTableName (name table-name))
-       (.setKeySchema (key-schema hash-key range-key))
-       (.setAttributeDefinitions  (attribute-definitions attr-defs))
-       (.setProvisionedThroughput (provisioned-throughput throughput))
-       (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
-
-(defn describe-table
-  "Returns a map describing a table, or nil if the table doesn't exist."
-  [creds table]
-  (try (as-map (.describeTable (db-client creds)
-                (doto (DescribeTableRequest.) (.setTableName (name table)))))
-       (catch ResourceNotFoundException _ nil)))
+  (as-map
+   (.createTable (db-client creds)
+     (let [attr-defs (->> (conj [] hash-key range-key)
+                          (concat (map :range-key indexes))
+                          (filter identity))]
+       (doto (CreateTableRequest.)
+         (.setTableName (name table-name))
+         (.setKeySchema (key-schema hash-key range-key))
+         (.setAttributeDefinitions  (attribute-definitions attr-defs))
+         (.setProvisionedThroughput (provisioned-throughput throughput))
+         (.setLocalSecondaryIndexes (local-indexes hash-key indexes)))))))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
@@ -321,20 +339,29 @@
   "Updates a table. Ref. http://goo.gl/Bj9TC for important throughput
   upgrade/downgrade limits."
   [creds {:keys [table throughput]}]
-  (.updateTable (db-client creds)
-   (let [utr (UpdateTableRequest.)]
-     (when table      (.setTableName utr (name table)))
-     (when throughput (.setProvisionedThroughput utr (provisioned-throughput
-                                                      throughput))))))
+  (as-map
+   (.updateTable (db-client creds)
+     (let [utr (UpdateTableRequest.)]
+       (when table      (.setTableName utr (name table)))
+       (when throughput (.setProvisionedThroughput utr (provisioned-throughput
+                                                        throughput)))))))
 
 (defn delete-table "Deletes a table."
   [creds table-name]
-  (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name))))
-
-(defn list-tables "Returns a list of tables."
-  [creds] (->> (db-client creds) (.listTables) (.getTableNames) (mapv keyword)))
+  (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name)))))
 
 ;;;; API - items
+
+(defn get-item
+  "Retrieves an item from a table by its hash key, {attr match-value}."
+  [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
+  (as-map
+   (.getItem (db-client creds)
+    (doto (GetItemRequest.)
+      (.setTableName      (name table))
+      (.setKey            (clj-item->db-item hash-key))
+      (.setConsistentRead  consistent?)
+      (.setAttributesToGet attrs-to-get)))))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
@@ -354,30 +381,6 @@
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
-(defn delete-item
-  "Deletes an item from a table by its hash key, {attr match-value}.
-  See `put-item` for option docs."
-  [creds table hash-key & [{:keys [return expected]
-                            :or   {return :none}}]]
-  (as-map
-   (.deleteItem (db-client creds)
-     (doto (DeleteItemRequest.)
-       (.setTableName    (name table))
-       (.setKey          (clj-item->db-item hash-key))
-       (.setExpected     (expected-values expected))
-       (.setReturnValues (utils/enum return))))))
-
-(defn get-item
-  "Retrieves an item from a table by its hash key, {attr match-value}."
-  [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
-  (as-map
-   (.getItem (db-client creds)
-    (doto (GetItemRequest.)
-      (.setTableName      (name table))
-      (.setKey            (clj-item->db-item hash-key))
-      (.setConsistentRead  consistent?)
-      (.setAttributesToGet attrs-to-get)))))
-
 (defn update-item
   "Updates an item in a table by its hash key, {attr match-value}.
   See `put-item` for option docs."
@@ -391,6 +394,19 @@
        (.setAttributeUpdates nil) ; TODO
        (.setExpected         (expected-values expected))
        (.setReturnValues     (utils/enum return))))))
+
+(defn delete-item
+  "Deletes an item from a table by its hash key, {attr match-value}.
+  See `put-item` for option docs."
+  [creds table hash-key & [{:keys [return expected]
+                            :or   {return :none}}]]
+  (as-map
+   (.deleteItem (db-client creds)
+     (doto (DeleteItemRequest.)
+       (.setTableName    (name table))
+       (.setKey          (clj-item->db-item hash-key))
+       (.setExpected     (expected-values expected))
+       (.setReturnValues (utils/enum return))))))
 
 ;;;; TODO Continue code walk-through below
 
@@ -441,10 +457,10 @@
         (for [[k v] item]
           {(name k) (clj-val->db-val v)})))))
 
-(defn- write-request [verb item]
+(defn- write-request [action item]
   (let [wr (WriteRequest.)]
-    (case verb :delete (.setDeleteRequest wr (delete-request item))
-               :put    (.setPutRequest    wr (put-request    item)))
+    (case action :delete (.setDeleteRequest wr (delete-request item))
+                 :put    (.setPutRequest    wr (put-request    item)))
     wr))
 
 (defn batch-write-item
@@ -464,7 +480,7 @@
         (.setRequestItems
          (utils/name-map
           (fn [reqs]
-            (reduce (fn [v [verb _ item]] (conj v (write-request verb item)))
+            (reduce (fn [v [action _ item]] (conj v (write-request action item)))
                     [] (partition 3 (flatten reqs))))
           (group-by (fn [[_ table _]] table) requests)))))))
 
@@ -564,14 +580,3 @@
     (as-map
      (.query (db-client creds)
        (query-request table hash-key range options)))))
-
-;;;; API - exceptions
-
-(def ^:const ex "Use #=(ex _) for `try` blocks, etc."
-  {:conditional-check-failed            ConditionalCheckFailedException
-   :internal-server-error               InternalServerErrorException
-   :item-collection-size-limit-exceeded ItemCollectionSizeLimitExceededException
-   :limit-exceeded                      LimitExceededException
-   :provisioned-throughput-exceeded     ProvisionedThroughputExceededException
-   :resource-in-use                     ResourceInUseException
-   :resource-not-found                  ResourceNotFoundException})
