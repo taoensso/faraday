@@ -16,14 +16,14 @@
              BatchWriteItemRequest
              BatchWriteItemResult
              Condition
-             ;; ConsumedCapacity
+             ;; ConsumedCapacity ; Implicit
              CreateTableRequest
-             ;; CreateTableResult
+             CreateTableResult
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
              DeleteTableRequest
-             ;; DeleteTableResult
+             DeleteTableResult
              DescribeTableRequest
              DescribeTableResult
              ExpectedAttributeValue
@@ -32,8 +32,8 @@
              ;; ItemCollectionMetrics
              KeysAndAttributes
              KeySchemaElement
-             ;; ListTablesRequest
-             ;; ListTablesResult
+             ;; ListTablesRequest ; Implicit
+             ;; ListTablesResult  ; Implicit
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
              Projection
@@ -46,18 +46,18 @@
              QueryResult
              ScanRequest
              ScanResult
-             ;; TableDescription
+             ;; TableDescription ; Implicit
              UpdateItemRequest
              UpdateItemResult
              UpdateTableRequest
-             ;; UpdateTableResult
+             UpdateTableResult
              WriteRequest
              ConditionalCheckFailedException
-             InternalServerErrorException ;+
-             ItemCollectionSizeLimitExceededException ;+
-             LimitExceededException ;+
-             ProvisionedThroughputExceededException ;+
-             ResourceInUseException ;+
+             InternalServerErrorException
+             ItemCollectionSizeLimitExceededException
+             LimitExceededException
+             ProvisionedThroughputExceededException
+             ResourceInUseException
              ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
@@ -65,7 +65,6 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Can probably drop `fmap` altogether?
 ;; * Docstrings: "key|table-name" -> :key|table-name.
 ;; * hash-key -> prim-key?
 ;; * Finish up code walk-through.
@@ -127,9 +126,9 @@
    :else (throw (Exception. (str "Unknown value type: " (type x) "."
                                  " See `freeze` for serialization.")))))
 
-(comment (map clj-val->db-val ["foo" 10 3.14 (.getBytes "foo")
-                               #{"a" "b" "c"} #{1 2 3.14} #{(.getBytes "foo")}
-                               (freeze {:a :A})]))
+(comment
+  (map clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
+                        #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
 (def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
 (def clj-item->db-item (partial utils/name-map    clj-val->db-val))
@@ -191,20 +190,20 @@
        (.setKeySchema  (key-schema hash-key range-key))
        (.setProjection
         (let [pr    (Projection.)
-              ptype (if (vector? projection) :include projection)]
+              ptype (if (coll? projection) :include projection)]
           (.setProjectionType pr (utils/enum ptype))
           (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
           pr))))
    indexes))
 
 (defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
-  [e-vals]
-  (when (seq e-vals)
+  [expected]
+  (when (seq expected)
     (utils/name-map
      #(case % (true  ::exists)     (ExpectedAttributeValue. true)
               (false ::not-exists) (ExpectedAttributeValue. false)
               (ExpectedAttributeValue. (clj-val->db-val %)))
-     e-vals)))
+     expected)))
 
 ;;;; Coercion - objects
 
@@ -225,68 +224,63 @@
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
   java.util.ArrayList (as-map [a] (mapv as-map a))
-  ;;java.util.HashMap   (as-map [m] (utils/keyword-map m))
   java.util.HashMap   (as-map [m] (utils/keyword-map as-map m))
+
   AttributeValue      (as-map [v] (db-val->clj-val v))
   KeySchemaElement    (as-map [e] {:name (keyword (.getAttributeName e))
                                    :type (utils/un-enum (.getKeyType e))})
-  GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
-  PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
-  DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
-  UpdateItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
-  QueryResult         (as-map [r] (am-query|scan-result r))
-  ScanResult          (as-map [r] (am-query|scan-result r))
   KeysAndAttributes
   (as-map [x]
     (merge
      (when-let [a (.getAttributesToGet x)] {:attrs (mapv keyword a)})
      (when-let [c (.getConsistentRead  x)] {:consistent c})
-     (when-let [k (.getKeys            x)] {:keys (mapv as-map k)})
-     ;;(when-let [k (.getKeys x)] {:keys (mapv db-item->clj-item k)})
-     ))
+     (when-let [k (.getKeys            x)] {:keys (mapv db-item->clj-item k)})))
 
-  ;; TODO CreateTableResult, ListTablesResult, UpdateTableResult, Projection
+  GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
+  PutItemResult       (as-map [r] (am-item-result r (.getAttributes r)))
+  UpdateItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
+  DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
+
+  QueryResult         (as-map [r] (am-query|scan-result r))
+  ScanResult          (as-map [r] (am-query|scan-result r))
+
+  CreateTableResult   (as-map [r]) ; TODO
+  UpdateTableResult   (as-map [r]) ; TODO
+  DeleteTableResult   (as-map [r]) ; TODO
 
   BatchGetItemResult
   (as-map [r]
-    {;; Map<String,List<Map<String,AttributeValue>>
-     :responses         (utils/keyword-map as-map (.getResponses       r))
-     ;; Map<String,KeysAndAttributes>
+    {:responses         (utils/keyword-map as-map (.getResponses       r))
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
   BatchWriteItemResult
   (as-map [r]
-    {;; Map<String,List<WriteRequest>>
-     :unprocessed-items (utils/keyword-map as-map (.getUnprocessedItems r))
+    {:unprocessed-items (utils/keyword-map as-map (.getUnprocessedItems r))
      :consumed-capacity (.getConsumedCapacity r)})
 
   DescribeTableResult
-  (as-map [r]
-    (let [t (.getTable r)]
-      {:name          (.getTableName t)
-       :creation-date (.getCreationDateTime t)
-       :item-count    (.getItemCount t)
-       :size          (.getTableSizeBytes t)
-       :key-schema    (as-map (.getKeySchema t))
-       :throughput    (as-map (.getProvisionedThroughput t))
-       :indexes       (as-map (.getLocalSecondaryIndexes t))
-       :status        (utils/un-enum (.getTableStatus t))}))
+  (as-map [r] (let [t (.getTable r)]
+                {:name          (.getTableName t)
+                 :creation-date (.getCreationDateTime t)
+                 :item-count    (.getItemCount t)
+                 :size          (.getTableSizeBytes t)
+                 :key-schema    (as-map (.getKeySchema t))
+                 :throughput    (as-map (.getProvisionedThroughput t))
+                 :indexes       (as-map (.getLocalSecondaryIndexes t))
+                 :status        (utils/un-enum (.getTableStatus t))}))
 
   LocalSecondaryIndexDescription
-  (as-map [d]
-    {:name       (.getIndexName d)
-     :size       (.getIndexSizeBytes d)
-     :item-count (.getItemCount d)
-     :key-schema (as-map (.getKeySchema d))
-     :projection (as-map (.getProjection d))})
-
+  (as-map [d] {:name       (.getIndexName d)
+               :size       (.getIndexSizeBytes d)
+               :item-count (.getItemCount d)
+               :key-schema (as-map (.getKeySchema d))
+               :projection (as-map (.getProjection d))})
   ProvisionedThroughputDescription
-  (as-map [d]
-    {:read                (.getReadCapacityUnits d)
-     :write               (.getWriteCapacityUnits d)
-     :last-decrease       (.getLastDecreaseDateTime d)
-     :last-increase       (.getLastIncreaseDateTime d)
-     :num-decreases-today (.getNumberOfDecreasesToday d)}))
+  (as-map [d] {:read                (.getReadCapacityUnits d)
+               :write               (.getWriteCapacityUnits d)
+               :last-decrease       (.getLastDecreaseDateTime d)
+               :last-increase       (.getLastIncreaseDateTime d)
+               :num-decreases-today (.getNumberOfDecreasesToday d)}))
 
 ;;;; API - tables
 
@@ -468,13 +462,11 @@
     (.batchWriteItem (db-client creds)
       (doto (BatchWriteItemRequest.)
         (.setRequestItems
-         (utils/fmap
+         (utils/name-map
           (fn [reqs]
-            (reduce
-             (fn [v [verb table item]] (conj v (write-request verb item)))
-             []
-             (partition 3 (flatten reqs))))
-          (group-by #(name (second %)) requests)))))))
+            (reduce (fn [v [verb _ item]] (conj v (write-request verb item)))
+                    [] (partition 3 (flatten reqs))))
+          (group-by (fn [[_ table _]] table) requests)))))))
 
 ;;;; API - queries & scans
 
@@ -503,10 +495,11 @@
 (defn- set-hash-condition
   "Create a map of specifying the hash-key condition for query"
   [hash-key]
-  (utils/fmap #(doto (Condition.)
-                 (.setComparisonOperator "EQ")
-                 (.setAttributeValueList [(clj-val->db-val %)]))
-              hash-key))
+  (utils/name-map ; TODO Correct? Used to be fmap
+   #(doto (Condition.)
+      (.setComparisonOperator "EQ")
+      (.setAttributeValueList [(clj-val->db-val %)]))
+   hash-key))
 
 (defn- set-range-condition
   "Add the range key condition to a QueryRequest object"
