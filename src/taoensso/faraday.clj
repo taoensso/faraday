@@ -65,7 +65,6 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Docstrings: "key|table-name" -> :key|table-name.
 ;; * hash-key -> prim-key?
 ;; * Finish up code walk-through.
 ;; * Go through Rotary PRs, non-PR forks.
@@ -210,7 +209,7 @@
           pr))))
    indexes))
 
-(defn- expected-values "{attr cond} -> {attr ExpectedAttributeValue}"
+(defn- expected-values "{:attr cond} -> {\"attr\" ExpectedAttributeValue}"
   [expected]
   (when (seq expected)
     (utils/name-map
@@ -315,7 +314,7 @@
     :hash-key   - (required) {:name _ :type #{:s :n :ss :ns :b :bs}}.
     :range-key  - (optional) {:name _ :type #{:s :n :ss :ns :b :bs}}.
     :indexes    - (optional) [{:name _ :range-key _
-                               :projection #{:all :keys-only [attr1 ...]}}]"
+                               :projection #{:all :keys-only [:attr1 ...]}}]"
   [creds {table-name :name
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
@@ -353,7 +352,7 @@
 ;;;; API - items
 
 (defn get-item
-  "Retrieves an item from a table by its hash key, {attr match-value}."
+  "Retrieves an item from a table by its hash key, {:attr match-value}."
   [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
   (as-map
    (.getItem (db-client creds)
@@ -368,9 +367,9 @@
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
-                  {\"my-attr\" \"expected-value\"}
-                  {\"my-attr\" true\"}  ; Attr must exist
-                  {\"my-attr\" false\"} ; Attr must not exist"
+                  {:attr \"expected-value\"}
+                  {:attr true}  ; Attribute must exist
+                  {:attr false} ; Attribute must not exist"
   [creds table item & [{:keys [return expected]
                         :or   {return :none}}]]
   (as-map
@@ -382,7 +381,7 @@
        (.setReturnValues (utils/enum return))))))
 
 (defn update-item
-  "Updates an item in a table by its hash key, {attr match-value}.
+  "Updates an item in a table by its hash key, {:attr match-value}.
   See `put-item` for option docs."
   [creds table hash-key update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
@@ -396,7 +395,7 @@
        (.setReturnValues     (utils/enum return))))))
 
 (defn delete-item
-  "Deletes an item from a table by its hash key, {attr match-value}.
+  "Deletes an item from a table by its hash key, {:attr match-value}.
   See `put-item` for option docs."
   [creds table hash-key & [{:keys [return expected]
                             :or   {return :none}}]]
@@ -434,11 +433,11 @@
 
   Example:
   (batch-get-item cred
-    {:users {:key-name \"names\"
+    {:users {:key-name :names
              :keys [\"alice\" \"bob\"]}
-     :posts {:key-name \"id\"
+     :posts {:key-name :id
              :keys [1 2 3]
-             :attrs [\"timestamp\" \"subject\"]
+             :attrs [:timestamp :subject]
              :consistent true}})"
   [creds requests]
   (as-map
@@ -561,8 +560,8 @@
 
 (defn query
   "Return the items in a table matching the supplied hash key,
-  defined in the form {\"hash-attr\" hash-value}.
-  Can specify a range clause if the table has a range-key ie. `(\"range-attr\" >= 234)
+  defined in the form {:hash-attr hash-value}.
+  Can specify a range clause if the table has a range-key ie. `(:range-attr >= 234)
   Takes the following options:
     :order - may be :asc or :desc (defaults to :asc)
     :attrs - limit the values returned to the following attribute names
