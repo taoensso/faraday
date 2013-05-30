@@ -78,7 +78,23 @@
 ;; * README docs, benchmarks, further tests.
 ;; * Long-term: async API, auto throughput adjusting, ...?
 
-;;;; API - exceptions
+;;;; Connections
+
+(def ^:private db-client*
+  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
+  (memoize
+   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
+     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+           client-config (ClientConfiguration.)]
+       (when proxy-host (.setProxyHost client-config proxy-host))
+       (when proxy-port (.setProxyPort client-config proxy-port))
+       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
+         (when endpoint (.setEndpoint client endpoint))
+         client)))))
+
+(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
+
+;;;; Exceptions
 
 (def ^:const ex "DynamoDB API exceptions. Use #=(ex _) for `try` blocks, etc."
   {:conditional-check-failed            ConditionalCheckFailedException
@@ -146,100 +162,10 @@
   (map clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
                         #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
+;;;; Coercion - objects
+
 (def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
 (def clj-item->db-item (partial utils/name-map    clj-val->db-val))
-
-;;;; API - object wrappers
-
-(def ^:private db-client*
-  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
-  (memoize
-   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
-     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-           client-config (ClientConfiguration.)]
-       (when proxy-host (.setProxyHost client-config proxy-host))
-       (when proxy-port (.setProxyPort client-config proxy-port))
-       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
-         (when endpoint (.setEndpoint client endpoint))
-         client)))))
-
-(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
-
-(defn- key-schema-element "Returns a new KeySchemaElement object."
-  [key-name key-type]
-  (doto (KeySchemaElement.)
-    (.setAttributeName (name key-name))
-    (.setKeyType (utils/enum key-type))))
-
-(defn- key-schema
-  "Returns a [{<hash-key> KeySchemaElement}], or
-             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
-   vector for use as a table/index primary key."
-  [hash-key & [range-key]]
-  (let [schema [(key-schema-element (:name hash-key) :hash)]]
-    (if range-key
-      (conj schema (key-schema-element (:name range-key) :range))
-      schema)))
-
-(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
-  [{read-units :read write-units :write}]
-  (doto (ProvisionedThroughput.)
-    (.setReadCapacityUnits  (long read-units))
-    (.setWriteCapacityUnits (long write-units))))
-
-(defn- attribute-definitions
-  "[{:name _ :type _} ...] -> [AttributeDefinition ...]"
-  [defs]
-  (mapv
-   (fn [{key-name :name key-type :type :as def}]
-     (doto (AttributeDefinition.)
-       (.setAttributeName (name key-name))
-       (.setAttributeType (utils/enum key-type))))
-   defs))
-
-(defn- local-indexes
-  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
-  [hash-key indexes]
-  (mapv
-   (fn [{index-name :name
-        :keys [range-key projection]
-        :or   {projection :all}
-        :as   index}]
-     (doto (LocalSecondaryIndex.)
-       (.setIndexName  (name index-name))
-       (.setKeySchema  (key-schema hash-key range-key))
-       (.setProjection
-        (let [pr    (Projection.)
-              ptype (if (coll? projection) :include projection)]
-          (.setProjectionType pr (utils/enum ptype))
-          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
-          pr))))
-   indexes))
-
-(defn- expected-values
-  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
-  [expected]
-  (when (seq expected)
-    (utils/name-map
-     #(case % (true  ::exists)     (ExpectedAttributeValue. true)
-              (false ::not-exists) (ExpectedAttributeValue. false)
-              (ExpectedAttributeValue. (clj-val->db-val %)))
-     expected)))
-
-(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
-  [{:keys [key vals attrs consistent?] :as request}]
-  (doto (KeysAndAttributes.)
-    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
-    (.setAttributesToGet (when attrs (mapv name attrs)))
-    (.setConsistentRead  consistent?)))
-
-(defn- batch-request-items
-  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
-  [requests]
-  (into {} (for [[table request] requests]
-             [(name table) (keys-and-attrs request)])))
-
-;;;; Coercion - objects
 
 (defprotocol AsMap (as-map [x]))
 
@@ -284,6 +210,8 @@
 
   BatchGetItemResult
   (as-map [r]
+    ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
+    ;; possible unless we force the inclusion of the prim-kv in :attrs.
     {:responses         (utils/keyword-map as-map (.getResponses       r))
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
@@ -328,6 +256,59 @@
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
        (catch ResourceNotFoundException _ nil)))
 
+(defn- key-schema-element "Returns a new KeySchemaElement object."
+  [key-name key-type]
+  (doto (KeySchemaElement.)
+    (.setAttributeName (name key-name))
+    (.setKeyType (utils/enum key-type))))
+
+(defn- key-schema
+  "Returns a [{<hash-key> KeySchemaElement}], or
+             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
+   vector for use as a table/index primary key."
+  [hash-key & [range-key]]
+  (let [schema [(key-schema-element (:name hash-key) :hash)]]
+    (if range-key
+      (conj schema (key-schema-element (:name range-key) :range))
+      schema)))
+
+(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
+  [{read-units :read write-units :write}]
+  (doto (ProvisionedThroughput.)
+    (.setReadCapacityUnits  (long read-units))
+    (.setWriteCapacityUnits (long write-units))))
+
+(defn- attribute-defs "[{:name _ :type _} ...] defs -> [AttributeDefinition ...]"
+  [hash-key range-key indexes]
+  (let [defs (->> (conj [] hash-key range-key)
+                  (concat (map :range-key indexes))
+                  (filter identity))]
+    (mapv
+     (fn [{key-name :name key-type :type :as def}]
+       (doto (AttributeDefinition.)
+         (.setAttributeName (name key-name))
+         (.setAttributeType (utils/enum key-type))))
+     defs)))
+
+(defn- local-indexes
+  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
+  [hash-key indexes]
+  (mapv
+   (fn [{index-name :name
+        :keys [range-key projection]
+        :or   {projection :all}
+        :as   index}]
+     (doto (LocalSecondaryIndex.)
+       (.setIndexName  (name index-name))
+       (.setKeySchema  (key-schema hash-key range-key))
+       (.setProjection
+        (let [pr    (Projection.)
+              ptype (if (coll? projection) :include projection)]
+          (.setProjectionType pr (utils/enum ptype))
+          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
+          pr))))
+   indexes))
+
 (defn create-table
   "Creates a table with the given map of options:
     :name       - (required) table name.
@@ -341,15 +322,12 @@
           :or   {throughput {:read 1 :write 1}}}]
   (as-map
    (.createTable (db-client creds)
-     (let [attr-defs (->> (conj [] hash-key range-key)
-                          (concat (map :range-key indexes))
-                          (filter identity))]
-       (doto (CreateTableRequest.)
-         (.setTableName (name table-name))
-         (.setKeySchema (key-schema hash-key range-key))
-         (.setAttributeDefinitions  (attribute-definitions attr-defs))
-         (.setProvisionedThroughput (provisioned-throughput throughput))
-         (.setLocalSecondaryIndexes (local-indexes hash-key indexes)))))))
+     (doto (CreateTableRequest.)
+       (.setTableName (name table-name))
+       (.setKeySchema (key-schema hash-key range-key))
+       (.setProvisionedThroughput (provisioned-throughput throughput))
+       (.setAttributeDefinitions  (attribute-defs hash-key range-key indexes))
+       (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
@@ -358,15 +336,15 @@
 (defn update-table
   "Updates a table. Ref. http://goo.gl/Bj9TC for important throughput
   upgrade/downgrade limits."
-  [creds {:keys [table throughput]}]
+  [creds {table-name :name :keys [throughput]}]
   (as-map
    (.updateTable (db-client creds)
-     (let [utr (UpdateTableRequest.)]
-       (when table      (.setTableName utr (name table)))
-       (when throughput (.setProvisionedThroughput utr (provisioned-throughput
-                                                        throughput)))))))
+     (doto (UpdateTableRequest.)
+       (.setTableName             (when table-name (name table-name)))
+       (.setProvisionedThroughput (when throughput (provisioned-throughput
+                                                    throughput)))))))
 
-(defn delete-table "Deletes a table."
+(defn delete-table "Deletes a table, go figure."
   [creds table-name]
   (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name)))))
 
@@ -375,21 +353,31 @@
 (defn get-item
   "Retrieves an item from a table by its primary key,
   {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}"
-  [creds table prim-key & [{:keys [consistent? attrs-to-get]}]]
+  [creds table prim-kvs & [{:keys [consistent? attrs]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
       (.setTableName      (name table))
-      (.setKey            (clj-item->db-item prim-key))
+      (.setKey            (clj-item->db-item prim-kvs))
       (.setConsistentRead  consistent?)
-      (.setAttributesToGet attrs-to-get)))))
+      (.setAttributesToGet attrs)))))
+
+(defn- expected-values
+  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
+  [expected-map]
+  (when (seq expected-map)
+    (utils/name-map
+     #(if (= false %)
+        (ExpectedAttributeValue. false)
+        (ExpectedAttributeValue. (clj-val->db-val %)))
+     expected-map)))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
-                  {<attr> \"expected-value\" ...}
+                  {<attr> <expected-value> ...}
                   {<attr> true  ...} ; Attribute must exist
                   {<attr> false ...} ; Attribute must not exist"
   [creds table item & [{:keys [return expected]
@@ -402,45 +390,70 @@
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
+(defn- attribute-updates
+  "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
+  [update-map]
+  (when (seq update-map)
+    (utils/name-map
+     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
+                                              (utils/enum action)))
+     update-map)))
+
 (defn update-item
-  "Updates an item in a table by its primary key.
+  "Updates an item in a table by its primary key and an update map:
+  {<attr> [<#{:put :add :delete}> <optional value>]}
   See `put-item` for option docs."
-  [creds table prim-key update-map & [{:keys [return expected]
+  [creds table prim-kvs update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
      (doto (UpdateItemRequest.)
        (.setTableName        (name table))
-       (.setKey              (clj-item->db-item prim-key))
-       (.setAttributeUpdates nil) ; TODO
+       (.setKey              (clj-item->db-item prim-kvs))
        (.setExpected         (expected-values expected))
-       (.setReturnValues     (utils/enum return))))))
+       (.setReturnValues     (utils/enum return))
+       (.setAttributeUpdates (attribute-updates update-map))))))
 
 (defn delete-item
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
-  [creds table prim-key & [{:keys [return expected]
+  [creds table prim-kvs & [{:keys [return expected]
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
      (doto (DeleteItemRequest.)
        (.setTableName    (name table))
-       (.setKey          (clj-item->db-item prim-key))
+       (.setKey          (clj-item->db-item prim-kvs))
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
 ;;;; API - batch ops
+
+(defn- batch-request-items
+  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+  [requests]
+  (utils/name-map
+   (fn [{:keys [prim-kvs attrs consistent?]}]
+     (doto (KeysAndAttributes.)
+       (.setKeys
+        (->> (for [[k v-or-vs] prim-kvs] ; {<k> <v-or-vs> ...} -> [{k v} ...]
+               (if (coll? v-or-vs) (for [v v-or-vs] [k v]) (list [k v-or-vs])))
+             (reduce into [])
+             (mapv (fn [[k v]] {(name k) (clj-val->db-val v)}))))
+       (.setAttributesToGet (when attrs (mapv name attrs)))
+       (.setConsistentRead  consistent?)))
+   requests))
+
+(comment (batch-request-items {:my-table {:prim-kvs {:my-hash "1"} :attrs []}}))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
   Limits apply, Ref. http://goo.gl/Bj9TC.
 
   (batch-get-item creds
-    {:users {:key  :names
-             :vals [\"alice\" \"bob\"]}
-     :posts {:key   :id
-             :vals  [1 2 3]
-             :attrs [:timestamp :subject]
+    {:users {:prim-kvs {:name \"alice\"}}
+     :posts {:prim-kvs {:id [1 2 3]} ; Matches multiple key values
+             :attrs    [:timestamp :subject]
              :consistent? true}})"
   [creds requests]
   (as-map
@@ -452,28 +465,32 @@
 (defn- delete-request [i] (doto (DeleteRequest.) (.setKey  (clj-item->db-item i))))
 (defn- write-request  [action item]
   (case action
-    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))
-    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))))
+    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))
+    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))))
 
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
    provided, nor conditional puts.
 
+   Execution order of write requests is undefined. TODO Alternatives?
+
    (batch-write-item creds
-     [:put    :users {:user-id 1 :username \"sally\"}]
-     [:put    :users {:user-id 2 :username \"jane\"}]
-     [:delete :users {:user-id 3}])"
-  [creds & requests]
+     {:users {:put    [{:user-id 1 :username \"sally\"}
+                       {:user-id 2 :username \"jane\"}]
+              :delete [{:user-id 3}]}})"
+  [creds requests]
   (as-map
     (.batchWriteItem (db-client creds)
       (doto (BatchWriteItemRequest.)
         (.setRequestItems
          (utils/name-map
-          (fn [reqs]
-            (reduce (fn [v [action _ item]] (conj v (write-request action item)))
-                    [] (partition 3 (flatten reqs))))
-          (group-by (fn [[_ table _]] table) requests)))))))
+          ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+          (fn [table-request]
+            (reduce into [] (for [action (keys table-request)
+                                  :let [items (table-request action)]]
+                              (mapv (partial write-request action) items))))
+          requests))))))
 
 ;;;; API - queries & scans
 
@@ -572,4 +589,14 @@
   (let [[range options] (extract-range range-and-options)]
     (as-map
      (.query (db-client creds)
-       (query-request table hash-key range options)))))
+             (query-request table hash-key range options)))))
+
+;;;; README
+
+(comment
+  (require '[taoensso.faraday :as far])
+
+  (def my-creds {:access-key ""
+                 :secret-key ""})
+
+  (far/list-tables my-creds))
