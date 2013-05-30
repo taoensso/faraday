@@ -3,7 +3,8 @@
   (:require [taoensso.faraday :as far]
             [taoensso.nippy   :as nippy]))
 
-;; TODO LOTS of tests still outstanding (PRs welcome!!)
+;; TODO These tests are pretty messy. Also LOTS of tests still outstanding.
+;; Test PRs very, very welcome!
 
 (def creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
             :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")})

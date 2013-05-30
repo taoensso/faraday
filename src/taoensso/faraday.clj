@@ -78,7 +78,23 @@
 ;; * README docs, benchmarks, further tests.
 ;; * Long-term: async API, auto throughput adjusting, ...?
 
-;;;; API - exceptions
+;;;; Connections
+
+(def ^:private db-client*
+  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
+  (memoize
+   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
+     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+           client-config (ClientConfiguration.)]
+       (when proxy-host (.setProxyHost client-config proxy-host))
+       (when proxy-port (.setProxyPort client-config proxy-port))
+       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
+         (when endpoint (.setEndpoint client endpoint))
+         client)))))
+
+(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
+
+;;;; Exceptions
 
 (def ^:const ex "DynamoDB API exceptions. Use #=(ex _) for `try` blocks, etc."
   {:conditional-check-failed            ConditionalCheckFailedException
@@ -146,107 +162,10 @@
   (map clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
                         #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
+;;;; Coercion - objects
+
 (def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
 (def clj-item->db-item (partial utils/name-map    clj-val->db-val))
-
-;;;; API - object wrappers
-
-(def ^:private db-client*
-  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
-  (memoize
-   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
-     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-           client-config (ClientConfiguration.)]
-       (when proxy-host (.setProxyHost client-config proxy-host))
-       (when proxy-port (.setProxyPort client-config proxy-port))
-       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
-         (when endpoint (.setEndpoint client endpoint))
-         client)))))
-
-(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
-
-(defn- key-schema-element "Returns a new KeySchemaElement object."
-  [key-name key-type]
-  (doto (KeySchemaElement.)
-    (.setAttributeName (name key-name))
-    (.setKeyType (utils/enum key-type))))
-
-(defn- key-schema
-  "Returns a [{<hash-key> KeySchemaElement}], or
-             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
-   vector for use as a table/index primary key."
-  [hash-key & [range-key]]
-  (let [schema [(key-schema-element (:name hash-key) :hash)]]
-    (if range-key
-      (conj schema (key-schema-element (:name range-key) :range))
-      schema)))
-
-(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
-  [{read-units :read write-units :write}]
-  (doto (ProvisionedThroughput.)
-    (.setReadCapacityUnits  (long read-units))
-    (.setWriteCapacityUnits (long write-units))))
-
-(defn- attribute-definitions
-  "[{:name _ :type _} ...] -> [AttributeDefinition ...]"
-  [defs]
-  (mapv
-   (fn [{key-name :name key-type :type :as def}]
-     (doto (AttributeDefinition.)
-       (.setAttributeName (name key-name))
-       (.setAttributeType (utils/enum key-type))))
-   defs))
-
-(defn- local-indexes
-  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
-  [hash-key indexes]
-  (mapv
-   (fn [{index-name :name
-        :keys [range-key projection]
-        :or   {projection :all}
-        :as   index}]
-     (doto (LocalSecondaryIndex.)
-       (.setIndexName  (name index-name))
-       (.setKeySchema  (key-schema hash-key range-key))
-       (.setProjection
-        (let [pr    (Projection.)
-              ptype (if (coll? projection) :include projection)]
-          (.setProjectionType pr (utils/enum ptype))
-          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
-          pr))))
-   indexes))
-
-(defn- expected-values
-  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
-  [expected-map]
-  (when (seq expected-map)
-    (utils/name-map
-     #(case % (true  ::exists)     (ExpectedAttributeValue. true)
-              (false ::not-exists) (ExpectedAttributeValue. false)
-              (ExpectedAttributeValue. (clj-val->db-val %)))
-     expected-map)))
-
-(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
-  [{:keys [key vals attrs consistent?] :as request}]
-  (doto (KeysAndAttributes.)
-
-    ;; TODO Our batch-get-item API is problematic, it doesn't support v2-style
-    ;; primary keys.
-    ;;
-    ;; prim-key => {<hash-key> <val> <range-key> <val>}
-    ;; (.setKey (clj-item->db-item prim-key))
-    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
-
-    (.setAttributesToGet (when attrs (mapv name attrs)))
-    (.setConsistentRead  consistent?)))
-
-(defn- batch-request-items
-  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
-  [requests]
-  (into {} (for [[table request] requests]
-             [(name table) (keys-and-attrs request)])))
-
-;;;; Coercion - objects
 
 (defprotocol AsMap (as-map [x]))
 
@@ -335,6 +254,59 @@
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
        (catch ResourceNotFoundException _ nil)))
 
+(defn- key-schema-element "Returns a new KeySchemaElement object."
+  [key-name key-type]
+  (doto (KeySchemaElement.)
+    (.setAttributeName (name key-name))
+    (.setKeyType (utils/enum key-type))))
+
+(defn- key-schema
+  "Returns a [{<hash-key> KeySchemaElement}], or
+             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
+   vector for use as a table/index primary key."
+  [hash-key & [range-key]]
+  (let [schema [(key-schema-element (:name hash-key) :hash)]]
+    (if range-key
+      (conj schema (key-schema-element (:name range-key) :range))
+      schema)))
+
+(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
+  [{read-units :read write-units :write}]
+  (doto (ProvisionedThroughput.)
+    (.setReadCapacityUnits  (long read-units))
+    (.setWriteCapacityUnits (long write-units))))
+
+(defn- attribute-defs "[{:name _ :type _} ...] defs -> [AttributeDefinition ...]"
+  [hash-key range-key indexes]
+  (let [defs (->> (conj [] hash-key range-key)
+                  (concat (map :range-key indexes))
+                  (filter identity))]
+    (mapv
+     (fn [{key-name :name key-type :type :as def}]
+       (doto (AttributeDefinition.)
+         (.setAttributeName (name key-name))
+         (.setAttributeType (utils/enum key-type))))
+     defs)))
+
+(defn- local-indexes
+  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
+  [hash-key indexes]
+  (mapv
+   (fn [{index-name :name
+        :keys [range-key projection]
+        :or   {projection :all}
+        :as   index}]
+     (doto (LocalSecondaryIndex.)
+       (.setIndexName  (name index-name))
+       (.setKeySchema  (key-schema hash-key range-key))
+       (.setProjection
+        (let [pr    (Projection.)
+              ptype (if (coll? projection) :include projection)]
+          (.setProjectionType pr (utils/enum ptype))
+          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
+          pr))))
+   indexes))
+
 (defn create-table
   "Creates a table with the given map of options:
     :name       - (required) table name.
@@ -348,15 +320,12 @@
           :or   {throughput {:read 1 :write 1}}}]
   (as-map
    (.createTable (db-client creds)
-     (let [attr-defs (->> (conj [] hash-key range-key)
-                          (concat (map :range-key indexes))
-                          (filter identity))]
-       (doto (CreateTableRequest.)
-         (.setTableName (name table-name))
-         (.setKeySchema (key-schema hash-key range-key))
-         (.setAttributeDefinitions  (attribute-definitions attr-defs))
-         (.setProvisionedThroughput (provisioned-throughput throughput))
-         (.setLocalSecondaryIndexes (local-indexes hash-key indexes)))))))
+     (doto (CreateTableRequest.)
+       (.setTableName (name table-name))
+       (.setKeySchema (key-schema hash-key range-key))
+       (.setProvisionedThroughput (provisioned-throughput throughput))
+       (.setAttributeDefinitions  (attribute-defs hash-key range-key indexes))
+       (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
@@ -365,13 +334,13 @@
 (defn update-table
   "Updates a table. Ref. http://goo.gl/Bj9TC for important throughput
   upgrade/downgrade limits."
-  [creds {:keys [table throughput]}]
+  [creds {table-name :name :keys [throughput]}]
   (as-map
    (.updateTable (db-client creds)
-     (let [utr (UpdateTableRequest.)]
-       (when table      (.setTableName utr (name table)))
-       (when throughput (.setProvisionedThroughput utr (provisioned-throughput
-                                                        throughput)))))))
+     (doto (UpdateTableRequest.)
+       (.setTableName             (when table-name (name table-name)))
+       (.setProvisionedThroughput (when throughput (provisioned-throughput
+                                                    throughput)))))))
 
 (defn delete-table "Deletes a table, go figure."
   [creds table-name]
@@ -390,6 +359,16 @@
       (.setKey            (clj-item->db-item prim-key))
       (.setConsistentRead  consistent?)
       (.setAttributesToGet attrs-to-get)))))
+
+(defn- expected-values
+  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
+  [expected-map]
+  (when (seq expected-map)
+    (utils/name-map
+     #(case % (true  ::exists)     (ExpectedAttributeValue. true)
+              (false ::not-exists) (ExpectedAttributeValue. false)
+              (ExpectedAttributeValue. (clj-val->db-val %)))
+     expected-map)))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
@@ -437,6 +416,26 @@
        (.setReturnValues (utils/enum return))))))
 
 ;;;; API - batch ops
+
+(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
+  [{:keys [key vals attrs consistent?] :as request}]
+  (doto (KeysAndAttributes.)
+
+    ;; TODO Our batch-get-item API is problematic, it doesn't support v2-style
+    ;; primary keys.
+    ;;
+    ;; prim-key => {<hash-key> <val> <range-key> <val>}
+    ;; (.setKey (clj-item->db-item prim-key))
+    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
+
+    (.setAttributesToGet (when attrs (mapv name attrs)))
+    (.setConsistentRead  consistent?)))
+
+(defn- batch-request-items
+  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+  [requests]
+  (into {} (for [[table request] requests]
+             [(name table) (keys-and-attrs request)])))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
