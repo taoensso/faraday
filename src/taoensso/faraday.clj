@@ -73,13 +73,10 @@
 
 ;;;; TODO
 ;; * Finish up code walk-through.
+;; * Finish up outstanding API: as-map types, update-item, scan+query stuff.
 ;; * Go through Rotary PRs, non-PR forks.
-;; * README docs.
-;; * Benchmarks.
-;; * Further tests.
-;; * Parallel scans.
-;; * Async API.
-;; * Auto throughput adjusting.
+;; * README docs, benchmarks, further tests.
+;; * Long-term: async API, auto throughput adjusting, ...?
 
 ;;;; API - exceptions
 
@@ -228,6 +225,19 @@
               (false ::not-exists) (ExpectedAttributeValue. false)
               (ExpectedAttributeValue. (clj-val->db-val %)))
      expected)))
+
+(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
+  [{:keys [key vals attrs consistent?] :as request}]
+  (doto (KeysAndAttributes.)
+    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
+    (.setAttributesToGet (when attrs (mapv name attrs)))
+    (.setConsistentRead  consistent?)))
+
+(defn- batch-request-items
+  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+  [requests]
+  (into {} (for [[table request] requests]
+             [(name table) (keys-and-attrs request)])))
 
 ;;;; Coercion - objects
 
@@ -421,30 +431,15 @@
 
 ;;;; API - batch ops
 
-(defn- keys-and-attrs [{:keys [key vals attrs consistent?] :as request}]
-  (doto (KeysAndAttributes.)
-    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
-    (.setAttributesToGet (when attrs (mapv name attrs)))
-    (.setConsistentRead  consistent?)))
-
-(defn- batch-request-items [requests]
-  (into {} (for [[table request] requests]
-             [(name table) (keys-and-attrs request)])))
-
-;;;; TODO Continue code walk-through below
-
 (defn batch-get-item
-  "Retrieve a batch of items in a single request. DynamoDB limits
-   apply - 100 items and 1MB total size limit. Requested items
-   which were elided by Amazon are available in the returned map
-   key :unprocessed-keys.
+  "Retrieves a batch of items in a single request.
+  Limits apply, Ref. http://goo.gl/Bj9TC.
 
-  Example:
-  (batch-get-item cred
-    {:users {:key-name :names
-             :keys [\"alice\" \"bob\"]}
-     :posts {:key-name :id
-             :keys [1 2 3]
+  (batch-get-item creds
+    {:users {:key  :names
+             :vals [\"alice\" \"bob\"]}
+     :posts {:key   :id
+             :vals  [1 2 3]
              :attrs [:timestamp :subject]
              :consistent? true}})"
   [creds requests]
@@ -453,33 +448,22 @@
       (doto (BatchGetItemRequest.)
         (.setRequestItems (batch-request-items requests))))))
 
-(defn- delete-request [item]
-  (doto (DeleteRequest.)
-    (.setKey (clj-item->db-item item))))
-
-(defn- put-request [item]
-  (doto (PutRequest.)
-    (.setItem
-      (into {}
-        (for [[k v] item]
-          {(name k) (clj-val->db-val v)})))))
-
-(defn- write-request [action item]
-  (let [wr (WriteRequest.)]
-    (case action :delete (.setDeleteRequest wr (delete-request item))
-                 :put    (.setPutRequest    wr (put-request    item)))
-    wr))
+(defn- put-request    [i] (doto (PutRequest.)    (.setItem (clj-item->db-item i))))
+(defn- delete-request [i] (doto (DeleteRequest.) (.setKey  (clj-item->db-item i))))
+(defn- write-request  [action item]
+  (case action
+    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))
+    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))))
 
 (defn batch-write-item
-  "Execute a batch of Puts and/or Deletes in a single request.
-   DynamoDB limits apply - 25 items max. No transaction
-   guarantees are provided, nor conditional puts.
+  "Executes a batch of Puts and/or Deletes in a single request.
+   Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
+   provided, nor conditional puts.
 
-   Example:
    (batch-write-item creds
-     [:put :users {:user-id 1 :username \"sally\"}]
-     [:put :users {:user-id 2 :username \"jane\"}]
-     [:delete :users {:hash-key 3}])"
+     [:put    :users {:user-id 1 :username \"sally\"}]
+     [:put    :users {:user-id 2 :username \"jane\"}]
+     [:delete :users {:user-id 3}])"
   [creds & requests]
   (as-map
     (.batchWriteItem (db-client creds)
@@ -492,6 +476,8 @@
           (group-by (fn [[_ table _]] table) requests)))))))
 
 ;;;; API - queries & scans
+
+;;;; TODO Continue code walk-through below
 
 (defn- scan-request
   "Create a ScanRequest object."
