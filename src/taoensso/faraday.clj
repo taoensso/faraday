@@ -229,7 +229,14 @@
 (defn- keys-and-attrs "Returns a new KeysAndAttributes object."
   [{:keys [key vals attrs consistent?] :as request}]
   (doto (KeysAndAttributes.)
+
+    ;; TODO Our batch-get-item API is problematic, it doesn't support v2-style
+    ;; primary keys.
+    ;;
+    ;; prim-key => {<hash-key> <val> <range-key> <val>}
+    ;; (.setKey (clj-item->db-item prim-key))
     (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
+
     (.setAttributesToGet (when attrs (mapv name attrs)))
     (.setConsistentRead  consistent?)))
 
@@ -436,7 +443,7 @@
   Limits apply, Ref. http://goo.gl/Bj9TC.
 
   (batch-get-item creds
-    {:users {:key  :names
+    {:users {:key  :names ; TODO What about range-keys?
              :vals [\"alice\" \"bob\"]}
      :posts {:key   :id
              :vals  [1 2 3]
