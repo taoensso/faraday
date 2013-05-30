@@ -218,13 +218,13 @@
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
-  [expected]
-  (when (seq expected)
+  [expected-map]
+  (when (seq expected-map)
     (utils/name-map
      #(case % (true  ::exists)     (ExpectedAttributeValue. true)
               (false ::not-exists) (ExpectedAttributeValue. false)
               (ExpectedAttributeValue. (clj-val->db-val %)))
-     expected)))
+     expected-map)))
 
 (defn- keys-and-attrs "Returns a new KeysAndAttributes object."
   [{:keys [key vals attrs consistent?] :as request}]
@@ -366,7 +366,7 @@
        (when throughput (.setProvisionedThroughput utr (provisioned-throughput
                                                         throughput)))))))
 
-(defn delete-table "Deletes a table."
+(defn delete-table "Deletes a table, go figure."
   [creds table-name]
   (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name)))))
 
@@ -389,7 +389,7 @@
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
-                  {<attr> \"expected-value\" ...}
+                  {<attr> <expected-value> ...}
                   {<attr> true  ...} ; Attribute must exist
                   {<attr> false ...} ; Attribute must not exist"
   [creds table item & [{:keys [return expected]
