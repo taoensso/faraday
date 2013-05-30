@@ -210,6 +210,8 @@
 
   BatchGetItemResult
   (as-map [r]
+    ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
+    ;; possible unless we force the inclusion of the prim-kv in :attrs.
     {:responses         (utils/keyword-map as-map (.getResponses       r))
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
@@ -351,23 +353,23 @@
 (defn get-item
   "Retrieves an item from a table by its primary key,
   {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}"
-  [creds table prim-kvs & [{:keys [consistent? attrs-to-get]}]]
+  [creds table prim-kvs & [{:keys [consistent? attrs]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
       (.setTableName      (name table))
       (.setKey            (clj-item->db-item prim-kvs))
       (.setConsistentRead  consistent?)
-      (.setAttributesToGet attrs-to-get)))))
+      (.setAttributesToGet attrs)))))
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
   [expected-map]
   (when (seq expected-map)
     (utils/name-map
-     #(case % (true  ::exists)     (ExpectedAttributeValue. true)
-              (false ::not-exists) (ExpectedAttributeValue. false)
-              (ExpectedAttributeValue. (clj-val->db-val %)))
+     #(if (= false %)
+        (ExpectedAttributeValue. false)
+        (ExpectedAttributeValue. (clj-val->db-val %)))
      expected-map)))
 
 (defn put-item
