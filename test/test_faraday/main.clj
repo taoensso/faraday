@@ -37,19 +37,17 @@
 
   (let [result
         (far/batch-get-item creds
-          {table {:key  id
-                  :vals ["1" "2" "3" "4"]
-                  :consistent? true}})
+          {table {:prim-kvs {id ["1" "2" "3" "4"]}
+                  :consistent? true ; TODO Should be false?
+                  }})
         consis
         (far/batch-get-item creds
-          {table {:key  id
-                  :vals ["1" "2" "3" "4"]
+          {table {:prim-kvs {id ["1" "2" "3" "4"]}
                   :consistent? true}})
         attrs
         (far/batch-get-item creds
-          {table {:key   id
-                  :vals  ["1" "2" "3" "4"]
-                  :attrs [attr]
+          {table {:prim-kvs {id ["1" "2" "3" "4"]}
+                  :attrs    [attr]
                   :consistent? true}})
 
         items  (get-in result [:responses table])

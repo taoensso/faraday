@@ -351,12 +351,12 @@
 (defn get-item
   "Retrieves an item from a table by its primary key,
   {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}"
-  [creds table prim-key & [{:keys [consistent? attrs-to-get]}]]
+  [creds table prim-kvs & [{:keys [consistent? attrs-to-get]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
       (.setTableName      (name table))
-      (.setKey            (clj-item->db-item prim-key))
+      (.setKey            (clj-item->db-item prim-kvs))
       (.setConsistentRead  consistent?)
       (.setAttributesToGet attrs-to-get)))))
 
@@ -401,13 +401,13 @@
   "Updates an item in a table by its primary key and an update map:
   {<attr> [<#{:put :add :delete}> <optional value>]}
   See `put-item` for option docs."
-  [creds table prim-key update-map & [{:keys [return expected]
+  [creds table prim-kvs update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
      (doto (UpdateItemRequest.)
        (.setTableName        (name table))
-       (.setKey              (clj-item->db-item prim-key))
+       (.setKey              (clj-item->db-item prim-kvs))
        (.setExpected         (expected-values expected))
        (.setReturnValues     (utils/enum return))
        (.setAttributeUpdates (attribute-updates update-map))))))
@@ -415,48 +415,43 @@
 (defn delete-item
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
-  [creds table prim-key & [{:keys [return expected]
+  [creds table prim-kvs & [{:keys [return expected]
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
      (doto (DeleteItemRequest.)
        (.setTableName    (name table))
-       (.setKey          (clj-item->db-item prim-key))
+       (.setKey          (clj-item->db-item prim-kvs))
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
 ;;;; API - batch ops
 
-(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
-  [{:keys [key vals attrs consistent?] :as request}]
-  (doto (KeysAndAttributes.)
-
-    ;; TODO Our batch-get-item API is problematic, it doesn't support v2-style
-    ;; primary keys.
-    ;;
-    ;; prim-key => {<hash-key> <val> <range-key> <val>}
-    ;; (.setKey (clj-item->db-item prim-key))
-    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
-
-    (.setAttributesToGet (when attrs (mapv name attrs)))
-    (.setConsistentRead  consistent?)))
-
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
   [requests]
-  (into {} (for [[table request] requests]
-             [(name table) (keys-and-attrs request)])))
+  (utils/name-map
+   (fn [{:keys [prim-kvs attrs consistent?]}]
+     (doto (KeysAndAttributes.)
+       (.setKeys
+        (->> (for [[k v-or-vs] prim-kvs] ; {<k> <v-or-vs> ...} -> [{k v} ...]
+               (if (coll? v-or-vs) (for [v v-or-vs] [k v]) (list [k v-or-vs])))
+             (reduce into)
+             (mapv (fn [[k v]] {(name k) (clj-val->db-val v)}))))
+       (.setAttributesToGet (when attrs (mapv name attrs)))
+       (.setConsistentRead  consistent?)))
+   requests))
+
+(comment (batch-request-items {:my-table {:prim-kvs {:my-hash "1"} :attrs []}}))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
   Limits apply, Ref. http://goo.gl/Bj9TC.
 
   (batch-get-item creds
-    {:users {:key  :names ; TODO What about range-keys?
-             :vals [\"alice\" \"bob\"]}
-     :posts {:key   :id
-             :vals  [1 2 3]
-             :attrs [:timestamp :subject]
+    {:users {:prim-kvs {:name \"alice\"}}
+     :posts {:prim-kvs {:id [1 2 3]} ; Matches multiple key values
+             :attrs    [:timestamp :subject]
              :consistent? true}})"
   [creds requests]
   (as-map
