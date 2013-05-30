@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.0.6"] ; WARNING: Still VERY experimental!
+[com.taoensso/faraday "0.1.0"] ; Alpha - Likely buggy, API subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -15,7 +15,7 @@ Faraday is a fork of [Rotary](https://github.com/weavejester/rotary) by James Re
  * **Good performance**.
  * Flexible, high-performance **binary-safe serialization** using [Nippy](https://github.com/ptaoussanis/nippy).
 
-It's still (very) early days. There's a lot of rough edges, but most of them are relatively superficial and will be ironed out as the lib sees Real-World-Use™. Again, since I'm still only evaluating DynamoDB myself: **pull requests, bug reports, and/or suggestions are very, very welcome**!
+It's still (very) early days. There's a lot of rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. Again, since I'm still only evaluating DynamoDB myself: **pull requests, bug reports, and/or suggestions are very, very welcome**!
 
 ## Getting Started
 
@@ -24,7 +24,7 @@ It's still (very) early days. There's a lot of rough edges, but most of them are
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.0.6"]
+[com.taoensso/faraday "0.1.0"]
 ```
 
 and `require` the library:

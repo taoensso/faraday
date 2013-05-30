@@ -1,7 +1,14 @@
 (ns taoensso.faraday
   "Clojure DynamoDB client. Adapted from Rotary by James Reeves.
   Ref. https://github.com/weavejester/rotary (Rotary),
-       http://goo.gl/22QGA (DynamoDBv2 API)"
+       http://goo.gl/22QGA (DynamoDBv2 API)
+
+  Definitions (with '=>' as 'implies'):
+    * item        => {<attribute> <value>}
+    * key         => hash OR range key => special attribute
+    * primary key => hash key WITH optional range key
+    * attribute   ≠> key (i.e. does not imply)"
+
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
@@ -16,7 +23,7 @@
              BatchWriteItemRequest
              BatchWriteItemResult
              Condition
-             ;; ConsumedCapacity ; Implicit
+             ConsumedCapacity
              CreateTableRequest
              CreateTableResult
              DeleteItemRequest
@@ -29,11 +36,11 @@
              ExpectedAttributeValue
              GetItemRequest
              GetItemResult
-             ;; ItemCollectionMetrics
+             ItemCollectionMetrics
              KeysAndAttributes
              KeySchemaElement
-             ;; ListTablesRequest ; Implicit
-             ;; ListTablesResult  ; Implicit
+             ListTablesRequest
+             ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
              Projection
@@ -46,7 +53,7 @@
              QueryResult
              ScanRequest
              ScanResult
-             ;; TableDescription ; Implicit
+             TableDescription
              UpdateItemRequest
              UpdateItemResult
              UpdateTableRequest
@@ -65,15 +72,11 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * hash-key -> prim-key?
 ;; * Finish up code walk-through.
+;; * Finish up outstanding API: as-map types, update-item, scan+query stuff.
 ;; * Go through Rotary PRs, non-PR forks.
-;; * README docs.
-;; * Benchmarks.
-;; * Further tests.
-;; * Parallel scans.
-;; * Async API.
-;; * Auto throughput adjusting.
+;; * README docs, benchmarks, further tests.
+;; * Long-term: async API, auto throughput adjusting, ...?
 
 ;;;; API - exceptions
 
@@ -136,7 +139,7 @@
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
-   :else (throw (Exception. (str "Unknown value type: " (type x) "."
+   :else (throw (Exception. (str "Unknown DynamoDB value type: " (type x) "."
                                  " See `freeze` for serialization.")))))
 
 (comment
@@ -168,7 +171,10 @@
     (.setAttributeName (name key-name))
     (.setKeyType (utils/enum key-type))))
 
-(defn- key-schema "Returns a new KeySchema object."
+(defn- key-schema
+  "Returns a [{<hash-key> KeySchemaElement}], or
+             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
+   vector for use as a table/index primary key."
   [hash-key & [range-key]]
   (let [schema [(key-schema-element (:name hash-key) :hash)]]
     (if range-key
@@ -181,7 +187,8 @@
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
 
-(defn- attribute-definitions "[{:name _ :type _}] -> [AttributeDefinition]"
+(defn- attribute-definitions
+  "[{:name _ :type _} ...] -> [AttributeDefinition ...]"
   [defs]
   (mapv
    (fn [{key-name :name key-type :type :as def}]
@@ -191,7 +198,7 @@
    defs))
 
 (defn- local-indexes
-  "[{:name _ :range-key _ :projection _}] -> [LocalSecondaryIndex]"
+  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-key indexes]
   (mapv
    (fn [{index-name :name
@@ -209,7 +216,8 @@
           pr))))
    indexes))
 
-(defn- expected-values "{:attr cond} -> {\"attr\" ExpectedAttributeValue}"
+(defn- expected-values
+  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
   [expected]
   (when (seq expected)
     (utils/name-map
@@ -217,6 +225,19 @@
               (false ::not-exists) (ExpectedAttributeValue. false)
               (ExpectedAttributeValue. (clj-val->db-val %)))
      expected)))
+
+(defn- keys-and-attrs "Returns a new KeysAndAttributes object."
+  [{:keys [key vals attrs consistent?] :as request}]
+  (doto (KeysAndAttributes.)
+    (.setKeys (for [v vals] {(name key) (clj-val->db-val v)}))
+    (.setAttributesToGet (when attrs (mapv name attrs)))
+    (.setConsistentRead  consistent?)))
+
+(defn- batch-request-items
+  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+  [requests]
+  (into {} (for [[table request] requests]
+             [(name table) (keys-and-attrs request)])))
 
 ;;;; Coercion - objects
 
@@ -246,7 +267,7 @@
   (as-map [x]
     (merge
      (when-let [a (.getAttributesToGet x)] {:attrs (mapv keyword a)})
-     (when-let [c (.getConsistentRead  x)] {:consistent c})
+     (when-let [c (.getConsistentRead  x)] {:consistent? c})
      (when-let [k (.getKeys            x)] {:keys (mapv db-item->clj-item k)})))
 
   GetItemResult       (as-map [r] (am-item-result r (.getItem r)))
@@ -297,7 +318,7 @@
 
 ;;;; API - tables
 
-(defn list-tables "Returns a list of tables."
+(defn list-tables "Returns a vector of table names."
   [creds] (->> (db-client creds) (.listTables) (.getTableNames) (mapv keyword)))
 
 (defn describe-table
@@ -310,11 +331,11 @@
 (defn create-table
   "Creates a table with the given map of options:
     :name       - (required) table name.
-    :throughput - (required) {:read units :write units}.
-    :hash-key   - (required) {:name _ :type #{:s :n :ss :ns :b :bs}}.
-    :range-key  - (optional) {:name _ :type #{:s :n :ss :ns :b :bs}}.
+    :throughput - (required) {:read <units> :write <units>}.
+    :hash-key   - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :range-key  - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :indexes    - (optional) [{:name _ :range-key _
-                               :projection #{:all :keys-only [:attr1 ...]}}]"
+                               :projection #{:all :keys-only [<attr> ...]}}]"
   [creds {table-name :name
           :keys [throughput hash-key range-key indexes]
           :or   {throughput {:read 1 :write 1}}}]
@@ -352,13 +373,14 @@
 ;;;; API - items
 
 (defn get-item
-  "Retrieves an item from a table by its hash key, {:attr match-value}."
-  [creds table hash-key & [{:keys [consistent? attrs-to-get]}]]
+  "Retrieves an item from a table by its primary key,
+  {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}"
+  [creds table prim-key & [{:keys [consistent? attrs-to-get]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
       (.setTableName      (name table))
-      (.setKey            (clj-item->db-item hash-key))
+      (.setKey            (clj-item->db-item prim-key))
       (.setConsistentRead  consistent?)
       (.setAttributesToGet attrs-to-get)))))
 
@@ -367,9 +389,9 @@
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
     :expected - a map of attribute/condition pairs, all of which must be met for
                 the operation to succeed. e.g.:
-                  {:attr \"expected-value\"}
-                  {:attr true}  ; Attribute must exist
-                  {:attr false} ; Attribute must not exist"
+                  {<attr> \"expected-value\" ...}
+                  {<attr> true  ...} ; Attribute must exist
+                  {<attr> false ...} ; Attribute must not exist"
   [creds table item & [{:keys [return expected]
                         :or   {return :none}}]]
   (as-map
@@ -381,97 +403,67 @@
        (.setReturnValues (utils/enum return))))))
 
 (defn update-item
-  "Updates an item in a table by its hash key, {:attr match-value}.
+  "Updates an item in a table by its primary key.
   See `put-item` for option docs."
-  [creds table hash-key update-map & [{:keys [return expected]
+  [creds table prim-key update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
      (doto (UpdateItemRequest.)
        (.setTableName        (name table))
-       (.setKey              (clj-item->db-item hash-key))
+       (.setKey              (clj-item->db-item prim-key))
        (.setAttributeUpdates nil) ; TODO
        (.setExpected         (expected-values expected))
        (.setReturnValues     (utils/enum return))))))
 
 (defn delete-item
-  "Deletes an item from a table by its hash key, {:attr match-value}.
+  "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
-  [creds table hash-key & [{:keys [return expected]
+  [creds table prim-key & [{:keys [return expected]
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
      (doto (DeleteItemRequest.)
        (.setTableName    (name table))
-       (.setKey          (clj-item->db-item hash-key))
+       (.setKey          (clj-item->db-item prim-key))
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
-;;;; TODO Continue code walk-through below
-
 ;;;; API - batch ops
 
-(defn- batch-item-keys [request-or-keys]
-  (for [key (:keys request-or-keys request-or-keys)]
-    (clj-item->db-item {(:key-name request-or-keys) key})))
-
-(defn- keys-and-attrs [{:keys [attrs consistent] :as request}]
-  (let [kaa (KeysAndAttributes.)]
-    (.setKeys kaa (batch-item-keys request))
-    (when attrs      (.setAttributesToGet kaa (mapv name attrs)))
-    (when consistent (.setConsistentRead  kaa consistent))
-    kaa))
-
-(defn- batch-request-items [requests]
-  (into {} (for [[k v] requests] [(name k) (keys-and-attrs v)])))
-
 (defn batch-get-item
-  "Retrieve a batch of items in a single request. DynamoDB limits
-   apply - 100 items and 1MB total size limit. Requested items
-   which were elided by Amazon are available in the returned map
-   key :unprocessed-keys.
+  "Retrieves a batch of items in a single request.
+  Limits apply, Ref. http://goo.gl/Bj9TC.
 
-  Example:
-  (batch-get-item cred
-    {:users {:key-name :names
-             :keys [\"alice\" \"bob\"]}
-     :posts {:key-name :id
-             :keys [1 2 3]
+  (batch-get-item creds
+    {:users {:key  :names
+             :vals [\"alice\" \"bob\"]}
+     :posts {:key   :id
+             :vals  [1 2 3]
              :attrs [:timestamp :subject]
-             :consistent true}})"
+             :consistent? true}})"
   [creds requests]
   (as-map
     (.batchGetItem (db-client creds)
       (doto (BatchGetItemRequest.)
         (.setRequestItems (batch-request-items requests))))))
 
-(defn- delete-request [item]
-  (doto (DeleteRequest.)
-    (.setKey (clj-item->db-item item))))
-
-(defn- put-request [item]
-  (doto (PutRequest.)
-    (.setItem
-      (into {}
-        (for [[k v] item]
-          {(name k) (clj-val->db-val v)})))))
-
-(defn- write-request [action item]
-  (let [wr (WriteRequest.)]
-    (case action :delete (.setDeleteRequest wr (delete-request item))
-                 :put    (.setPutRequest    wr (put-request    item)))
-    wr))
+(defn- put-request    [i] (doto (PutRequest.)    (.setItem (clj-item->db-item i))))
+(defn- delete-request [i] (doto (DeleteRequest.) (.setKey  (clj-item->db-item i))))
+(defn- write-request  [action item]
+  (case action
+    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))
+    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))))
 
 (defn batch-write-item
-  "Execute a batch of Puts and/or Deletes in a single request.
-   DynamoDB limits apply - 25 items max. No transaction
-   guarantees are provided, nor conditional puts.
+  "Executes a batch of Puts and/or Deletes in a single request.
+   Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
+   provided, nor conditional puts.
 
-   Example:
    (batch-write-item creds
-     [:put :users {:user-id 1 :username \"sally\"}]
-     [:put :users {:user-id 2 :username \"jane\"}]
-     [:delete :users {:hash-key 3}])"
+     [:put    :users {:user-id 1 :username \"sally\"}]
+     [:put    :users {:user-id 2 :username \"jane\"}]
+     [:delete :users {:user-id 3}])"
   [creds & requests]
   (as-map
     (.batchWriteItem (db-client creds)
@@ -484,6 +476,8 @@
           (group-by (fn [[_ table _]] table) requests)))))))
 
 ;;;; API - queries & scans
+
+;;;; TODO Continue code walk-through below
 
 (defn- scan-request
   "Create a ScanRequest object."
@@ -533,7 +527,7 @@
 
 (defn- query-request
   "Create a QueryRequest object."
-  [table hash-key range-clause {:keys [order limit after count consistent attrs index]}]
+  [table hash-key range-clause {:keys [order limit after count consistent? attrs index]}]
   (let [qr (QueryRequest.)
         hash-clause (set-hash-condition hash-key)
         [range-key operator range-value range-end] range-clause
@@ -548,7 +542,7 @@
     (when attrs      (.setAttributesToGet qr (map name attrs)))
     (when order      (.setScanIndexForward qr (not= order :desc)))
     (when limit      (.setLimit qr (int limit)))
-    (when consistent (.setConsistentRead qr consistent))
+    (when consistent? (.setConsistentRead qr consistent?)) ; TODO
     (when after      (.setExclusiveStartKey qr (clj-item->db-item after)))
     (when index      (.setIndexName qr index))
     qr))
@@ -567,7 +561,7 @@
     :attrs - limit the values returned to the following attribute names
     :limit - the maximum number of items to return
     :after - only return results after this key
-    :consistent - return a consistent read if logical true
+    :consistent? - return a consistent read iff logical true
     :index - the secondary index to query
 
   The items are returned as a map with the following keys:

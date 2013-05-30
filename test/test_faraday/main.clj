@@ -14,9 +14,10 @@
 
 (defn setup-table!
   []
-  (far/ensure-table creds {:name       table
-                           :hash-key   {:name id :type :s}
-                           :throughput {:read 1 :write 1}})
+  (far/ensure-table creds
+    {:name       table
+     :hash-key   {:name id :type :s}
+     :throughput {:read 1 :write 1}})
 
   (far/batch-write-item creds
     [:delete table {id "1"}]
@@ -35,20 +36,20 @@
 
   (let [result
         (far/batch-get-item creds
-          {table {:key-name id
-                  :keys ["1" "2" "3" "4"]
-                  :consistent true}})
+          {table {:key  id
+                  :vals ["1" "2" "3" "4"]
+                  :consistent? true}})
         consis
         (far/batch-get-item creds
-          {table {:key-name id
-                  :keys ["1" "2" "3" "4"]
-                  :consistent true}})
+          {table {:key  id
+                  :vals ["1" "2" "3" "4"]
+                  :consistent? true}})
         attrs
         (far/batch-get-item creds
-          {table {:key-name id
-                  :keys ["1" "2" "3" "4"]
-                  :consistent true
-                  :attrs [attr]}})
+          {table {:key   id
+                  :vals  ["1" "2" "3" "4"]
+                  :attrs [attr]
+                  :consistent? true}})
 
         items  (get-in result [:responses table])
         item-1 (far/get-item creds table {id "1"})
@@ -63,7 +64,7 @@
 
     (is (= true (some #(= (% attr) "foo") items)))
     (is (= true (some #(= (% attr) "bar") (get-in consis [:responses table]))))
-    (is (= true (some #(= (% attr) "baz") (get-in attrs [:responses table]))))
+    (is (= true (some #(= (% attr) "baz") (get-in attrs  [:responses table]))))
     (is (= true (some #(= (% attr) "foobar") items)))
 
     (far/batch-write-item creds
