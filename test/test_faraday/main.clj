@@ -21,16 +21,13 @@
      :throughput {:read 1 :write 1}})
 
   (far/batch-write-item creds
-    [:delete table {id "1"}]
-    [:delete table {id "2"}]
-    [:delete table {id "3"}]
-    [:delete table {id "4"}])
+    {table {:delete [{id "1"} {id "2"} {id "3"} {id "4"}]}})
 
   (far/batch-write-item creds
-    [:put table {id "1" attr "foo"}]
-    [:put table {id "2" attr "bar"}]
-    [:put table {id "3" attr "baz"}]
-    [:put table {id "4" attr "foobar"}]))
+    {table {:put [{id "1" attr "foo"}
+                  {id "2" attr "bar"}
+                  {id "3" attr "baz"}
+                  {id "4" attr "foobar"}]}}))
 
 (deftest test-batch-simple
   (setup-table!)
@@ -67,10 +64,7 @@
     (is (= true (some #(= (% attr) "foobar") items)))
 
     (far/batch-write-item creds
-      [:delete table {id "1"}]
-      [:delete table {id "2"}]
-      [:delete table {id "3"}]
-      [:delete table {id "4"}])
+      {table {:delete [{id "1"} {id "2"} {id "3"} {id "4"}]}})
 
     (is (= nil (far/get-item creds table {id "1"})) "batch-write-item :delete failed")
     (is (= nil (far/get-item creds table {id "2"})) "batch-write-item :delete failed")
@@ -79,15 +73,12 @@
 
 (deftest conditional-put
   (far/batch-write-item creds
-   [:delete table {id "42"}]
-   [:delete table {id "9"}]
-   [:delete table {id "6"}]
-   [:delete table {id "23"}])
+    {table {:delete [{id "42"} {id "9"} {id "6"} {id "23"}]}})
 
   (far/batch-write-item creds
-   [:put table {id "42" attr "foo"}]
-   [:put table {id "6"  attr "foobar"}]
-   [:put table {id "9"  attr "foobaz"}])
+    {table {:put [{id "42" attr "foo"}
+                  {id "6"  attr "foobar"}
+                  {id "9"  attr "foobaz"}]}})
 
   ;; Should update item 42 to have attr bar
   (far/put-item creds table {id "42" attr "bar"} {:expected {attr "foo"}})

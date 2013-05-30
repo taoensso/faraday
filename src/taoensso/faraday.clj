@@ -436,7 +436,7 @@
        (.setKeys
         (->> (for [[k v-or-vs] prim-kvs] ; {<k> <v-or-vs> ...} -> [{k v} ...]
                (if (coll? v-or-vs) (for [v v-or-vs] [k v]) (list [k v-or-vs])))
-             (reduce into)
+             (reduce into [])
              (mapv (fn [[k v]] {(name k) (clj-val->db-val v)}))))
        (.setAttributesToGet (when attrs (mapv name attrs)))
        (.setConsistentRead  consistent?)))
@@ -463,28 +463,32 @@
 (defn- delete-request [i] (doto (DeleteRequest.) (.setKey  (clj-item->db-item i))))
 (defn- write-request  [action item]
   (case action
-    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))
-    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))))
+    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))
+    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))))
 
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
    provided, nor conditional puts.
 
+   Execution order of write requests is undefined. TODO Alternatives?
+
    (batch-write-item creds
-     [:put    :users {:user-id 1 :username \"sally\"}]
-     [:put    :users {:user-id 2 :username \"jane\"}]
-     [:delete :users {:user-id 3}])"
-  [creds & requests]
+     {:users {:put    [{:user-id 1 :username \"sally\"}
+                       {:user-id 2 :username \"jane\"}]
+              :delete [{:user-id 3}]}})"
+  [creds requests]
   (as-map
     (.batchWriteItem (db-client creds)
       (doto (BatchWriteItemRequest.)
         (.setRequestItems
          (utils/name-map
-          (fn [reqs]
-            (reduce (fn [v [action _ item]] (conj v (write-request action item)))
-                    [] (partition 3 (flatten reqs))))
-          (group-by (fn [[_ table _]] table) requests)))))))
+          ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+          (fn [table-request]
+            (reduce into [] (for [action (keys table-request)
+                                  :let [items (table-request action)]]
+                              (mapv (partial write-request action) items))))
+          requests))))))
 
 ;;;; API - queries & scans
 
