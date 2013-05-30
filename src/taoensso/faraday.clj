@@ -388,8 +388,18 @@
        (.setExpected     (expected-values expected))
        (.setReturnValues (utils/enum return))))))
 
+(defn- attribute-updates
+  "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
+  [update-map]
+  (when (seq update-map)
+    (utils/name-map
+     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
+                                              (utils/enum action)))
+     update-map)))
+
 (defn update-item
-  "Updates an item in a table by its primary key.
+  "Updates an item in a table by its primary key and an update map:
+  {<attr> [<#{:put :add :delete}> <optional value>]}
   See `put-item` for option docs."
   [creds table prim-key update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
@@ -398,9 +408,9 @@
      (doto (UpdateItemRequest.)
        (.setTableName        (name table))
        (.setKey              (clj-item->db-item prim-key))
-       (.setAttributeUpdates nil) ; TODO
        (.setExpected         (expected-values expected))
-       (.setReturnValues     (utils/enum return))))))
+       (.setReturnValues     (utils/enum return))
+       (.setAttributeUpdates (attribute-updates update-map))))))
 
 (defn delete-item
   "Deletes an item from a table by its primary key.
