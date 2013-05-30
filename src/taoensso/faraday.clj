@@ -599,4 +599,18 @@
   (def my-creds {:access-key ""
                  :secret-key ""})
 
-  (far/list-tables my-creds))
+  (far/list-tables my-creds)
+
+  (far/create-table my-creds
+    {:name :my-table
+     :throughput {:read 1 :write 1}
+     :hash-key   {:name :id
+                  :type :n}})
+
+  (far/put-item my-creds
+    :my-table
+    {:id 0 :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
+                                                    :set      #{1 2 3}
+                                                    :rational (/ 22 7)})})
+
+  (far/get-item my-creds :my-table {:id 0}))

@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.2.0"] ; Alpha - Likely buggy, API subject to change
+[com.taoensso/faraday "0.2.0"] ; Alpha - likely buggy, API subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -17,7 +17,7 @@ Faraday is a fork of [Rotary](https://github.com/weavejester/rotary) by James Re
  * **Good performance**.
  * Flexible, high-performance **binary-safe serialization** using [Nippy](https://github.com/ptaoussanis/nippy).
 
-It's still (very) early days. There's a lot of rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. Again, since I'm still only evaluating DynamoDB myself: **pull requests, bug reports, and/or suggestions are very, very welcome**!
+It's still early days. There's rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. Again, since I'm still only evaluating DynamoDB myself: **pull requests, bug reports, and/or suggestions are very, very welcome**!
 
 ## Getting Started
 
@@ -39,9 +39,7 @@ and `require` the library:
 
 ### Preparing A Database
 
-First thing is to make sure you've got an **[AWS DynamoDB](http://aws.amazon.com/dynamodb/) account** (there's a **free tier** with 100MB of storage and limited read+write throughput).
-
-Next you'll need credentials for an IAM user with read+write access to your DynamoDB tables (see the **IAM section of your AWS Management Console**). Ready?
+First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.amazon.com/dynamodb/)** (there's a **free tier** with 100MB of storage and limited read+write throughput). Next you'll need credentials for an IAM user with read+write access to your DynamoDB tables (see the **IAM section of your AWS Management Console**). Ready?
 
 ### Connecting
 
@@ -53,20 +51,44 @@ Next you'll need credentials for an IAM user with read+write access to your Dyna
 => [] ; No tables yet...
 ```
 
-Well that was easy. How about we create a table?
+Well that was easy. How about we create a table? (This is actually one of the most complicated parts of working with DynamoDB since it requires understanding how DynamoDB [provisions capacity](http://aws.amazon.com/dynamodb/pricing/) and how its [primary keys](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey) work. Anyway, we can safely ignore the specific for now).
 
 ```clojure
-;; (far/create-table ...) ; TODO
+(far/create-table my-creds
+  {:name :my-table
+   :throughput {:read 1 :write 1}    ; Read & write capacity (units/sec)
+   :hash-key   {:name :id :type :n}} ; Primary key (:n => number type)
+  )
+
+;; Wait a minute for the table to be created... maybe have a nice sandwich?
 
 (far/list-tables my-creds)
-=> [:my-users-table]
+=> [:my-table] ; There's our new table!
 ```
 
-TODO Moar
+Let's write something to `:my-table` and fetch it back:
+
+```clojure
+(far/put-item my-creds
+    :my-table
+    {:id 0 ; Remember that this is our primary (indexed) key
+     :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
+                                              :set      #{1 2 3}
+                                              :rational (/ 22 7)
+                                              ;; ... Other Clojure data goodness
+                                              })})
+
+(far/get-item my-creds :my-table {:id 0})
+=> {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
+```
+
+It really couldn't be simpler!
 
 ### API
 
-See the appropriate **docstrings for options**:
+The above example is just scratching the surface obviously. DynamoDB gives you tons of power including **secondary indexes**, **conditional writes**, **batch operations**, **atomic counters**, **tuneable read consistency** and more.
+
+Most of this stuff is controlled through optional arguments and is pretty easy to pick up by **seeing the appropriate docstrings**:
 
 **Tables**: `list-tables`, `describe-table`, `create-table`, `ensure-table`, `update-table`, `delete-table`.
 
@@ -76,13 +98,15 @@ See the appropriate **docstrings for options**:
 
 **Querying**: `scan`, `query`.
 
+You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Farady.
+
 ## TODO Performance
 
-Faraday adds negligable overhead to the official [Java AWS SDK](http://aws.amazon.com/sdkforjava/):
+Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazon.com/sdkforjava/):
 
 ![Performance comparison chart](https://github.com/ptaoussanis/faraday/raw/master/benchmarks/chart.png)
 
-[Detailed benchmark information](https://docs.google.com/spreadsheet/TODO) is available on Google Docs.
+[Detailed benchmark information](https://docs.google.com/spreadsheet/ccc?key=0AuSXb68FH4uhdE5kTTlocGZKSXppWG9sRzA5Y2pMVkE) is available on Google Docs.
 
 ## Faraday Supports the ClojureWerkz and CDS Project Goals
 
