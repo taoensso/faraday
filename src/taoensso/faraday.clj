@@ -572,4 +572,14 @@
   (let [[range options] (extract-range range-and-options)]
     (as-map
      (.query (db-client creds)
-       (query-request table hash-key range options)))))
+             (query-request table hash-key range options)))))
+
+;;;; README
+
+(comment
+  (require '[taoensso.faraday :as far])
+
+  (def my-creds {:access-key ""
+                 :secret-key ""})
+
+  (far/list-tables my-creds))
