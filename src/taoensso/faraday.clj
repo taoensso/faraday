@@ -4,10 +4,10 @@
        http://goo.gl/22QGA (DynamoDBv2 API)
 
   Definitions (with '=>' as 'implies'):
-    * item        => {<attribute> <value>}
-    * key         => hash OR range key => special attribute
-    * primary key => hash key WITH optional range key
-    * attribute   ≠> key (i.e. does not imply)"
+    * item        => {<attribute> <value>}.
+    * key         => hash OR range key => special attribute.
+    * primary key => hash key WITH optional range key.
+    * attribute   ≠> key (i.e. does not imply)."
 
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
@@ -549,7 +549,8 @@
     :total-segments - total number of parallel scan segments.
     :segment        - calling worker's segment number (>=0, <=total-segments).
 
-  See also `scan-parallel` for automatic parallelization & segment control."
+  For automatic parallelization & segment control see `scan-parallel`.
+  For indexed item retrievel see `query`."
   [creds table
    & [{:keys [attr-conds last-prim-kvs return limit total-segments segment]
        :or   {return :all-attributes}}]]
