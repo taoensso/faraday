@@ -375,7 +375,7 @@
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
-    :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
+    :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}.
     :expected - a map of item attribute/condition pairs, all of which must be
                 met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
@@ -400,9 +400,14 @@
      update-map)))
 
 (defn update-item
-  "Updates an item in a table by its primary key and an update map:
-  {<attr> [<#{:put :add :delete}> <optional value>]}
-  See `put-item` for option docs."
+  "Updates an item in a table by its primary key with options:
+    prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
+    update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
+    :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
+    :expected  - a map of item attribute/condition pairs, all of which must be
+                 met for the operation to succeed. e.g.:
+                   {<attr> <expected-value> ...}
+                   {<attr> false ...} ; Attribute must not exist"
   [creds table prim-kvs update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
   (as-map
@@ -511,14 +516,14 @@
 
 (defn query
   "Retries items from a table (indexed) with options:
-    :prim-key-conds - {<key-attr> [comparison-operator <values>] ...}
-    :last-prim-kv   - primary key-val from which to eval, useful for paging.
-    :return         - e/o #{:all-attributes :all-projected-attributes :count
-                            [<attr> ...]}.
-    :index          - name of a secondary index to query.
-    :order          - index scaning order e/o #{:asc :desc}.
-    :limit          - max num >=1 of items to eval (≠ num of matching items).
-    :consistent?    - use strongly (rather than eventually) consistent reads?
+    prim-key-conds - {<key-attr> [comparison-operator <values>] ...}.
+    :last-prim-kv  - primary key-val from which to eval, useful for paging.
+    :return        - e/o #{:all-attributes :all-projected-attributes :count
+                           [<attr> ...]}.
+    :index         - name of a secondary index to query.
+    :order         - index scaning order e/o #{:asc :desc}.
+    :limit         - max num >=1 of items to eval (≠ num of matching items).
+    :consistent?   - use strongly (rather than eventually) consistent reads?
 
   For unindexed item retrievel see `scan`."
   [creds table prim-key-conds
@@ -539,12 +544,11 @@
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
-    :attr-conds     - {<attr> [comparison-operator <values>] ...}
+    :attr-conds     - {<attr> [comparison-operator <values>] ...}.
     :limit          - max num >=1 of items to eval (≠ num of matching items).
     :last-prim-kv   - primary key-val from which to eval, useful for paging.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
                             [<attr> ...]}.
-
     :total-segments - total number of parallel scan segments.
     :segment        - calling worker's segment number (>=0, <=total-segments).
 
