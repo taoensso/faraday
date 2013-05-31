@@ -72,10 +72,9 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Finish up code walk-through.
-;; * Finish up outstanding API: as-map types, update-item, scan+query stuff.
-;; * Go through Rotary PRs, non-PR forks.
-;; * README docs, benchmarks, further tests.
+;; * Finish up code walk-through, scan+query stuff.
+;; * Finish up outstanding API: as-map types, Rotary PRs, non-PR forks.
+;; * Benchmarks, further tests.
 ;; * Long-term: async API, auto throughput adjusting, ...?
 
 ;;;; Connections
@@ -375,10 +374,9 @@
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}
-    :expected - a map of attribute/condition pairs, all of which must be met for
-                the operation to succeed. e.g.:
+    :expected - a map of item attribute/condition pairs, all of which must be
+                met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
-                  {<attr> true  ...} ; Attribute must exist
                   {<attr> false ...} ; Attribute must not exist"
   [creds table item & [{:keys [return expected]
                         :or   {return :none}}]]
@@ -473,7 +471,7 @@
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
    provided, nor conditional puts.
 
-   Execution order of write requests is undefined. TODO Alternatives?
+   Request execution order is undefined. TODO Alternatives?
 
    (batch-write-item creds
      {:users {:put    [{:user-id 1 :username \"sally\"}

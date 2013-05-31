@@ -28,7 +28,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.2.0"]
+[com.taoensso/faraday "0.2.0"] ; Requires Clojure 1.5+
 ```
 
 and `require` the library:
