@@ -72,7 +72,6 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Finish up code walk-through, scan+query stuff.
 ;; * Finish up outstanding API: as-map types, Rotary PRs, non-PR forks.
 ;; * Benchmarks, further tests.
 ;; * Long-term: async API, auto throughput adjusting, ...?
@@ -310,7 +309,7 @@
    indexes))
 
 (defn create-table
-  "Creates a table with the given map of options:
+  "Creates a table with options:
     :name       - (required) table name.
     :throughput - (required) {:read <units> :write <units>}.
     :hash-key   - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
@@ -351,9 +350,11 @@
 ;;;; API - items
 
 (defn get-item
-  "Retrieves an item from a table by its primary key,
-  {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}"
-  [creds table prim-kvs & [{:keys [consistent? attrs]}]]
+  "Retrieves an item from a table by its primary key with options:
+    prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
+    :attrs       - attrs to return, [<attr> ...].
+    :consistent? - use strongly (rather than eventually) consistent reads?"
+  [creds table prim-kvs & [{:keys [attrs consistent?]}]]
   (as-map
    (.getItem (db-client creds)
     (doto (GetItemRequest.)
@@ -491,47 +492,77 @@
                               (mapv (partial write-request action) items))))
           requests))))))
 
-;;;; API - scans & queries
+;;;; API - queries & scans
 
 (defn- ^String enum-op [operator]
   (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
       utils/enum))
 
-(defn- scan-filter "{<attr> [operator <values>] ...} -> {<attr> Condition ...}"
-  [filter-map]
-  (when (seq filter-map)
+(defn- query|scan-conditions
+  "{<attr> [operator <values>] ...} -> {<attr> Condition ...}"
+  [conditions]
+  (when (seq conditions)
     (utils/name-map
      (fn [[operator values]]
        (doto (Condition.)
          (.setComparisonOperator (enum-op operator))
          (.setAttributeValueList (mapv clj-val->db-val values))))
-     filter-map)))
+     conditions)))
+
+(defn query
+  "Retries items from a table (indexed) with options:
+    :prim-key-conds - {<key-attr> [comparison-operator <values>] ...}
+    :last-prim-kv   - primary key-val from which to eval, useful for paging.
+    :return         - e/o #{:all-attributes :all-projected-attributes :count
+                            [<attr> ...]}.
+    :index          - name of a secondary index to query.
+    :order          - index scaning order e/o #{:asc :desc}.
+    :limit          - max num >=1 of items to eval (≠ num of matching items).
+    :consistent?    - use strongly (rather than eventually) consistent reads?
+
+  For unindexed item retrievel see `scan`."
+  [creds table prim-key-conds
+   & [{:keys [last-prim-kv return index order limit consistent?]
+       :or   {order :asc}}]]
+  (as-map
+   (.query (db-client creds)
+     (doto (QueryRequest.)
+       (.setTableName         (name table))
+       (.setKeyConditions     (query|scan-conditions prim-key-conds))
+       (.setExclusiveStartKey (when last-prim-kv (clj-item->db-item last-prim-kv)))
+       (.setAttributesToGet   (when     (coll? return) return))
+       (.setSelect            (when-not (coll? return) (utils/enum return)))
+       (.setIndexName         index)
+       (.setScanIndexForward  (case order :asc true :desc false))
+       (.setLimit             (when limit (long limit)))
+       (.setConsistentRead    consistent?)))))
 
 (defn scan
-  "Retrieves items from a table with options:
-    :filter         - {<attr> [comparison-operator <values>] ...}
-    :limit          - max num >=1 of items to scan (≠ num of matching items).
-    :last-prim-kv   - primary key-val from which to scan, useful for paging.
+  "Retrieves items from a table (unindexed) with options:
+    :attr-conds     - {<attr> [comparison-operator <values>] ...}
+    :limit          - max num >=1 of items to eval (≠ num of matching items).
+    :last-prim-kv   - primary key-val from which to eval, useful for paging.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
                             [<attr> ...]}.
 
     :total-segments - total number of parallel scan segments.
     :segment        - calling worker's segment number (>=0, <=total-segments).
+
   See also `scan-parallel` for automatic parallelization & segment control."
-  [creds table {filter-map filter
-                :keys [limit last-prim-kv return total-segments segment]
-                :or   {return :all-attributes}}]
+  [creds table
+   & [{:keys [attr-conds last-prim-kv return limit total-segments segment]
+       :or   {return :all-attributes}}]]
   (as-map
    (.scan (db-client creds)
      (doto (ScanRequest.)
-       (.setTableName (name table))
-       (.setLimit (when limit (long limit)))
+       (.setTableName         (name table))
+       (.setScanFilter        (query|scan-conditions attr-conds))
        (.setExclusiveStartKey (when last-prim-kv (clj-item->db-item last-prim-kv)))
-       (.setScanFilter  (scan-filter filter-map))
-       (.setAttributesToGet (when     (coll? return) return))
-       (.setSelect          (when-not (coll? return) (utils/enum return)))
-       (.setTotalSegments   (when total-segments (long total-segments)))
-       (.setSegment         (when segment        (long segment)))))))
+       (.setAttributesToGet   (when     (coll? return) return))
+       (.setSelect            (when-not (coll? return) (utils/enum return)))
+       (.setLimit             (when limit (long limit)))
+       (.setTotalSegments     (when total-segments (long total-segments)))
+       (.setSegment           (when segment        (long segment)))))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
@@ -539,80 +570,11 @@
   `scan` results.
 
   Ref. http://goo.gl/KLwnn (official parallel scan documentation)."
-  [creds table total-segments opts]
-  (let [shared-opts (assoc opts :total-segments total-segments)]
+  [creds table total-segments & [opts]]
+  (let [opts (assoc opts :total-segments total-segments)]
     (->> (mapv (fn [seg] (future (scan creds table (assoc opts :segment seg))))
                (range total-segments))
          (mapv deref))))
-
-;;;; TODO Continue code walk-through below
-
-(defn- set-hash-condition
-  "Create a map of specifying the hash-key condition for query"
-  [hash-key]
-  (utils/name-map ; TODO Correct? Used to be fmap
-   #(doto (Condition.)
-      (.setComparisonOperator "EQ")
-      (.setAttributeValueList [(clj-val->db-val %)]))
-   hash-key))
-
-(defn- set-range-condition
-  "Add the range key condition to a QueryRequest object"
-  [range-key op & [range-value range-end]]
-  (let [op ({:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} op op)
-        attribute-list (->> [range-value range-end] (filterv identity) (map clj-val->db-val))]
-    {range-key (doto (Condition.)
-                 (.setComparisonOperator (utils/enum op))
-                 (.setAttributeValueList attribute-list))}))
-
-(defn- query-request
-  "Create a QueryRequest object."
-  [table hash-key range-clause {:keys [order limit after count consistent? attrs index]}]
-  (let [qr (QueryRequest.)
-        hash-clause (set-hash-condition hash-key)
-        [range-key operator range-value range-end] range-clause
-        query-conditions (if-not operator
-                           hash-clause
-                           (merge hash-clause (set-range-condition range-key
-                                                                   operator
-                                                                   range-value
-                                                                   range-end)))]
-    (.setTableName qr table)
-    (.setKeyConditions qr query-conditions)
-    (when attrs      (.setAttributesToGet qr (map name attrs)))
-    (when order      (.setScanIndexForward qr (not= order :desc)))
-    (when limit      (.setLimit qr (int limit)))
-    (when consistent? (.setConsistentRead qr consistent?)) ; TODO
-    (when after      (.setExclusiveStartKey qr (clj-item->db-item after)))
-    (when index      (.setIndexName qr index))
-    qr))
-
-(defn- extract-range [[range options]]
-  (if (and (map? range) (not options))
-    [nil range]
-    [range options]))
-
-(defn query
-  "Return the items in a table matching the supplied hash key,
-  defined in the form {:hash-attr hash-value}.
-  Can specify a range clause if the table has a range-key ie. `(:range-attr >= 234)
-  Takes the following options:
-    :order - may be :asc or :desc (defaults to :asc)
-    :attrs - limit the values returned to the following attribute names
-    :limit - the maximum number of items to return
-    :after - only return results after this key
-    :consistent? - return a consistent read iff logical true
-    :index - the secondary index to query
-
-  The items are returned as a map with the following keys:
-    :items - the list of items returned
-    :count - the count of items matching the query
-    :last-key - the last evaluated key (useful for paging)"
-  [creds table hash-key & range-and-options]
-  (let [[range options] (extract-range range-and-options)]
-    (as-map
-     (.query (db-client creds)
-             (query-request table hash-key range options)))))
 
 ;;;; README
 
