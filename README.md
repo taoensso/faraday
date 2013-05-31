@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.2.0"] ; Alpha - likely buggy, API subject to change
+[com.taoensso/faraday "0.4.0"] ; Alpha - likely buggy, API subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -28,7 +28,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.2.0"]
+[com.taoensso/faraday "0.4.0"] ; Requires Clojure 1.5+
 ```
 
 and `require` the library:
@@ -96,7 +96,7 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 **Batch items**: `batch-get-item`, `batch-write-item`.
 
-**Querying**: `scan`, `query`.
+**Querying**: `query`, `scan`, `scan-parallel`.
 
 You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Farady.
 
