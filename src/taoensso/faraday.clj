@@ -72,7 +72,7 @@
             java.nio.ByteBuffer))
 
 ;;;; TODO
-;; * Finish up outstanding API: as-map types, Rotary PRs, non-PR forks.
+;; * Finish up any outstanding API stuff: as-map types, Rotary PRs, non-PR forks.
 ;; * Benchmarks, further tests.
 ;; * Long-term: async API, auto throughput adjusting, ...?
 
@@ -404,10 +404,7 @@
     prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected  - a map of item attribute/condition pairs, all of which must be
-                 met for the operation to succeed. e.g.:
-                   {<attr> <expected-value> ...}
-                   {<attr> false ...} ; Attribute must not exist"
+    :expected  - {<attr> <#{<expected-value> false}> ...}."
   [creds table prim-kvs update-map & [{:keys [return expected]
                                        :or   {return :none}}]]
   (as-map
