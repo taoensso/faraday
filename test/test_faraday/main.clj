@@ -13,9 +13,9 @@
 (use-fixtures :each
   (fn [f]
     (far/ensure-table creds
-      {:name       table
-       :hash-key   {:name :id :type :n}
-       :throughput {:read 1 :write 1}}) ; Free tier: {:read 10 :write 10}
+      {:name        table
+       :hash-keydef {:name :id :type :n}
+       :throughput  {:read 1 :write 1}}) ; Free tier: {:read 10 :write 10}
     (f)
     (far/batch-write-item creds {table {:delete [{:id 0} {:id 1} {:id 2}]}})
     (comment (far/delete-table creds table))))

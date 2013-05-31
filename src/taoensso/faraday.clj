@@ -265,10 +265,10 @@
   "Returns a [{<hash-key> KeySchemaElement}], or
              [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
    vector for use as a table/index primary key."
-  [hash-key & [range-key]]
-  (let [schema [(key-schema-element (:name hash-key) :hash)]]
-    (if range-key
-      (conj schema (key-schema-element (:name range-key) :range))
+  [hash-keydef & [range-keydef]]
+  (let [schema [(key-schema-element (:name hash-keydef) :hash)]]
+    (if range-keydef
+      (conj schema (key-schema-element (:name range-keydef) :range))
       schema)))
 
 (defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
@@ -278,9 +278,9 @@
     (.setWriteCapacityUnits (long write-units))))
 
 (defn- attribute-defs "[{:name _ :type _} ...] defs -> [AttributeDefinition ...]"
-  [hash-key range-key indexes]
-  (let [defs (->> (conj [] hash-key range-key)
-                  (concat (map :range-key indexes))
+  [hash-keydef range-keydef indexes]
+  (let [defs (->> (conj [] hash-keydef range-keydef)
+                  (concat (map :range-keydef indexes))
                   (filterv identity))]
     (mapv
      (fn [{key-name :name key-type :type :as def}]
@@ -290,16 +290,16 @@
      defs)))
 
 (defn- local-indexes
-  "[{:name _ :range-key _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
-  [hash-key indexes]
+  "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
+  [hash-keydef indexes]
   (mapv
    (fn [{index-name :name
-        :keys [range-key projection]
+        :keys [range-keydef projection]
         :or   {projection :all}
         :as   index}]
      (doto (LocalSecondaryIndex.)
        (.setIndexName  (name index-name))
-       (.setKeySchema  (key-schema hash-key range-key))
+       (.setKeySchema  (key-schema hash-keydef range-keydef))
        (.setProjection
         (let [pr    (Projection.)
               ptype (if (coll? projection) :include projection)]
@@ -310,23 +310,23 @@
 
 (defn create-table
   "Creates a table with options:
-    :name       - (required) table name.
-    :throughput - (required) {:read <units> :write <units>}.
-    :hash-key   - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
-    :range-key  - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
-    :indexes    - (optional) [{:name _ :range-key _
-                               :projection #{:all :keys-only [<attr> ...]}}]"
+    :name         - (required) table name.
+    :throughput   - (required) {:read <units> :write <units>}.
+    :hash-keydef  - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :range-keydef - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :indexes      - (optional) [{:name _ :range-keydef _
+                                 :projection #{:all :keys-only [<attr> ...]}}]"
   [creds {table-name :name
-          :keys [throughput hash-key range-key indexes]
+          :keys [throughput hash-keydef range-keydef indexes]
           :or   {throughput {:read 1 :write 1}}}]
   (as-map
    (.createTable (db-client creds)
      (doto (CreateTableRequest.)
        (.setTableName (name table-name))
-       (.setKeySchema (key-schema hash-key range-key))
+       (.setKeySchema (key-schema hash-keydef range-keydef))
        (.setProvisionedThroughput (provisioned-throughput throughput))
-       (.setAttributeDefinitions  (attribute-defs hash-key range-key indexes))
-       (.setLocalSecondaryIndexes (local-indexes hash-key indexes))))))
+       (.setAttributeDefinitions  (attribute-defs hash-keydef range-keydef indexes))
+       (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes))))))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]

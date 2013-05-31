@@ -56,8 +56,8 @@ Well that was easy. How about we create a table? (This is actually one of the mo
 ```clojure
 (far/create-table my-creds
   {:name :my-table
-   :throughput {:read 1 :write 1}    ; Read & write capacity (units/sec)
-   :hash-key   {:name :id :type :n}} ; Primary key (:n => number type)
+   :throughput  {:read 1 :write 1}    ; Read & write capacity (units/sec)
+   :hash-keydef {:name :id :type :n}} ; Primary key (:n => number type)
   )
 
 ;; Wait a minute for the table to be created... maybe grab a tasty sandwich?
