@@ -96,7 +96,7 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 **Batch items**: `batch-get-item`, `batch-write-item`.
 
-**Querying**: `scan`, `query`.
+**Querying**: `query`, `scan`, `scan-parallel`.
 
 You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Farady.
 

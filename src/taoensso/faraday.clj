@@ -178,7 +178,7 @@
      {:items (mapv db-item->clj-item (.getItems result#))
       :count (.getCount result#)
       :consumed-capacity (.getConsumedCapacity result#)
-      :last-key (as-map (.getLastEvaluatedKey result#))}))
+      :last-prim-kv (as-map (.getLastEvaluatedKey result#))}))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
@@ -201,7 +201,8 @@
   DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
 
   QueryResult         (as-map [r] (am-query|scan-result r))
-  ScanResult          (as-map [r] (am-query|scan-result r))
+  ScanResult          (as-map [r] (assoc (am-query|scan-result r)
+                                    :scanned-count (.getScannedCount r)))
 
   CreateTableResult   (as-map [r] r) ; TODO
   UpdateTableResult   (as-map [r] r) ; TODO
@@ -281,7 +282,7 @@
   [hash-key range-key indexes]
   (let [defs (->> (conj [] hash-key range-key)
                   (concat (map :range-key indexes))
-                  (filter identity))]
+                  (filterv identity))]
     (mapv
      (fn [{key-name :name key-type :type :as def}]
        (doto (AttributeDefinition.)
@@ -490,31 +491,61 @@
                               (mapv (partial write-request action) items))))
           requests))))))
 
-;;;; API - queries & scans
+;;;; API - scans & queries
 
-;;;; TODO Continue code walk-through below
+(defn- ^String enum-op [operator]
+  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
+      utils/enum))
 
-(defn- scan-request
-  "Create a ScanRequest object."
-  [table {:keys [limit count after]}]
-  (let [sr (ScanRequest. table)]
-    (when limit (.setLimit sr (int limit)))
-    (when after (.setExclusiveStartKey sr (clj-item->db-item after)))
-    sr))
+(defn- scan-filter "{<attr> [operator <values>] ...} -> {<attr> Condition ...}"
+  [filter-map]
+  (when (seq filter-map)
+    (utils/name-map
+     (fn [[operator values]]
+       (doto (Condition.)
+         (.setComparisonOperator (enum-op operator))
+         (.setAttributeValueList (mapv clj-val->db-val values))))
+     filter-map)))
 
 (defn scan
-  "Return the items in a table. Takes the following options:
-    :limit - the maximum number of items to return
-    :after - only return results after this key
+  "Retrieves items from a table with options:
+    :filter         - {<attr> [comparison-operator <values>] ...}
+    :limit          - max num >=1 of items to scan (≠ num of matching items).
+    :last-prim-kv   - primary key-val from which to scan, useful for paging.
+    :return         - e/o #{:all-attributes :all-projected-attributes :count
+                            [<attr> ...]}.
 
-  The items are returned as a map with the following keys:
-    :items    - the list of items returned
-    :count    - the count of items matching the query
-    :last-key - the last evaluated key (useful for paging) "
-  [creds table & [options]]
+    :total-segments - total number of parallel scan segments.
+    :segment        - calling worker's segment number (>=0, <=total-segments).
+  See also `scan-parallel` for automatic parallelization & segment control."
+  [creds table {filter-map filter
+                :keys [limit last-prim-kv return total-segments segment]
+                :or   {return :all-attributes}}]
   (as-map
    (.scan (db-client creds)
-    (scan-request table options))))
+     (doto (ScanRequest.)
+       (.setTableName (name table))
+       (.setLimit (when limit (long limit)))
+       (.setExclusiveStartKey (when last-prim-kv (clj-item->db-item last-prim-kv)))
+       (.setScanFilter  (scan-filter filter-map))
+       (.setAttributesToGet (when     (coll? return) return))
+       (.setSelect          (when-not (coll? return) (utils/enum return)))
+       (.setTotalSegments   (when total-segments (long total-segments)))
+       (.setSegment         (when segment        (long segment)))))))
+
+(defn scan-parallel
+  "Like `scan` but starts a number of worker threads and automatically handles
+  parallel scan options (:total-segments and :segment). Returns a vector of
+  `scan` results.
+
+  Ref. http://goo.gl/KLwnn (official parallel scan documentation)."
+  [creds table total-segments opts]
+  (let [shared-opts (assoc opts :total-segments total-segments)]
+    (->> (mapv (fn [seg] (future (scan creds table (assoc opts :segment seg))))
+               (range total-segments))
+         (mapv deref))))
+
+;;;; TODO Continue code walk-through below
 
 (defn- set-hash-condition
   "Create a map of specifying the hash-key condition for query"
@@ -527,18 +558,12 @@
 
 (defn- set-range-condition
   "Add the range key condition to a QueryRequest object"
-  [range-key operator & [range-value range-end]]
-  (let [attribute-list (->> [range-value range-end] (filter identity) (map clj-val->db-val))]
+  [range-key op & [range-value range-end]]
+  (let [op ({:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} op op)
+        attribute-list (->> [range-value range-end] (filterv identity) (map clj-val->db-val))]
     {range-key (doto (Condition.)
-                 (.setComparisonOperator ^String operator)
+                 (.setComparisonOperator (utils/enum op))
                  (.setAttributeValueList attribute-list))}))
-
-(defn- normalize-operator
-  "Maps Clojure operators to DynamoDB operators"
-  [operator]
-  (let [operator-map {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"}
-        op (->> operator utils/enum)]
-    (operator-map (keyword op) op)))
 
 (defn- query-request
   "Create a QueryRequest object."
@@ -549,7 +574,7 @@
         query-conditions (if-not operator
                            hash-clause
                            (merge hash-clause (set-range-condition range-key
-                                                                   (normalize-operator operator)
+                                                                   operator
                                                                    range-value
                                                                    range-end)))]
     (.setTableName qr table)
