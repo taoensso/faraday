@@ -177,7 +177,7 @@
      {:items (mapv db-item->clj-item (.getItems result#))
       :count (.getCount result#)
       :consumed-capacity (.getConsumedCapacity result#)
-      :last-prim-kv (as-map (.getLastEvaluatedKey result#))}))
+      :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
@@ -210,7 +210,7 @@
   BatchGetItemResult
   (as-map [r]
     ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
-    ;; possible unless we force the inclusion of the prim-kv in :attrs.
+    ;; possible unless we force the inclusion of the prim-kvs in :attrs.
     {:responses         (utils/keyword-map as-map (.getResponses       r))
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
@@ -514,7 +514,7 @@
 (defn query
   "Retries items from a table (indexed) with options:
     prim-key-conds - {<key-attr> [comparison-operator <values>] ...}.
-    :last-prim-kv  - primary key-val from which to eval, useful for paging.
+    :last-prim-kvs - primary key-val from which to eval, useful for paging.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
                            [<attr> ...]}.
     :index         - name of a secondary index to query.
@@ -524,14 +524,14 @@
 
   For unindexed item retrievel see `scan`."
   [creds table prim-key-conds
-   & [{:keys [last-prim-kv return index order limit consistent?]
+   & [{:keys [last-prim-kvs return index order limit consistent?]
        :or   {order :asc}}]]
   (as-map
    (.query (db-client creds)
      (doto (QueryRequest.)
        (.setTableName         (name table))
        (.setKeyConditions     (query|scan-conditions prim-key-conds))
-       (.setExclusiveStartKey (when last-prim-kv (clj-item->db-item last-prim-kv)))
+       (.setExclusiveStartKey (when last-prim-kvs (clj-item->db-item last-prim-kvs)))
        (.setAttributesToGet   (when     (coll? return) return))
        (.setSelect            (when-not (coll? return) (utils/enum return)))
        (.setIndexName         index)
@@ -543,7 +543,7 @@
   "Retrieves items from a table (unindexed) with options:
     :attr-conds     - {<attr> [comparison-operator <values>] ...}.
     :limit          - max num >=1 of items to eval (≠ num of matching items).
-    :last-prim-kv   - primary key-val from which to eval, useful for paging.
+    :last-prim-kvs  - primary key-val from which to eval, useful for paging.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
                             [<attr> ...]}.
     :total-segments - total number of parallel scan segments.
@@ -551,14 +551,14 @@
 
   See also `scan-parallel` for automatic parallelization & segment control."
   [creds table
-   & [{:keys [attr-conds last-prim-kv return limit total-segments segment]
+   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment]
        :or   {return :all-attributes}}]]
   (as-map
    (.scan (db-client creds)
      (doto (ScanRequest.)
        (.setTableName         (name table))
        (.setScanFilter        (query|scan-conditions attr-conds))
-       (.setExclusiveStartKey (when last-prim-kv (clj-item->db-item last-prim-kv)))
+       (.setExclusiveStartKey (when last-prim-kvs (clj-item->db-item last-prim-kvs)))
        (.setAttributesToGet   (when     (coll? return) return))
        (.setSelect            (when-not (coll? return) (utils/enum return)))
        (.setLimit             (when limit (long limit)))

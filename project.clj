@@ -11,5 +11,6 @@
   :profiles {:dev   {:dependencies []}
              :test  {:dependencies []}
              :bench {:dependencies []}}
+  :plugins [[codox "0.6.4"]]
   :min-lein-version "2.0.0"
   :warn-on-reflection true)
