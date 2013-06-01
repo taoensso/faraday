@@ -4,6 +4,7 @@
 /checkouts
 /logs
 /docs
+/doc
 pom.xml
 *.jar
 *.class
