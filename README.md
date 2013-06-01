@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.5.0"] ; Still alpha: likely buggy, API subject to change
+[com.taoensso/faraday "0.5.0"] ; Still alpha - likely buggy, API subject to change!
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -12,32 +12,27 @@ Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](
 
 Faraday was adapted from James Reaves' own [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
 
-## What's In The Box™?
- * Small, simple, [API](http://ptaoussanis.github.io/faraday/): **complete coverage of DynamoDBv2 features**.
- * **Great performance** (zero overhead to the official Java SDK).
- * Full **support for Clojure's rich data types** using [Nippy](https://github.com/ptaoussanis/nippy).
+## What's in the box™?
+  * Small, simple, API: **complete coverage of DynamoDBv2 features**.
+  * **Great performance** (zero overhead to the official Java SDK).
+  * Full **support for Clojure's rich data types** using [Nippy](https://github.com/ptaoussanis/nippy).
 
 It's still early days. There's probably rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. The goal is to head toward something very much production ready ASAP. **Pull requests, bug reports, and/or suggestions are very, very welcome**!
 
-## Getting Started
+## Getting started
 
 DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexity (in the Rich Hickey sense) that comes with managing large amounts of data. Despite the power at your disposal, the actual API you'll be using is pretty darn simple (especially via Clojure, as usual).
 
-### Leiningen
+### Dependencies
 
-Depend on Faraday in your `project.clj`:
-
-```clojure
-[com.taoensso/faraday "0.5.0"] ; Needs Clojure 1.5+
-```
-
-and `require` the library:
+Add the necessary dependency to your [Leiningen](http://leiningen.org/) `project.clj` and `require` the library in your ns:
 
 ```clojure
-(ns my-app (:require [taoensso.faraday :as far]))
+[com.taoensso/faraday "0.5.0"] ; project.clj
+(ns awesome-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
-### Preparing A Database
+### Preparing a database
 
 First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.amazon.com/dynamodb/)** (there's a **free tier** with 100MB of storage and limited read+write throughput). Next you'll need credentials for an IAM user with read+write access to your DynamoDB tables (see the **IAM section of your AWS Management Console**). Ready?
 
@@ -108,15 +103,22 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 [Detailed benchmark information](https://docs.google.com/spreadsheet/ccc?key=0AuSXb68FH4uhdE5kTTlocGZKSXppWG9sRzA5Y2pMVkE) is available on Google Docs.
 
-## Faraday Supports the ClojureWerkz and CDS Project Goals
+## Project links
 
-ClojureWerkz is a growing collection of open-source, batteries-included [Clojure libraries](http://clojurewerkz.org/) that emphasise modern targets, great documentation, and thorough testing.
+  * [API documentation](http://ptaoussanis.github.io/faraday/).
+  * My other [Clojure libraries](https://www.taoensso.com/clojure-libraries) (Redis & DynamoDB clients, logging+profiling, I18n+L10n, serialization, A/B testing).
 
-CDS (Clojure Documentation Site) is a contributor-friendly community project aimed at producing top-notch [Clojure tutorials](http://clojure-doc.org/) and documentation.
+##### This project supports the **CDS and ClojureWerkz project goals**:
 
-## Contact & Contribution
+  * [CDS](http://clojure-doc.org/), the **Clojure Documentation Site**, is a contributer-friendly community project aimed at producing top-notch Clojure tutorials and documentation.
 
-Reach me (Peter Taoussanis) at [taoensso.com](https://www.taoensso.com) for questions/comments/suggestions/whatever. I'm very open to ideas if you have any! I'm also on Twitter: [@ptaoussanis](https://twitter.com/#!/ptaoussanis).
+  * [ClojureWerkz](http://clojurewerkz.org/) is a growing collection of open-source, batteries-included **Clojure libraries** that emphasise modern targets, great documentation, and thorough testing.
+
+## Contact & contribution
+
+Please use the [project's GitHub issues page](https://github.com/ptaoussanis/faraday/issues) for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
+
+Otherwise reach me (Peter Taoussanis) at [taoensso.com](https://www.taoensso.com) or on Twitter ([@ptaoussanis](https://twitter.com/#!/ptaoussanis)). Cheers!
 
 ## License
 
