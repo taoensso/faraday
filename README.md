@@ -29,7 +29,7 @@ Add the necessary dependency to your [Leiningen](http://leiningen.org/) `project
 
 ```clojure
 [com.taoensso/faraday "0.5.0"] ; project.clj
-(ns awesome-app (:require [taoensso.faraday :as far])) ; ns
+(ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
 ### Preparing a database
