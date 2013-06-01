@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.4.0"] ; Still alpha: likely buggy, API subject to change
+[com.taoensso/faraday "0.5.0"] ; Still alpha: likely buggy, API subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -28,7 +28,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Depend on Faraday in your `project.clj`:
 
 ```clojure
-[com.taoensso/faraday "0.4.0"] ; Needs Clojure 1.5+
+[com.taoensso/faraday "0.5.0"] ; Needs Clojure 1.5+
 ```
 
 and `require` the library:
