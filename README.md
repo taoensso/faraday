@@ -106,7 +106,7 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 ## Project links
 
   * [API documentation](http://ptaoussanis.github.io/faraday/).
-  * My other [Clojure libraries](https://www.taoensso.com/clojure-libraries) (Redis & DynamoDB clients, logging+profiling, I18n+L10n, serialization, A/B testing).
+  * My other [Clojure libraries](https://www.taoensso.com/clojure-libraries) (Redis & DynamoDB clients, logging+profiling, i18n+L10n, serialization, A/B testing).
 
 ##### This project supports the **CDS and ClojureWerkz project goals**:
 
