@@ -8,9 +8,11 @@
                  [com.amazonaws/aws-java-sdk "1.4.4.1"]
                  [com.taoensso/nippy         "1.2.0"]
                  [com.taoensso/timbre        "1.6.0"]]
-  :profiles {:dev   {:dependencies []}
+  :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
+             :dev   {:dependencies []}
              :test  {:dependencies []}
              :bench {:dependencies []}}
+  :aliases {"test-all" ["with-profile" "test,1.5" "test"]}
   :plugins [[codox "0.6.4"]]
   :min-lein-version "2.0.0"
   :warn-on-reflection true)

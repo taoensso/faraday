@@ -8,5 +8,5 @@ then
 else
     echo "Using ./.env for DynamoDB IAM creds..."
     source .env
-    lein with-profile test test
+    lein test-all
 fi
