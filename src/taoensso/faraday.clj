@@ -215,6 +215,8 @@
     ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
     ;; possible unless we force the inclusion of the prim-kvs in :attrs.
     {:responses         (utils/keyword-map as-map (.getResponses       r))
+
+     ;; TODO Could wrap as metadata?
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
      :consumed-capacity (.getConsumedCapacity r)})
   BatchWriteItemResult
@@ -268,14 +270,19 @@
   "Returns a [{<hash-key> KeySchemaElement}], or
              [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
    vector for use as a table/index primary key."
-  [hash-keydef & [range-keydef]]
-  (let [schema [(key-schema-element (:name hash-keydef) :hash)]]
-    (if range-keydef
-      (conj schema (key-schema-element (:name range-keydef) :range))
-      schema)))
+  [{hash-key-name :name :as hash-keydef} &
+   [{range-key-name :name :as range-keydef}]]
+  (assert (and hash-key-name (when range-keydef range-key-name))
+          (assert (str "Malformed key schema: "
+                       {:hash-keydef  hash-keydef
+                        :range-keydef range-keydef})))
+  (cond-> [(key-schema-element hash-key-name :hash)]
+          range-keydef (conj (key-schema-element range-key-name :range))))
 
 (defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
-  [{read-units :read write-units :write}]
+  [{read-units :read write-units :write :as throughput}]
+  (assert (and read-units write-units)
+          (str "Malformed throughput: " throughput))
   (doto (ProvisionedThroughput.)
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
@@ -287,6 +294,7 @@
                   (filterv identity))]
     (mapv
      (fn [{key-name :name key-type :type :as def}]
+       (assert (and key-name key-type) (str "Malformed def: " def))
        (doto (AttributeDefinition.)
          (.setAttributeName (name key-name))
          (.setAttributeType (utils/enum key-type))))
@@ -300,6 +308,8 @@
         :keys [range-keydef projection]
         :or   {projection :all}
         :as   index}]
+     (assert (and index-name range-keydef projection)
+             (str "Malformed index: " index))
      (doto (LocalSecondaryIndex.)
        (.setIndexName  (name index-name))
        (.setKeySchema  (key-schema hash-keydef range-keydef))
@@ -507,7 +517,8 @@
   [conditions]
   (when (seq conditions)
     (utils/name-map
-     (fn [[operator values]]
+     (fn [[operator values :as condition]]
+       (assert (coll? values) (str "Malformed condition: " condition))
        (doto (Condition.)
          (.setComparisonOperator (enum-op operator))
          (.setAttributeValueList (mapv clj-val->db-val values))))
@@ -515,7 +526,7 @@
 
 (defn query
   "Retries items from a table (indexed) with options:
-    prim-key-conds - {<key-attr> [comparison-operator <values>] ...}.
+    prim-key-conds - {<key-attr> [<comparison-operator> <values>] ...}.
     :last-prim-kvs - primary key-val from which to eval, useful for paging.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
                            [<attr> ...]}.
@@ -524,26 +535,29 @@
     :limit         - max num >=1 of items to eval (≠ num of matching items).
     :consistent?   - use strongly (rather than eventually) consistent reads?
 
+  comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}.
+
   For unindexed item retrievel see `scan`."
   [creds table prim-key-conds
    & [{:keys [last-prim-kvs return index order limit consistent?]
        :or   {order :asc}}]]
+  (println (query|scan-conditions prim-key-conds))
   (as-map
    (.query (db-client creds)
      (doto-maybe (QueryRequest.) g
        :always (.setTableName        (name table))
        :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
        :always (.setScanIndexForward (case order :asc true :desc false))
-       last-prim-kvs (.setExclusiveStartKey (clj-item->db-item g))
-       limit         (.setLimit    (long g))
-       index         (.setIndexName      g)
-       consistent?   (.setConsistentRead g)
-       (coll? return)       (.setAttributesToGet (mapv name return))
-       (not (coll? return)) (.setSelect (utils/enum return))))))
+       last-prim-kvs  (.setExclusiveStartKey (clj-item->db-item g))
+       limit          (.setLimit    (long g))
+       index          (.setIndexName      g)
+       consistent?    (.setConsistentRead g)
+       (coll? return) (.setAttributesToGet (mapv name return))
+       (and return (not (coll? return))) (.setSelect (utils/enum return))))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
-    :attr-conds     - {<attr> [comparison-operator <values>] ...}.
+    :attr-conds     - {<attr> [<comparison-operator> <values>] ...}.
     :limit          - max num >=1 of items to eval (≠ num of matching items).
     :last-prim-kvs  - primary key-val from which to eval, useful for paging.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
@@ -551,11 +565,13 @@
     :total-segments - total number of parallel scan segments.
     :segment        - calling worker's segment number (>=0, <=total-segments).
 
+  comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
+                             :not-null :null :contains :not-contains :in}.
+
   For automatic parallelization & segment control see `scan-parallel`.
   For indexed item retrievel see `query`."
   [creds table
-   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment]
-       :or   {return :all-attributes}}]]
+   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment]}]]
   (as-map
    (.scan (db-client creds)
      (doto-maybe (ScanRequest.) g
@@ -565,8 +581,8 @@
        limit          (.setLimit             (long g))
        total-segments (.setTotalSegments     (long g))
        segment        (.setSegment           (long g))
-       (coll? return)       (.setAttributesToGet (mapv name return))
-       (not (coll? return)) (.setSelect (utils/enum return))))))
+       (coll? return) (.setAttributesToGet (mapv name return))
+       (and return (not (coll? return))) (.setSelect (utils/enum return))))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
