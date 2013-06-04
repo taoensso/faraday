@@ -363,7 +363,7 @@
       :always     (.setTableName       (name table))
       :always     (.setKey             (clj-item->db-item prim-kvs))
       consistent? (.setConsistentRead  g)
-      attrs       (.setAttributesToGet g)))))
+      attrs       (.setAttributesToGet (mapv name g))))))
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
@@ -538,7 +538,7 @@
        limit         (.setLimit    (long g))
        index         (.setIndexName      g)
        consistent?   (.setConsistentRead g)
-       (coll? return)       (.setAttributesToGet    return)
+       (coll? return)       (.setAttributesToGet (mapv name return))
        (not (coll? return)) (.setSelect (utils/enum return))))))
 
 (defn scan
@@ -565,7 +565,7 @@
        limit          (.setLimit             (long g))
        total-segments (.setTotalSegments     (long g))
        segment        (.setSegment           (long g))
-       (coll? return)       (.setAttributesToGet    return)
+       (coll? return)       (.setAttributesToGet (mapv name return))
        (not (coll? return)) (.setSelect (utils/enum return))))))
 
 (defn scan-parallel
