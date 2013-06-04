@@ -36,3 +36,15 @@
                         dorun))))]
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
+
+(defn nnil? [x] (not= x nil))
+
+(defmacro doto-maybe "Diabolical cross between `doto`, `cond->` and `as->`."
+  [x name & clauses]
+  (assert (even? (count clauses)))
+  (let [g (gensym)
+        pstep (fn [[test-expr step]] `(when-let [~name ~test-expr]
+                                       (-> ~g ~step)))]
+    `(let [~g ~x]
+       ~@(map pstep (partition 2 clauses))
+       ~g)))

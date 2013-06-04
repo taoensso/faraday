@@ -13,7 +13,7 @@
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
-            [taoensso.faraday.utils :as utils])
+            [taoensso.faraday.utils :as utils :refer (nnil? doto-maybe)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -81,14 +81,17 @@
 (def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
   (memoize
-   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port] :as creds}]
+   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port
+               conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
      (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-           client-config (ClientConfiguration.)]
-       (when proxy-host (.setProxyHost client-config proxy-host))
-       (when proxy-port (.setProxyPort client-config proxy-port))
-       (let [client (AmazonDynamoDBClient. aws-creds client-config)]
-         (when endpoint (.setEndpoint client endpoint))
-         client)))))
+           client-config (doto-maybe (ClientConfiguration.) g
+                           proxy-port      (.setProxyHost         g)
+                           conn-timeout    (.setConnectionTimeout g)
+                           max-conns       (.setMaxConnections    g)
+                           max-error-retry (.setMaxErrorRetry     g)
+                           socket-timeout  (.setSocketTimeout     g))]
+       (doto-maybe (AmazonDynamoDBClient. aws-creds client-config) g
+         endpoint (.setEndpoint g))))))
 
 (defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
 
@@ -338,10 +341,9 @@
   [creds {table-name :name :keys [throughput]}]
   (as-map
    (.updateTable (db-client creds)
-     (doto (UpdateTableRequest.)
-       (.setTableName             (when table-name (name table-name)))
-       (.setProvisionedThroughput (when throughput (provisioned-throughput
-                                                    throughput)))))))
+     (doto-maybe (UpdateTableRequest.) g
+       table-name (.setTableName (name g))
+       throughput (.setProvisionedThroughput (provisioned-throughput g))))))
 
 (defn delete-table "Deletes a table, go figure."
   [creds table-name]
@@ -357,11 +359,11 @@
   [creds table prim-kvs & [{:keys [attrs consistent?]}]]
   (as-map
    (.getItem (db-client creds)
-    (doto (GetItemRequest.)
-      (.setTableName      (name table))
-      (.setKey            (clj-item->db-item prim-kvs))
-      (.setConsistentRead  consistent?)
-      (.setAttributesToGet attrs)))))
+    (doto-maybe (GetItemRequest.) g
+      :always     (.setTableName       (name table))
+      :always     (.setKey             (clj-item->db-item prim-kvs))
+      consistent? (.setConsistentRead  g)
+      attrs       (.setAttributesToGet g)))))
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
@@ -384,11 +386,11 @@
                         :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
-     (doto (PutItemRequest.)
-       (.setTableName    (name table))
-       (.setItem         (clj-item->db-item item))
-       (.setExpected     (expected-values expected))
-       (.setReturnValues (utils/enum return))))))
+     (doto-maybe (PutItemRequest.) g
+       :always  (.setTableName    (name table))
+       :always  (.setItem         (clj-item->db-item item))
+       expected (.setExpected     (expected-values g))
+       return   (.setReturnValues (utils/enum g))))))
 
 (defn- attribute-updates
   "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
@@ -409,12 +411,12 @@
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
-     (doto (UpdateItemRequest.)
-       (.setTableName        (name table))
-       (.setKey              (clj-item->db-item prim-kvs))
-       (.setExpected         (expected-values expected))
-       (.setReturnValues     (utils/enum return))
-       (.setAttributeUpdates (attribute-updates update-map))))))
+     (doto-maybe (UpdateItemRequest.) g
+       :always  (.setTableName        (name table))
+       :always  (.setKey              (clj-item->db-item prim-kvs))
+       :always  (.setAttributeUpdates (attribute-updates update-map))
+       expected (.setExpected         (expected-values g))
+       return   (.setReturnValues     (utils/enum g))))))
 
 (defn delete-item
   "Deletes an item from a table by its primary key.
@@ -423,11 +425,11 @@
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
-     (doto (DeleteItemRequest.)
-       (.setTableName    (name table))
-       (.setKey          (clj-item->db-item prim-kvs))
-       (.setExpected     (expected-values expected))
-       (.setReturnValues (utils/enum return))))))
+     (doto-maybe (DeleteItemRequest.) g
+       :always  (.setTableName    (name table))
+       :always  (.setKey          (clj-item->db-item prim-kvs))
+       expected (.setExpected     (expected-values g))
+       return   (.setReturnValues (utils/enum g))))))
 
 ;;;; API - batch ops
 
@@ -436,14 +438,14 @@
   [requests]
   (utils/name-map
    (fn [{:keys [prim-kvs attrs consistent?]}]
-     (doto (KeysAndAttributes.)
-       (.setKeys
+     (doto-maybe (KeysAndAttributes.) g
+       :always (.setKeys
         (->> (for [[k v-or-vs] prim-kvs] ; {<k> <v-or-vs> ...} -> [{k v} ...]
                (if (coll? v-or-vs) (for [v v-or-vs] [k v]) (list [k v-or-vs])))
              (reduce into [])
              (mapv (fn [[k v]] {(name k) (clj-val->db-val v)}))))
-       (.setAttributesToGet (when attrs (mapv name attrs)))
-       (.setConsistentRead  consistent?)))
+       attrs       (.setAttributesToGet (mapv name g))
+       consistent? (.setConsistentRead  g)))
    requests))
 
 (comment (batch-request-items {:my-table {:prim-kvs {:my-hash "1"} :attrs []}}))
@@ -528,16 +530,16 @@
        :or   {order :asc}}]]
   (as-map
    (.query (db-client creds)
-     (doto (QueryRequest.)
-       (.setTableName         (name table))
-       (.setKeyConditions     (query|scan-conditions prim-key-conds))
-       (.setExclusiveStartKey (when last-prim-kvs (clj-item->db-item last-prim-kvs)))
-       (.setAttributesToGet   (when     (coll? return) return))
-       (.setSelect            (when-not (coll? return) (utils/enum return)))
-       (.setIndexName         index)
-       (.setScanIndexForward  (case order :asc true :desc false))
-       (.setLimit             (when limit (long limit)))
-       (.setConsistentRead    consistent?)))))
+     (doto-maybe (QueryRequest.) g
+       :always (.setTableName        (name table))
+       :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
+       :always (.setScanIndexForward (case order :asc true :desc false))
+       last-prim-kvs (.setExclusiveStartKey (clj-item->db-item g))
+       limit         (.setLimit    (long g))
+       index         (.setIndexName      g)
+       consistent?   (.setConsistentRead g)
+       (coll? return)       (.setAttributesToGet    return)
+       (not (coll? return)) (.setSelect (utils/enum return))))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
@@ -556,15 +558,15 @@
        :or   {return :all-attributes}}]]
   (as-map
    (.scan (db-client creds)
-     (doto (ScanRequest.)
-       (.setTableName         (name table))
-       (.setScanFilter        (query|scan-conditions attr-conds))
-       (.setExclusiveStartKey (when last-prim-kvs (clj-item->db-item last-prim-kvs)))
-       (.setAttributesToGet   (when     (coll? return) return))
-       (.setSelect            (when-not (coll? return) (utils/enum return)))
-       (.setLimit             (when limit (long limit)))
-       (.setTotalSegments     (when total-segments (long total-segments)))
-       (.setSegment           (when segment        (long segment)))))))
+     (doto-maybe (ScanRequest.) g
+       :always (.setTableName (name table))
+       attr-conds     (.setScanFilter        (query|scan-conditions g))
+       last-prim-kvs  (.setExclusiveStartKey (clj-item->db-item g))
+       limit          (.setLimit             (long g))
+       total-segments (.setTotalSegments     (long g))
+       segment        (.setSegment           (long g))
+       (coll? return)       (.setAttributesToGet    return)
+       (not (coll? return)) (.setSelect (utils/enum return))))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
