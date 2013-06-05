@@ -71,3 +71,6 @@
 
 (comment (cartesian-product [:a :b] [1 2] [:A :B])
          (cartesian-product [:a :b]))
+
+(def ^:const bytes-class (Class/forName "[B"))
+(defn bytes? [x] (instance? bytes-class x))
