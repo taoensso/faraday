@@ -6,8 +6,8 @@
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.1"]
                  [com.amazonaws/aws-java-sdk "1.4.4.1"]
-                 [com.taoensso/nippy         "1.2.0"]
-                 [com.taoensso/timbre        "1.6.0"]]
+                 [com.taoensso/nippy         "1.2.1"]
+                 [com.taoensso/timbre        "2.0.1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :dev   {:dependencies []}
              :test  {:dependencies []}
