@@ -188,6 +188,8 @@
   java.util.HashMap   (as-map [m] (utils/keyword-map as-map m))
 
   AttributeValue      (as-map [v] (db-val->clj-val v))
+  AttributeDefinition (as-map [d] {:name (keyword       (.getAttributeName d))
+                                   :type (utils/un-enum (.getAttributeType d))})
   KeySchemaElement    (as-map [e] {:name (keyword (.getAttributeName e))
                                    :type (utils/un-enum (.getKeyType e))})
   KeysAndAttributes
@@ -230,10 +232,17 @@
                  :creation-date (.getCreationDateTime t)
                  :item-count    (.getItemCount t)
                  :size          (.getTableSizeBytes t)
-                 :key-schema    (as-map (.getKeySchema t))
                  :throughput    (as-map (.getProvisionedThroughput t))
                  :indexes       (as-map (.getLocalSecondaryIndexes t))
-                 :status        (utils/un-enum (.getTableStatus t))}))
+                 :status        (utils/un-enum (.getTableStatus t))
+                 :prim-keys
+                 (let [schema (as-map (.getKeySchema t))
+                       defs   (as-map (.getAttributeDefinitions t))]
+                   (merge-with merge
+                     (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
+                                {} schema)
+                     (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
+                                {} defs)))}))
 
   LocalSecondaryIndexDescription
   (as-map [d] {:name       (keyword (.getIndexName d))
