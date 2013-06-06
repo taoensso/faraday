@@ -226,7 +226,7 @@
 
   DescribeTableResult
   (as-map [r] (let [t (.getTable r)]
-                {:name          (.getTableName t)
+                {:name          (keyword (.getTableName t))
                  :creation-date (.getCreationDateTime t)
                  :item-count    (.getItemCount t)
                  :size          (.getTableSizeBytes t)
@@ -236,7 +236,7 @@
                  :status        (utils/un-enum (.getTableStatus t))}))
 
   LocalSecondaryIndexDescription
-  (as-map [d] {:name       (.getIndexName d)
+  (as-map [d] {:name       (keyword (.getIndexName d))
                :size       (.getIndexSizeBytes d)
                :item-count (.getItemCount d)
                :key-schema (as-map (.getKeySchema d))
