@@ -279,14 +279,9 @@
   "Returns a [{<hash-key> KeySchemaElement}], or
              [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
    vector for use as a table/index primary key."
-  [{hash-key-name :name :as hash-keydef} &
-   [{range-key-name :name :as range-keydef}]]
-  (assert (and hash-key-name (when range-keydef range-key-name))
-          (assert (str "Malformed key schema: "
-                       {:hash-keydef  hash-keydef
-                        :range-keydef range-keydef})))
-  (cond-> [(key-schema-element hash-key-name :hash)]
-          range-keydef (conj (key-schema-element range-key-name :range))))
+  [hash-keydef & [range-keydef]]
+  (cond-> [(key-schema-element (:name hash-keydef) :hash)]
+          range-keydef (conj (key-schema-element (:name range-keydef) :range))))
 
 (defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
   [{read-units :read write-units :write :as throughput}]
