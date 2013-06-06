@@ -454,15 +454,18 @@
    (fn [{:keys [prim-kvs attrs consistent?]}]
      (doto-maybe (KeysAndAttributes.) g
        :always (.setKeys
-        (->> (for [[k v-or-vs] prim-kvs] ; {<k> <v-or-vs> ...} -> [{k v} ...]
-               (if (coll? v-or-vs) (for [v v-or-vs] [k v]) (list [k v-or-vs])))
-             (reduce into [])
-             (mapv (fn [[k v]] {(name k) (clj-val->db-val v)}))))
+                ;; {<k1> <v1-or-v1s> ...} -> [{k1 v1 ...} ...]
+                (let [ks (keys prim-kvs)
+                      vs (mapv #(if (coll? %) % [%]) (vals prim-kvs))]
+                  (mapv (comp clj-item->db-item (partial zipmap ks))
+                        (apply utils/cartesian-product vs))))
        attrs       (.setAttributesToGet (mapv name g))
        consistent? (.setConsistentRead  g)))
    requests))
 
-(comment (batch-request-items {:my-table {:prim-kvs {:my-hash "1"} :attrs []}}))
+(comment (batch-request-items {:my-table {:prim-kvs {:my-hash  ["a" "b"]
+                                                     :my-range ["0" "1"]}
+                                          :attrs []}}))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
