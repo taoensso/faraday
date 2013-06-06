@@ -40,9 +40,9 @@
                        :attrs       [:id]
                        :consistent? true}})]
 
-      (is (and (= (->> r1 :responses table set) (set [i0 i1]))
-               (= (->> r2 :responses table set) (set [(dissoc i0 :name)
-                                                      (dissoc i1 :name)])))
+      (is (and (= (->> r1 :items table set) (set [i0 i1]))
+               (= (->> r2 :items table set) (set [(dissoc i0 :name)
+                                                  (dissoc i1 :name)])))
           "batch-write-item :put works with :attrs option"))
 
     (far/batch-write-item creds {table {:delete [{:id 0} {:id 1}]}})

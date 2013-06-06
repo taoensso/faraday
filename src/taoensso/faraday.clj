@@ -214,7 +214,7 @@
   (as-map [r]
     ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
     ;; possible unless we force the inclusion of the prim-kvs in :attrs.
-    {:responses         (utils/keyword-map as-map (.getResponses       r))
+    {:items             (utils/keyword-map as-map (.getResponses       r))
 
      ;; TODO Could wrap as metadata?
      :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
