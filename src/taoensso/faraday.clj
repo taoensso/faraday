@@ -175,12 +175,13 @@
      (with-meta (db-item->clj-item get-form#)
        {:consumed-capacity (.getConsumedCapacity ~result)})))
 
-(defmacro ^:private am-query|scan-result [result]
+(defmacro ^:private am-query|scan-result [result & [meta]]
   `(let [result# ~result]
-     {:items (mapv db-item->clj-item (.getItems result#))
-      :count (.getCount result#)
-      :consumed-capacity (.getConsumedCapacity result#)
-      :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}))
+     (with-meta (mapv db-item->clj-item (.getItems result#))
+       (merge {:count (.getCount result#)
+               :consumed-capacity (.getConsumedCapacity result#)
+               :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
+              meta))))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
@@ -205,8 +206,8 @@
   DeleteItemResult    (as-map [r] (am-item-result r (.getAttributes r)))
 
   QueryResult         (as-map [r] (am-query|scan-result r))
-  ScanResult          (as-map [r] (assoc (am-query|scan-result r)
-                                    :scanned-count (.getScannedCount r)))
+  ScanResult          (as-map [r] (am-query|scan-result r
+                                    {:scanned-count (.getScannedCount r)}))
 
   CreateTableResult   (as-map [r] r) ; TODO
   UpdateTableResult   (as-map [r] r) ; TODO
@@ -214,13 +215,9 @@
 
   BatchGetItemResult
   (as-map [r]
-    ;; TODO Better way of grouping responses & unprocessed-keys? Might not be
-    ;; possible unless we force the inclusion of the prim-kvs in :attrs.
-    {:items             (utils/keyword-map as-map (.getResponses       r))
-
-     ;; TODO Could wrap as metadata?
-     :unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
-     :consumed-capacity (.getConsumedCapacity r)})
+    (with-meta (utils/keyword-map as-map (.getResponses r))
+      {:unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
+       :consumed-capacity (.getConsumedCapacity r)}))
   BatchWriteItemResult
   (as-map [r]
     {:unprocessed-items (utils/keyword-map as-map (.getUnprocessedItems r))

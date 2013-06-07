@@ -40,8 +40,8 @@
                        :attrs       [:id]
                        :consistent? true}})]
 
-      (is (and (= (->> r1 :items ttable set) (set [i0 i1]))
-               (= (->> r2 :items ttable set) (set [(dissoc i0 :name)
+      (is (and (= (->> r1 ttable set) (set [i0 i1]))
+               (= (->> r2 ttable set) (set [(dissoc i0 :name)
                                                   (dissoc i1 :name)])))
           "batch-write-item :put works with :attrs option"))
 
