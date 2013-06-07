@@ -453,18 +453,22 @@
   (utils/name-map
    (fn [{:keys [prim-kvs attrs consistent?]}]
      (doto-maybe (KeysAndAttributes.) g
-       :always (.setKeys
-                ;; {<k1> <v1-or-v1s> ...} -> [{k1 v1 ...} ...]
-                (let [ks (keys prim-kvs)
-                      vs (mapv #(if (coll? %) % [%]) (vals prim-kvs))]
-                  (mapv (comp clj-item->db-item (partial zipmap ks))
-                        (apply utils/cartesian-product vs))))
        attrs       (.setAttributesToGet (mapv name g))
-       consistent? (.setConsistentRead  g)))
+       consistent? (.setConsistentRead  g)
+       :always
+       (.setKeys
+        ;; [{<k1> <v1s*> ...} ...]* -> [{k1 v1 ...} ...] (* => optional vec)
+        (let [ensure-vec (fn [x] (if (vector? x) x [x]))]
+          (reduce (fn [r kvs]
+                    (let [ks (keys kvs)
+                          vs (mapv ensure-vec (vals kvs))]
+                      (into r (mapv (comp clj-item->db-item (partial zipmap ks))
+                                    (apply utils/cartesian-product vs)))))
+                  [] (ensure-vec prim-kvs))))))
    requests))
 
-(comment (batch-request-items {:my-table {:prim-kvs {:my-hash  ["a" "b"]
-                                                     :my-range ["0" "1"]}
+(comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
+                                                      :my-range ["0" "1"]}]
                                           :attrs []}}))
 
 (defn batch-get-item
@@ -472,10 +476,12 @@
   Limits apply, Ref. http://goo.gl/Bj9TC.
 
   (batch-get-item creds
-    {:users {:prim-kvs {:name \"alice\"}}
-     :posts {:prim-kvs {:id [1 2 3]} ; Matches multiple key values
-             :attrs    [:timestamp :subject]
-             :consistent? true}})"
+    {:users   {:prim-kvs {:name \"alice\"}}
+     :posts   {:prim-kvs {:id [1 2 3]}
+               :attrs    [:timestamp :subject]
+               :consistent? true}
+     :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
+                          {:catagory \"recent\"    :id [7 8 9]}]}})"
   [creds requests]
   (as-map
     (.batchGetItem (db-client creds)
