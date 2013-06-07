@@ -13,7 +13,7 @@
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
-            [taoensso.faraday.utils :as utils :refer (nnil? doto-maybe)])
+            [taoensso.faraday.utils :as utils :refer (nnil? coll?* doto-maybe)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -319,7 +319,7 @@
        (.setKeySchema  (key-schema hash-keydef range-keydef))
        (.setProjection
         (let [pr    (Projection.)
-              ptype (if (coll? projection) :include projection)]
+              ptype (if (coll?* projection) :include projection)]
           (.setProjectionType pr (utils/enum ptype))
           (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
           pr))))
@@ -458,13 +458,13 @@
        :always
        (.setKeys
         ;; [{<k1> <v1s*> ...} ...]* -> [{k1 v1 ...} ...] (* => optional vec)
-        (let [ensure-vec (fn [x] (if (vector? x) x [x]))]
+        (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
           (reduce (fn [r kvs]
                     (let [ks (keys kvs)
-                          vs (mapv ensure-vec (vals kvs))]
+                          vs (mapv ensure-coll (vals kvs))]
                       (into r (mapv (comp clj-item->db-item (partial zipmap ks))
                                     (apply utils/cartesian-product vs)))))
-                  [] (ensure-vec prim-kvs))))))
+                  [] (ensure-coll prim-kvs))))))
    requests))
 
 (comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
@@ -531,7 +531,7 @@
   (when (seq conditions)
     (utils/name-map
      (fn [[operator values :as condition]]
-       (assert (coll? values) (str "Malformed condition: " condition))
+       (assert (coll?* values) (str "Malformed condition: " condition))
        (doto (Condition.)
          (.setComparisonOperator (enum-op operator))
          (.setAttributeValueList (mapv clj-val->db-val values))))
@@ -561,12 +561,12 @@
        :always (.setTableName        (name table))
        :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
        :always (.setScanIndexForward (case order :asc true :desc false))
-       last-prim-kvs  (.setExclusiveStartKey (clj-item->db-item g))
-       limit          (.setLimit    (long g))
-       index          (.setIndexName      g)
-       consistent?    (.setConsistentRead g)
-       (coll? return) (.setAttributesToGet (mapv name return))
-       (and return (not (coll? return))) (.setSelect (utils/enum return))))))
+       last-prim-kvs   (.setExclusiveStartKey (clj-item->db-item g))
+       limit           (.setLimit    (long g))
+       index           (.setIndexName      g)
+       consistent?     (.setConsistentRead g)
+       (coll?* return) (.setAttributesToGet (mapv name return))
+       (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
@@ -589,13 +589,13 @@
    (.scan (db-client creds)
      (doto-maybe (ScanRequest.) g
        :always (.setTableName (name table))
-       attr-conds     (.setScanFilter        (query|scan-conditions g))
-       last-prim-kvs  (.setExclusiveStartKey (clj-item->db-item g))
-       limit          (.setLimit             (long g))
-       total-segments (.setTotalSegments     (long g))
-       segment        (.setSegment           (long g))
-       (coll? return) (.setAttributesToGet (mapv name return))
-       (and return (not (coll? return))) (.setSelect (utils/enum return))))))
+       attr-conds      (.setScanFilter        (query|scan-conditions g))
+       last-prim-kvs   (.setExclusiveStartKey (clj-item->db-item g))
+       limit           (.setLimit             (long g))
+       total-segments  (.setTotalSegments     (long g))
+       segment         (.setSegment           (long g))
+       (coll?* return) (.setAttributesToGet (mapv name return))
+       (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles

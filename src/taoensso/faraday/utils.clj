@@ -37,7 +37,8 @@
           (if ~as-ns? nanosecs# (Math/round (/ nanosecs# 1000000.0))))
         (catch Exception e# (str "DNF: " (.getMessage e#)))))
 
-(defn nnil? [x] (not= x nil))
+(defn nnil?  [x] (not (nil? x)))
+(defn coll?* [x] (and (coll? x) (not (map? x ))))
 
 (defmacro doto-maybe "Diabolical cross between `doto`, `cond->` and `as->`."
   [x name & clauses]
