@@ -132,8 +132,8 @@
       (some->> (.getN  x) str->num)
       (some->> (.getB  x) thaw)
       (some->> (.getSS x) (into #{}))
-      (some->> (.getNS x) (map str->num) (into #{}))
-      (some->> (.getBS x) (map thaw)     (into #{}))))
+      (some->> (.getNS x) (mapv str->num) (into #{}))
+      (some->> (.getBS x) (mapv thaw)     (into #{}))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -151,8 +151,8 @@
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
       (every? string?     x) (doto (AttributeValue.) (.setSS x))
-      (every? simple-num? x) (doto (AttributeValue.) (.setNS (map str x)))
-      (every? freeze?     x) (doto (AttributeValue.) (.setBS (map freeze* x)))
+      (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str x)))
+      (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv freeze* x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
@@ -160,8 +160,8 @@
                                  " See `freeze` for serialization.")))))
 
 (comment
-  (map clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
-                        #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
+  (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
+                         #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
 ;;;; Coercion - objects
 
@@ -291,7 +291,7 @@
 (defn- attribute-defs "[{:name _ :type _} ...] defs -> [AttributeDefinition ...]"
   [hash-keydef range-keydef indexes]
   (let [defs (->> (conj [] hash-keydef range-keydef)
-                  (concat (map :range-keydef indexes))
+                  (concat (mapv :range-keydef indexes))
                   (filterv identity))]
     (mapv
      (fn [{key-name :name key-type :type :as def}]
