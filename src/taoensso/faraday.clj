@@ -453,16 +453,15 @@
     (reduce (fn [r kvs]
               (let [ks (keys kvs)
                     vs (mapv ensure-coll (vals kvs))]
+                (when (> (count (filter next vs)) 1)
+                  (-> (Exception. "Can range over only a single attr's values")
+                      (throw)))
                 (into r (mapv (comp clj-item->db-item (partial zipmap ks))
                               (apply utils/cartesian-product vs)))))
             [] (ensure-coll kvs))))
 
-(comment (multi-kvs {:k1 "v1"})
-         (multi-kvs {:k1 ["v1" "v2"]})
-         (multi-kvs {:k1 "v1" :k2 [0 1]})
-         (multi-kvs [{:k1 "v1" :k2 [0 1]}
-                     {:k1 "v2" :k2 [2 3]}])
-         (multi-kvs {:k1 ["v1" "v2"] :k2 [0 1]}))
+(comment (multi-kvs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
+         (multi-kvs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
