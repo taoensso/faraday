@@ -182,7 +182,7 @@
        (merge {:count (.getCount result#)
                :consumed-capacity (.getConsumedCapacity result#)
                :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
-              meta))))
+              ~meta))))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
