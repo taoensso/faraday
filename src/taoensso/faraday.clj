@@ -157,6 +157,7 @@
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
+   (instance? AttributeValue x) x
    :else (throw (Exception. (str "Unknown DynamoDB value type: " (type x) "."
                                  " See `freeze` for serialization.")))))
 
@@ -445,6 +446,24 @@
 
 ;;;; API - batch ops
 
+(defn- multi-kvs
+  "[{<k1> <v1s*> ...} ...]* -> [{k1 v1 ...} ...] (* => optional vec)"
+  [kvs]
+  (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
+    (reduce (fn [r kvs]
+              (let [ks (keys kvs)
+                    vs (mapv ensure-coll (vals kvs))]
+                (into r (mapv (comp clj-item->db-item (partial zipmap ks))
+                              (apply utils/cartesian-product vs)))))
+            [] (ensure-coll kvs))))
+
+(comment (multi-kvs {:k1 "v1"})
+         (multi-kvs {:k1 ["v1" "v2"]})
+         (multi-kvs {:k1 "v1" :k2 [0 1]})
+         (multi-kvs [{:k1 "v1" :k2 [0 1]}
+                     {:k1 "v2" :k2 [2 3]}])
+         (multi-kvs {:k1 ["v1" "v2"] :k2 [0 1]}))
+
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
   [requests]
@@ -453,16 +472,7 @@
      (doto-maybe (KeysAndAttributes.) g
        attrs       (.setAttributesToGet (mapv name g))
        consistent? (.setConsistentRead  g)
-       :always
-       (.setKeys
-        ;; [{<k1> <v1s*> ...} ...]* -> [{k1 v1 ...} ...] (* => optional vec)
-        (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
-          (reduce (fn [r kvs]
-                    (let [ks (keys kvs)
-                          vs (mapv ensure-coll (vals kvs))]
-                      (into r (mapv (comp clj-item->db-item (partial zipmap ks))
-                                    (apply utils/cartesian-product vs)))))
-                  [] (ensure-coll prim-kvs))))))
+       :always     (.setKeys (multi-kvs prim-kvs))))
    requests))
 
 (comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
@@ -486,12 +496,10 @@
       (doto (BatchGetItemRequest.)
         (.setRequestItems (batch-request-items requests))))))
 
-(defn- put-request    [i] (doto (PutRequest.)    (.setItem (clj-item->db-item i))))
-(defn- delete-request [i] (doto (DeleteRequest.) (.setKey  (clj-item->db-item i))))
-(defn- write-request  [action item]
+(defn- write-request [action item]
   (case action
-    :put    (doto (WriteRequest.) (.setPutRequest    (put-request    item)))
-    :delete (doto (WriteRequest.) (.setDeleteRequest (delete-request item)))))
+    :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
+    :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
 
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
@@ -503,7 +511,7 @@
    (batch-write-item creds
      {:users {:put    [{:user-id 1 :username \"sally\"}
                        {:user-id 2 :username \"jane\"}]
-              :delete [{:user-id 3}]}})"
+              :delete [{:user-id [3 4 5]}]}})"
   [creds requests]
   (as-map
     (.batchWriteItem (db-client creds)
@@ -512,9 +520,10 @@
          (utils/name-map
           ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
           (fn [table-request]
-            (reduce into [] (for [action (keys table-request)
-                                  :let [items (table-request action)]]
-                              (mapv (partial write-request action) items))))
+            (reduce into []
+             (for [action (keys table-request)
+                   :let [items (multi-kvs (table-request action))]]
+               (mapv (partial write-request action) items))))
           requests))))))
 
 ;;;; API - queries & scans

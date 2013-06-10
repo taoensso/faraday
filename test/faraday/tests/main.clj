@@ -22,7 +22,7 @@
     (println "45s left...")
     (Thread/sleep 45000))
 
-  (far/batch-write-item creds {ttable {:delete [{:id 0} {:id 1} {:id 2}]}}))
+  (far/batch-write-item creds {ttable {:delete {:id [0 1 2]}}}))
 
 (comment (far/delete-table creds ttable))
 
@@ -50,7 +50,7 @@
         ttable set))
 
   (expect ; Batch delete
-   [nil nil] (do (far/batch-write-item creds {ttable {:delete [{:id 0} {:id 1}]}})
+   [nil nil] (do (far/batch-write-item creds {ttable {:delete {:id [0 1]}}})
                  [(far/get-item creds ttable {:id 0})
                   (far/get-item creds ttable {:id 1})])))
 
