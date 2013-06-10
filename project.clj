@@ -13,7 +13,7 @@
              :dev   {:dependencies []}
              :test  {:dependencies []}
              :bench {:dependencies []}}
-  :aliases {"test-all" ["with-profile" "test,1.5" "test"]}
+  :aliases {"test-all" ["with-profile" "test,1.5" "expectations"]}
   :plugins [[lein-expectations "0.0.7"]
             [lein-autoexpect   "0.2.5"]
             [codox             "0.6.4"]]

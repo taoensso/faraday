@@ -1,12 +1,19 @@
 #!/bin/bash
 
-if [ ! -f .env ];
-then
-    echo "ABORTING: ./.env file not found!"
-    echo "Please see .env.example."
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <env-file> [--auto]"
+    exit 1
+elif [ ! -f "$1" ]; then
+    echo "ABORTING: specified env-file not found: $1"
     exit 1
 else
-    echo "Using ./.env for DynamoDB IAM creds..."
-    source .env
-    lein test-all
+    echo "Using $1 for IAM creds..."
+    source $1
+
+   if [ "$2" = "--auto" ]; then
+      #lein autoexpect :growl
+      lein autoexpect
+   else
+      lein test-all
+    fi
 fi
