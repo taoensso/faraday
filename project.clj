@@ -6,6 +6,7 @@
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.1"]
                  [com.amazonaws/aws-java-sdk "1.4.4.1"]
+                 [expectations               "1.4.43"]
                  [com.taoensso/nippy         "1.2.1"]
                  [com.taoensso/timbre        "2.0.1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
@@ -13,6 +14,8 @@
              :test  {:dependencies []}
              :bench {:dependencies []}}
   :aliases {"test-all" ["with-profile" "test,1.5" "test"]}
-  :plugins [[codox "0.6.4"]]
+  :plugins [[lein-expectations "0.0.7"]
+            [lein-autoexpect   "0.2.5"]
+            [codox             "0.6.4"]]
   :min-lein-version "2.0.0"
   :warn-on-reflection true)
