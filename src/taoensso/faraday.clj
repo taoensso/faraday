@@ -83,6 +83,7 @@
   (memoize
    (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
+     (assert (and access-key secret-key) "Please provide valid IWS credentials!")
      (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
            client-config (doto-maybe (ClientConfiguration.) g
                            proxy-port      (.setProxyHost         g)
