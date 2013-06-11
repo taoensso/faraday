@@ -446,22 +446,22 @@
 
 ;;;; API - batch ops
 
-(defn- multi-kvs
-  "[{<k1> <v1s*> ...} ...]* -> [{k1 v1 ...} ...] (* => optional vec)"
-  [kvs]
+(defn- attr-multi-vs
+  "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
+  [attr-multi-vs-map]
   (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
-    (reduce (fn [r kvs]
-              (let [ks (keys kvs)
-                    vs (mapv ensure-coll (vals kvs))]
+    (reduce (fn [r attr-multi-vs]
+              (let [attrs (keys attr-multi-vs)
+                    vs    (mapv ensure-coll (vals attr-multi-vs))]
                 (when (> (count (filter next vs)) 1)
                   (-> (Exception. "Can range over only a single attr's values")
                       (throw)))
-                (into r (mapv (comp clj-item->db-item (partial zipmap ks))
+                (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
                               (apply utils/cartesian-product vs)))))
-            [] (ensure-coll kvs))))
+            [] (ensure-coll attr-multi-vs-map))))
 
-(comment (multi-kvs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
-         (multi-kvs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
+(comment (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
+         (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
@@ -471,7 +471,7 @@
      (doto-maybe (KeysAndAttributes.) g
        attrs       (.setAttributesToGet (mapv name g))
        consistent? (.setConsistentRead  g)
-       :always     (.setKeys (multi-kvs prim-kvs))))
+       :always     (.setKeys (attr-multi-vs prim-kvs))))
    requests))
 
 (comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
@@ -521,7 +521,7 @@
           (fn [table-request]
             (reduce into []
              (for [action (keys table-request)
-                   :let [items (multi-kvs (table-request action))]]
+                   :let [items (attr-multi-vs (table-request action))]]
                (mapv (partial write-request action) items))))
           requests))))))
 
