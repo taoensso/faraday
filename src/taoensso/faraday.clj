@@ -13,7 +13,7 @@
   (:require [clojure.string         :as str]
             [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
-            [taoensso.faraday.utils :as utils :refer (nnil? coll?* doto-maybe)])
+            [taoensso.faraday.utils :as utils :refer (coll?* doto-maybe)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -111,6 +111,12 @@
 
 ;; TODO Consider alternative approaches to freezing that would _not_ serialize
 ;; unwrapped binary data; this is too presumptuous.
+;;
+;; The obvious solution to this would be to just make raw bytes writeable as-is
+;; and to require explicit thawing when we want it.
+;;
+;; This may actually be a good approach _anyway_ to support ad-hoc options on
+;; freeze/thaw opts like encryption.
 
 (deftype Frozen [value])
 (defn freeze [x] (Frozen. x))
@@ -494,10 +500,10 @@
   [creds requests]
   (doto (BatchGetItemRequest.)
         (.setRequestItems (batch-request-items requests)))
-  (as-map ; TODO
-    (.batchGetItem (db-client creds)
-      (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
-        (.setRequestItems (batch-request-items requests))))))
+  (as-map
+   (.batchGetItem (db-client creds)
+     (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
+       (.setRequestItems (batch-request-items requests))))))
 
 (defn- write-request [action item]
   (case action
