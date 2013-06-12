@@ -625,6 +625,36 @@
                (range total-segments))
          (mapv deref))))
 
+;;;; Helpers, etc.
+
+(defn items-by-attrs
+  "Groups one or more items by one or more attributes, returning a map of form
+  {<attr-val> <item> ...} or {{<attr> <val> ...} <item>}.
+
+  Good for collecting batch or query/scan items results into useable maps,
+  indexed by their 'primary key' (which, remember, may consist of 1 OR 2 attrs)."
+  [attr-or-attrs item-or-items]
+  (letfn [(item-by-attrs [a-or-as item] ;
+            (if-not (utils/coll?* a-or-as)
+              (let [a  a-or-as] {(get item a) (dissoc item a)})
+              (let [as a-or-as] {(select-keys item as) (apply dissoc item as)})))]
+
+    (if-not (utils/coll?* item-or-items)
+      (let [item  item-or-items] (item-by-attrs attr-or-attrs item))
+      (let [items item-or-items]
+        (into {} (mapv (partial item-by-attrs attr-or-attrs) items))))))
+
+(comment
+  (items-by-attrs :a      {:a :A :b :B :c :C})
+  (items-by-attrs [:a]    {:a :A :b :B :c :C})
+  (items-by-attrs [:a :b] {:a :A :b :B :c :C})
+  (items-by-attrs :a      [{:a :A1 :b :B1 :c :C2}
+                           {:a :A2 :b :B2 :c :C2}])
+  (items-by-attrs [:a]    [{:a :A1 :b :B1 :c :C2}
+                           {:a :A2 :b :B2 :c :C2}])
+  (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
+                           {:a :A2 :b :B2 :c :C2}]))
+
 ;;;; README
 
 (comment
