@@ -1,4 +1,4 @@
-(ns faraday.tests.main
+(ns taoensso.faraday.tests.main
   (:require [expectations     :as test :refer :all]
             [taoensso.faraday :as far]
             [taoensso.carmine :as car]
