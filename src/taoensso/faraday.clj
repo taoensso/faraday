@@ -331,10 +331,12 @@
     :hash-keydef  - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :range-keydef - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :indexes      - (optional) [{:name _ :range-keydef _
-                                 :projection #{:all :keys-only [<attr> ...]}}]"
+                                 :projection #{:all :keys-only [<attr> ...]}}]
+    :block?       - (optional) block until table is actually available?"
   [creds {table-name :name
-          :keys [throughput hash-keydef range-keydef indexes]
+          :keys [throughput hash-keydef range-keydef indexes block?]
           :or   {throughput {:read 1 :write 1}}}]
+  ;; TODO Implement block? feature
   (as-map
    (.createTable (db-client creds)
      (doto (CreateTableRequest.)
