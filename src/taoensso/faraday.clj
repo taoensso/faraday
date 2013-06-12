@@ -71,11 +71,6 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
-;;;; TODO
-;; * Finish up any outstanding API stuff: as-map types, Rotary PRs, non-PR forks.
-;; * Benchmarks, further tests.
-;; * Long-term: async API, auto throughput adjusting, ...?
-
 ;;;; Connections
 
 (def ^:private db-client*
@@ -556,9 +551,7 @@
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
-   provided, nor conditional puts.
-
-   Request execution order is undefined. TODO Alternatives?
+   provided, nor conditional puts. Request execution order is undefined.
 
    (batch-write-item creds
      {:users {:put    [{:user-id 1 :username \"sally\"}
@@ -669,6 +662,8 @@
          (mapv deref))))
 
 ;;;; Misc. helpers
+
+;; TODO Automatic throughput adjustment tools
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
