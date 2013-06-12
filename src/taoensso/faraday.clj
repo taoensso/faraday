@@ -274,6 +274,37 @@
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
        (catch ResourceNotFoundException _ nil)))
 
+(defn block-while-table-status
+  "BLOCKS to poll for a change to table's status. On status change, polling will
+  terminate and the table's new description will be returned."
+  [creds table-name status & [{:keys [poll-ms timeout-ms timeout-val]
+                               :or   {poll-ms 5000}}]]
+  (assert (#{:creating :updating :deleting :active} (utils/un-enum status))
+          (throw (Exception. (str "Invalid table status: " status))))
+  (let [polling-future
+        (future
+          (loop []
+            (let [current-descr (describe-table creds table-name)]
+              (if-not (= (:status current-descr) (utils/un-enum status))
+                current-descr
+                (do (Thread/sleep poll-ms)
+                    (recur))))))]
+    (if-not timeout-ms
+      (deref polling-future)
+      (let [deref-result (deref polling-future timeout-ms ::timeout)]
+        (if-not (= deref-result ::timeout)
+          deref-result
+          (do (future-cancel polling-future)
+              timeout-val))))))
+
+(comment
+  (create-table mc {:name "delete-me5"
+                    :throughput  {:read 1 :write 1}
+                    :hash-keydef {:name :id :type :s}})
+  (def descr (describe-table mc "delete-me5"))
+  (block-while-table-status mc "delete-me5" :creating) ; ~53000ms
+  )
+
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [key-name key-type]
   (doto (KeySchemaElement.)
@@ -337,20 +368,32 @@
     :hash-keydef  - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :range-keydef - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :indexes      - (optional) [{:name _ :range-keydef _
-                                 :projection #{:all :keys-only [<attr> ...]}}]
-    :block?       - (optional) block until table is actually available?"
+                                 :projection #{:all :keys-only [<attr> ...]}}].
+    :block?       - (optional) blocks for table to actually be active."
   [creds {table-name :name
           :keys [throughput hash-keydef range-keydef indexes block?]
           :or   {throughput {:read 1 :write 1}}}]
-  ;; TODO Implement block? feature
-  (as-map
-   (.createTable (db-client creds)
-     (doto (CreateTableRequest.)
-       (.setTableName (name table-name))
-       (.setKeySchema (key-schema hash-keydef range-keydef))
-       (.setProvisionedThroughput (provisioned-throughput throughput))
-       (.setAttributeDefinitions  (attribute-defs hash-keydef range-keydef indexes))
-       (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes))))))
+
+  (let [request-result
+        (as-map
+         (.createTable (db-client creds)
+           (doto (CreateTableRequest.)
+             (.setTableName (name table-name))
+             (.setKeySchema (key-schema hash-keydef range-keydef))
+             (.setProvisionedThroughput (provisioned-throughput throughput))
+             (.setAttributeDefinitions  (attribute-defs hash-keydef range-keydef indexes))
+             (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+
+    (if-not block?
+      request-result
+      (do (block-while-table-status creds table-name :creating)
+          request-result))))
+
+(comment
+  (time (create-table mc {:name "delete-me7"
+                          :throughput  {:read 1 :write 1}
+                          :hash-keydef {:name :id :type :s}
+                          :block?      true})))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds {table-name :name :as opts}]
@@ -625,7 +668,7 @@
                (range total-segments))
          (mapv deref))))
 
-;;;; Helpers, etc.
+;;;; Misc. helpers
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form

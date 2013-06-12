@@ -13,8 +13,9 @@
 (defn name-map    ([m] (name-map    nil m)) ([vf m] (map-kvs name    vf m)))
 
 (def  enum*   (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
-(def  un-enum (memoize (fn [e] (-> e (str/lower-case) (str/replace "_" "-")
-                                  (keyword)))))
+(def  un-enum (memoize (fn [e] (if (keyword? e) e
+                                  (-> e (str/lower-case) (str/replace "_" "-")
+                                      (keyword))))))
 (defn enum ^String [x] (enum* x))
 
 (defmacro time-ns "Returns number of nanoseconds it takes to execute body."
