@@ -22,6 +22,8 @@
             [taoensso.timbre        :as timbre]))
 
 ;; TODO Roughest working prototype, ASAP.
+;; TODO This entire thing could be written as a Carmine abstraction targetting
+;; arbitrary backends/data-stores...
 
 (def ttable :faraday.tundra.cache)
 
