@@ -15,7 +15,7 @@ Faraday was adapted from James Reaves' own [Rotary client](https://github.com/we
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
   * **Great performance** (zero overhead to the official Java SDK).
-  * Full **support for Clojure's rich data types** using [Nippy](https://github.com/ptaoussanis/nippy).
+  * Uses [Nippy](https://github.com/ptaoussanis/nippy) to **support Clojure's rich data types** and **high-strength encryption**.
 
 It's still early days. There's probably rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. The goal is to head toward something very much production ready ASAP. **Pull requests, bug reports, and/or suggestions are very, very welcome**!
 
