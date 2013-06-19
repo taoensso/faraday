@@ -1,7 +1,6 @@
 (ns taoensso.faraday.tests.main
   (:require [expectations     :as test :refer :all]
             [taoensso.faraday :as far]
-            [taoensso.carmine :as car]
             [taoensso.nippy   :as nippy]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!

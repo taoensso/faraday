@@ -9,8 +9,8 @@
                  [expectations               "1.4.43"]
                  [com.taoensso/nippy         "1.3.0-alpha3"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
-             :dev   {:dependencies [[com.taoensso/carmine "1.12.0"]]}
-             :test  {:dependencies [[com.taoensso/carmine "1.12.0"]]}
+             :dev   {:dependencies []}
+             :test  {:dependencies []}
              :bench {:dependencies []}}
   :aliases {"test-all"  ["with-profile" "test,1.5" "expectations"]
             "start-dev" ["with-profile" "dev,test" "repl" ":headless"]}
