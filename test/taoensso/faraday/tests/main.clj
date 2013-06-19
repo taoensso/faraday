@@ -2,7 +2,6 @@
   (:require [expectations     :as test :refer :all]
             [taoensso.faraday :as far]
             [taoensso.carmine :as car]
-            [taoensso.tundra  :as tundra]
             [taoensso.timbre  :as timbre]
             [taoensso.nippy   :as nippy]))
 
@@ -21,8 +20,7 @@
   (when (or (far/ensure-table creds
               {:name        ttable
                :hash-keydef {:name :id :type :n}
-               :throughput  {:read 1 :write 1}})
-            (tundra/ensure-table creds {:read 1 :write 1}))
+               :throughput  {:read 1 :write 1}}))
     (println "Sleeping 90s for table creation (only need to do this once!)...")
     (Thread/sleep 45000)
     (println "45s left...")
@@ -86,20 +84,3 @@
 
 ;; (expect (interaction (println anything&)) (println 5))
 ;; (expect (interaction (println Long))      (println 5))
-
-;;;; Tundra
-
-(defmacro wcar [& body] `(car/with-conn nil nil ~@body))
-
-(let [ttable  tundra/ttable
-      tworker :test-worker
-      tkey (partial car/kname "carmine" "tundra" "temp" "test")
-      [k1 k2 k3 k4 :as ks] (mapv tkey ["k1 k2 k3 k4"])]
-
-  (wcar (apply car/del ks))
-  (far/batch-write-item creds {ttable {:delete [{:worker   (name tworker)
-                                                 :redis-key k1}]}})
-
-  ;; TODO
-  ;;(far/scan creds tundra/ttable {:attr-conds {:worker [:eq ["default"]]}})
-  )
