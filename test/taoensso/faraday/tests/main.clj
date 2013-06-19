@@ -14,16 +14,12 @@
 
 (defn- setup {:expectations-options :before-run} []
   (println "Setting up testing environment...")
-
-  (when (or (far/ensure-table creds
-              {:name        ttable
-               :hash-keydef {:name :id :type :n}
-               :throughput  {:read 1 :write 1}}))
-    (println "Sleeping 90s for table creation (only need to do this once!)...")
-    (Thread/sleep 45000)
-    (println "45s left...")
-    (Thread/sleep 45000)
-    (println "Ready to roll...")))
+  (far/ensure-table creds
+    {:name        ttable
+     :hash-keydef {:name :id :type :n}
+     :throughput  {:read 1 :write 1}
+     :block?      true})
+  (println "Ready to roll..."))
 
 (comment (far/delete-table creds ttable))
 
