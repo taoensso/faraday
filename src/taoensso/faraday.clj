@@ -11,8 +11,7 @@
 
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
-            [taoensso.timbre        :as timbre]
-            [taoensso.nippy         :as nippy]
+            [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?* doto-maybe)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
@@ -104,24 +103,16 @@
 
 ;;;; Coercion - values
 
-;; TODO Consider alternative approaches to freezing that would _not_ serialize
-;; unwrapped binary data; this is too presumptuous.
-;;
-;; The obvious solution to this would be to just make raw bytes writeable as-is
-;; and to require explicit thawing when we want it.
-;;
-;; This may actually be a good approach _anyway_ to support ad-hoc options on
-;; freeze/thaw opts like encryption.
+(def ^:private nt-freeze (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
+(def ^:private nt-thaw   (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
 
-(deftype Frozen [value])
-(defn freeze [x] (Frozen. x))
+(utils/defalias with-thaw-opts nippy-tools/with-thaw-opts)
+(utils/defalias freeze         nippy-tools/wrap-for-freezing
+  "Forces argument of any type to be subject to automatic de/serialization with
+  Nippy.")
 
-(def ^:private ^:const ba-class (Class/forName "[B"))
-(defn- freeze?     [x] (or (instance? Frozen x) (instance? ba-class x)))
-(defn- freeze*     [x] (ByteBuffer/wrap (nippy/freeze-to-bytes
-                                         (if (instance? Frozen x)
-                                           (.value ^Frozen x) x))))
-(defn- thaw        [^ByteBuffer bb] (nippy/thaw-from-bytes (.array bb)))
+(defn- freeze?     [x] (or (nippy-tools/wrapped-for-freezing? x)
+                           (utils/bytes? x)))
 (defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- simple-num? [x] (or (instance? Long    x)
                            (instance? Double  x)
@@ -132,10 +123,10 @@
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) str->num)
-      (some->> (.getB  x) thaw)
+      (some->> (.getB  x) nt-thaw)
       (some->> (.getSS x) (into #{}))
       (some->> (.getNS x) (mapv str->num) (into #{}))
-      (some->> (.getBS x) (mapv thaw)     (into #{}))))
+      (some->> (.getBS x) (mapv nt-thaw) (into #{}))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -146,7 +137,7 @@
      (doto (AttributeValue.) (.setS x)))
 
    (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?     x) (doto (AttributeValue.) (.setB (freeze* x)))
+   (freeze?     x) (doto (AttributeValue.) (.setB (nt-freeze x)))
 
    (set? x)
    (if (empty? x)
@@ -154,7 +145,7 @@
      (cond
       (every? string?     x) (doto (AttributeValue.) (.setSS x))
       (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str x)))
-      (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv freeze* x)))
+      (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 

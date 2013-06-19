@@ -3,6 +3,16 @@
   (:require [clojure.string      :as str]
             [clojure.tools.macro :as macro]))
 
+(defmacro defalias
+  "Defines an alias for a var, preserving metadata. Adapted from
+  clojure.contrib/def.clj, Ref. http://goo.gl/xpjeH"
+  [name target & [doc]]
+  `(let [^clojure.lang.Var v# (var ~target)]
+     (alter-meta! (def ~name (.getRawRoot v#))
+                  #(merge % (apply dissoc (meta v#) [:column :line :file :test :name])
+                            (when-let [doc# ~doc] {:doc doc#})))
+     (var ~name)))
+
 (defn map-kvs [kf vf m]
   (let [m (if (instance? java.util.HashMap m) (into {} m) m)]
     (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k) k)
@@ -75,3 +85,4 @@
 
 (def ^:const bytes-class (Class/forName "[B"))
 (defn bytes? [x] (instance? bytes-class x))
+(defn ba= [^bytes x ^bytes y] (java.util.Arrays/equals x y))
