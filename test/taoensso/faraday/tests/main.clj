@@ -1,7 +1,8 @@
 (ns taoensso.faraday.tests.main
-  (:require [expectations     :as test :refer :all]
-            [taoensso.faraday :as far]
-            [taoensso.nippy   :as nippy]))
+  (:require [expectations           :as test :refer :all]
+            [taoensso.faraday       :as far]
+            [taoensso.faraday.utils :as utils]
+            [taoensso.nippy         :as nippy]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
@@ -60,6 +61,12 @@
  {:id 10 :nippy-data data}
  (do (far/put-item creds ttable {:id 10 :nippy-data (far/freeze data)})
      (far/get-item creds ttable {:id 10})))
+
+(expect-let ; "Unserialized" bytes
+ [data (byte-array (mapv byte [0 1 2]))]
+ #(utils/ba= data %)
+ (do (far/put-item creds ttable {:id 11 :ba-data data})
+     (:ba-data (far/get-item creds ttable {:id 11}))))
 
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}
