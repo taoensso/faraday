@@ -7,8 +7,7 @@
                  [org.clojure/tools.macro    "0.1.2"]
                  [com.amazonaws/aws-java-sdk "1.4.4.1"]
                  [expectations               "1.4.43"]
-                 [com.taoensso/nippy         "1.3.0-alpha3"]
-                 [com.taoensso/timbre        "2.1.2"]]
+                 [com.taoensso/nippy         "1.3.0-alpha3"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :dev   {:dependencies [[com.taoensso/carmine "1.12.0"]]}
              :test  {:dependencies [[com.taoensso/carmine "1.12.0"]]}

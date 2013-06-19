@@ -11,7 +11,6 @@
 
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
-            [taoensso.timbre        :as timbre]
             [taoensso.nippy         :as nippy]
             [taoensso.faraday.utils :as utils :refer (coll?* doto-maybe)])
   (:import  [com.amazonaws.services.dynamodbv2.model
