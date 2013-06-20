@@ -497,52 +497,8 @@
                               (apply utils/cartesian-product vs)))))
             [] (ensure-coll attr-multi-vs-map))))
 
-(comment (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
+(comment (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
          (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
-
-(defn- expand-requests
-  "Desugars and partitions GET/WRITE batch requests:
-  {<table> <sugared-request> ...} -> [{<table> <desugared-request> ...} ...]
-
-  Relevant DynamoDB limits, Ref. http://goo.gl/wA06O
-    * Max item size: 64KB (incl. key size).
-    * Batch GET: <= 100 items, <= 1MB total.
-    * Batch PUT: <= 25 items,  <= 1MB total.
-
-  So as a -very- simple way of ensuring we don't exceed limits, we'll partition
-  requests into groups of (/ 1024 62.0) ~ 16 items per request. An ex will be
-  thrown by AWS client if any particular item exceeds max size."
-  [expanding-ks requests]
-  (let [;; Desugar expanding-ks into individual reqs for partitioning
-        flat-single-reqs ; [{<table> {#{:prim-kvs :put :delete} <attr-vs> ...}} ...]
-        (reduce into []
-          (for [table (keys requests)
-                exp-k expanding-ks
-                :let [unexp-part (apply dissoc (get requests table) expanding-ks)
-                      sugared-attr-vs (get-in requests [table exp-k])]
-                :when sugared-attr-vs]
-            (mapv (fn [attr-vs] {table (assoc unexp-part exp-k [attr-vs])})
-                  (attr-multi-vs sugared-attr-vs))))]
-
-    (mapv ; [{<table> {#{:prim-kvs :put :delete} [<attr-vs> ...] ...} ...]
-     (fn [flat-req-partition]
-       (reduce (fn [m single-req]
-                 (utils/deep-merge-with
-                  (fn [r l] (if (and (not= r l) (vector l)) (into l r) r))
-                  m single-req))
-               {} flat-req-partition))
-     (partition-all 16 flat-single-reqs))))
-
-(comment (expand-requests [:prim-kvs]
-          {:t1 {:prim-kvs [{:hash  ["a"] :range (range 2)}] :attrs []}
-           :t2 {:prim-kvs [{:hash  ["a"] :range (range 2)}]
-                :consistent? true}})
-         (expand-requests [:put :delete]
-           {:t1 {:put    {:hash "a"}
-                 :delete [{:hash "b"}]}})
-         (expand-requests [:put :delete]
-           {:t1 {:put    {:hash "a" :attr "foo"}
-                 :delete [{:hash "b"}]}}))
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
@@ -552,15 +508,12 @@
      (doto-maybe (KeysAndAttributes.) g
        attrs       (.setAttributesToGet (mapv name g))
        consistent? (.setConsistentRead  g)
-       :always     (.setKeys (mapv clj-item->db-item prim-kvs))))
+       :always     (.setKeys (attr-multi-vs prim-kvs))))
    requests))
 
-(comment (->> {:t1 {:prim-kvs [{:hash "a" :range 0}] :attrs []}}
-              (batch-request-items)) ; 1 request
-         (->> {:t1 {:prim-kvs [{:hash "a" :range (range 200)}] :attrs []}}
-              (expand-requests [:prim-kvs])
-              (mapv batch-request-items)) ; Multiple partitioned requests
-         )
+(comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
+                                                      :my-range ["0" "1"]}]
+                                          :attrs []}}))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
@@ -574,21 +527,12 @@
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})"
   [creds requests]
+  (doto (BatchGetItemRequest.)
+        (.setRequestItems (batch-request-items requests)))
   (as-map
    (.batchGetItem (db-client creds)
      (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
-       (.setRequestItems
-
-        ;; TODO Run & merge multiple partitions...
-        (first (map batch-request-items (expand-requests [:prim-kvs] requests)))
-        ;;(batch-request-items requests)
-        )))))
-
-(comment (batch-write-item creds
-           {:faraday.tests.main {:put [{:id 0 :name "foo"}
-                                       {:id 1 :name "bar"}]}})
-         (batch-get-item creds
-           {:faraday.tests.main {:prim-kvs {:id [0 1]}}}))
+       (.setRequestItems (batch-request-items requests))))))
 
 (defn- write-request [action item]
   (case action
