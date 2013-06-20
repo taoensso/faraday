@@ -173,11 +173,11 @@
 
 (defmacro ^:private am-query|scan-result [result & [meta]]
   `(let [result# ~result]
-     (with-meta (mapv db-item->clj-item (.getItems result#))
-       (merge {:count (.getCount result#)
-               :consumed-capacity (cc-units (.getConsumedCapacity result#))
-               :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
-              ~meta))))
+     (merge {:items (mapv db-item->clj-item (.getItems result#))
+             :count (.getCount result#)
+             :consumed-capacity (cc-units (.getConsumedCapacity result#))
+             :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
+            ~meta)))
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
@@ -270,7 +270,7 @@
   [creds table-name status & [{:keys [poll-ms timeout-ms timeout-val]
                                :or   {poll-ms 5000}}]]
   (assert (#{:creating :updating :deleting :active} (utils/un-enum status))
-          (throw (Exception. (str "Invalid table status: " status))))
+          (str "Invalid table status: " status))
   (let [polling-future
         (future
           (loop []
@@ -353,13 +353,13 @@
 
 (defn create-table
   "Creates a table with options:
-    :name         - (required) table name.
-    :throughput   - (required) {:read <units> :write <units>}.
-    :hash-keydef  - (required) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
-    :range-keydef - (optional) {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
-    :indexes      - (optional) [{:name _ :range-keydef _
-                                 :projection #{:all :keys-only [<attr> ...]}}].
-    :block?       - (optional) blocks for table to actually be active."
+    :name         - Table name.
+    :throughput   - {:read <units> :write <units>}.
+    :hash-keydef  - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :range-keydef - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :indexes      - [{:name _ :range-keydef _
+                      :projection #{:all :keys-only [<attr> ...]}}].
+    :block?       - Block for table to actually be active?"
   [creds {table-name :name
           :keys [throughput hash-keydef range-keydef indexes block?]
           :or   {throughput {:read 1 :write 1}}}]
@@ -408,8 +408,8 @@
 (defn get-item
   "Retrieves an item from a table by its primary key with options:
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
-    :attrs       - attrs to return, [<attr> ...].
-    :consistent? - use strongly (rather than eventually) consistent reads?"
+    :attrs       - Attrs to return, [<attr> ...].
+    :consistent? - Use strongly (rather than eventually) consistent reads?"
   [creds table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
   (as-map
    (.getItem (db-client creds)
@@ -433,7 +433,7 @@
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected - a map of item attribute/condition pairs, all of which must be
+    :expected - A map of item attribute/condition pairs, all of which must be
                 met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
                   {<attr> false ...} ; Attribute must not exist"
@@ -523,23 +523,21 @@
                                                       :my-range ["0" "1"]}]
                                           :attrs []}}))
 
-(defn- merge-unprocessed
-  [more-f last-result]
-  (loop [{:keys [items unprocessed consumed-capacity]} last-result]
-    (if-not (seq unprocessed)
-      (if items (with-meta items {:consumed-capacity consumed-capacity})
-                last-result)
-
-      (let [{items* :items unprocessed* :unprocessed
-             consumed-capacity* :consumed-capacity}
-            (more-f unprocessed)]
-
-        (recur (merge {:unprocessed       unprocessed*
-                       :consumed-capacity (when consumed-capacity
-                                            (+ consumed-capacity
-                                               consumed-capacity*))}
-                      (when (or items items*)
-                        {:items (into (or items []) items*)})))))))
+(defn- merge-more
+  "Enables auto paging for batch batch-get/write and query/scan requests.
+  Particularly useful for throughput limitations."
+  [more-f max-idx last-result]
+  (loop [{:keys [unprocessed last-prim-kvs] :as last-result} last-result idx 1]
+    (let [more (or unprocessed last-prim-kvs)]
+      (if (or (empty? more) (>= idx max-idx))
+        (if-let [items (:items last-result)]
+          (with-meta items (dissoc last-result :items))
+          last-result)
+        (let [merge-results (fn [l r] (cond (number? l) (+    l r)
+                                           (vector? l) (into l r)
+                                           :else               r))]
+          (recur (merge-with merge-results last-result (more-f more))
+                 (inc idx)))))))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
@@ -552,20 +550,22 @@
                :consistent? true}
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})"
-  [creds requests & [{:keys [return-cc?] :as opts}]]
-  (let [raw-req (if (:raw? opts) requests (batch-request-items requests))]
-    (merge-unprocessed #(batch-get-item creds % (assoc opts :raw? true))
-     (as-map
-      (.batchGetItem (db-client creds)
-        (doto-maybe (BatchGetItemRequest.) g ; {table-str KeysAndAttributes}
-          :always    (.setRequestItems raw-req)
-          return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))))
+  [creds requests & [{:keys [return-cc? max-reqs] :as opts
+                      :or   {max-reqs 5}}]]
+  (letfn [(run1 [raw-req]
+            (as-map
+             (.batchGetItem (db-client creds)
+               (doto-maybe (BatchGetItemRequest.) g ; {table-str KeysAndAttributes}
+                 :always    (.setRequestItems raw-req)
+                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
+    (merge-more run1 max-reqs (run1 (batch-request-items requests)))))
 
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
   (defn- ids [from to] (for [n (range from to)] {:id n :name bigval}))
-  (batch-write-item creds {:faraday.tests.main {:put (ids 0 5)}})
-  (batch-get-item   creds {:faraday.tests.main {:prim-kvs {:id (range 3)}}}))
+  (batch-write-item creds {:faraday.tests.main {:put (ids 0 10)}})
+  (batch-get-item   creds {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
+  (scan creds :faraday.tests.main))
 
 (defn- write-request [action item]
   (case action
@@ -581,24 +581,24 @@
      {:users {:put    [{:user-id 1 :username \"sally\"}
                        {:user-id 2 :username \"jane\"}]
               :delete [{:user-id [3 4 5]}]}})"
-  [creds requests & [{:keys [return-cc?] :as opts}]]
-  (let [raw-req
-        (if (:raw? opts) requests
-            (utils/name-map
-             ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
-             (fn [table-request]
-               (reduce into []
-                 (for [action (keys table-request)
-                       :let [items (attr-multi-vs (table-request action))]]
-                   (mapv (partial write-request action) items))))
-             requests))]
-
-    (merge-unprocessed #(batch-write-item creds % (assoc opts :raw? true))
-     (as-map
-      (.batchWriteItem (db-client creds)
-        (doto-maybe (BatchWriteItemRequest.) g
-          :always    (.setRequestItems raw-req)
-          return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))))
+  [creds requests & [{:keys [return-cc? max-reqs] :as opts
+                      :or   {max-reqs 5}}]]
+  (letfn [(run1 [raw-req]
+            (as-map
+             (.batchWriteItem (db-client creds)
+               (doto-maybe (BatchWriteItemRequest.) g
+                 :always    (.setRequestItems raw-req)
+                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
+    (merge-more run1 max-reqs
+      (run1
+       (utils/name-map
+        ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+        (fn [table-request]
+          (reduce into []
+            (for [action (keys table-request)
+                  :let [items (attr-multi-vs (table-request action))]]
+              (mapv (partial write-request action) items))))
+        requests)))))
 
 ;;;; API - queries & scans
 
@@ -621,43 +621,51 @@
 (defn query
   "Retries items from a table (indexed) with options:
     prim-key-conds - {<key-attr> [<comparison-operator> <values>] ...}.
-    :last-prim-kvs - primary key-val from which to eval, useful for paging.
+    :last-prim-kvs - Primary key-val from which to eval, useful for paging.
+    :max-reqs      - Max number of requests to automatically stitch together.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
                            [<attr> ...]}.
-    :index         - name of a secondary index to query.
-    :order         - index scaning order e/o #{:asc :desc}.
-    :limit         - max num >=1 of items to eval (≠ num of matching items).
-    :consistent?   - use strongly (rather than eventually) consistent reads?
+    :index         - Name of a secondary index to query.
+    :order         - Index scaning order e/o #{:asc :desc}.
+    :limit         - Max num >=1 of items to eval (≠ num of matching items).
+    :consistent?   - Use strongly (rather than eventually) consistent reads?
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}.
 
   For unindexed item retrievel see `scan`."
   [creds table prim-key-conds
-   & [{:keys [last-prim-kvs return index order limit consistent? return-cc?]
-       :or   {order :asc}}]]
-  (as-map
-   (.query (db-client creds)
-     (doto-maybe (QueryRequest.) g
-       :always (.setTableName        (name table))
-       :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
-       :always (.setScanIndexForward (case order :asc true :desc false))
-       last-prim-kvs   (.setExclusiveStartKey (clj-item->db-item g))
-       limit           (.setLimit    (long g))
-       index           (.setIndexName      g)
-       consistent?     (.setConsistentRead g)
-       (coll?* return) (.setAttributesToGet (mapv name return))
-       return-cc? (.setReturnConsumedCapacity (utils/enum :total))
-       (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
+   & [{:keys [last-prim-kvs max-reqs return index order limit consistent?
+              return-cc?] :as opts
+       :or   {max-reqs 5
+              order    :asc}}]]
+  (letfn [(run1 [last-prim-kvs]
+            (as-map
+             (.query (db-client creds)
+               (doto-maybe (QueryRequest.) g
+                 :always (.setTableName        (name table))
+                 :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
+                 :always (.setScanIndexForward (case order :asc true :desc false))
+                 last-prim-kvs   (.setExclusiveStartKey
+                                  (clj-item->db-item last-prim-kvs))
+                 limit           (.setLimit    (long g))
+                 index           (.setIndexName      g)
+                 consistent?     (.setConsistentRead g)
+                 (coll?* return) (.setAttributesToGet (mapv name return))
+                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))
+                 (and return (not (coll?* return)))
+                 (.setSelect (utils/enum return))))))]
+    (merge-more run1 max-reqs (run1 last-prim-kvs))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
     :attr-conds     - {<attr> [<comparison-operator> <values>] ...}.
-    :limit          - max num >=1 of items to eval (≠ num of matching items).
-    :last-prim-kvs  - primary key-val from which to eval, useful for paging.
+    :limit          - Max num >=1 of items to eval (≠ num of matching items).
+    :last-prim-kvs  - Primary key-val from which to eval, useful for paging.
+    :max-reqs       - Max number of requests to automatically stitch together.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
                             [<attr> ...]}.
-    :total-segments - total number of parallel scan segments.
-    :segment        - calling worker's segment number (>=0, <=total-segments).
+    :total-segments - Total number of parallel scan segments.
+    :segment        - Calling worker's segment number (>=0, <=total-segments).
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
                              :not-null :null :contains :not-contains :in}.
@@ -665,20 +673,25 @@
   For automatic parallelization & segment control see `scan-parallel`.
   For indexed item retrievel see `query`."
   [creds table
-   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment
-              return-cc?]}]]
-  (as-map
-   (.scan (db-client creds)
-     (doto-maybe (ScanRequest.) g
-       :always (.setTableName (name table))
-       attr-conds      (.setScanFilter        (query|scan-conditions g))
-       last-prim-kvs   (.setExclusiveStartKey (clj-item->db-item g))
-       limit           (.setLimit             (long g))
-       total-segments  (.setTotalSegments     (long g))
-       segment         (.setSegment           (long g))
-       (coll?* return) (.setAttributesToGet (mapv name return))
-       return-cc? (.setReturnConsumedCapacity (utils/enum :total))
-       (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
+   & [{:keys [attr-conds last-prim-kvs max-reqs return limit total-segments
+              segment return-cc?] :as opts
+       :or   {max-reqs 5}}]]
+  (letfn [(run1 [last-prim-kvs]
+            (as-map
+             (.scan (db-client creds)
+               (doto-maybe (ScanRequest.) g
+                 :always (.setTableName (name table))
+                 attr-conds      (.setScanFilter        (query|scan-conditions g))
+                 last-prim-kvs   (.setExclusiveStartKey
+                                  (clj-item->db-item last-prim-kvs))
+                 limit           (.setLimit             (long g))
+                 total-segments  (.setTotalSegments     (long g))
+                 segment         (.setSegment           (long g))
+                 (coll?* return) (.setAttributesToGet (mapv name return))
+                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))
+                 (and return (not (coll?* return)))
+                 (.setSelect (utils/enum return))))))]
+    (merge-more run1 max-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
