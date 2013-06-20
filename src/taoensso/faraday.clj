@@ -70,11 +70,6 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
-;; TODO setReturnConsumedCapacity enum for:
-;; GetItem PutItem UpdateItem DeleteItem
-;; Query Scan
-;; BatchGetItem BatchWriteItem
-
 ;;;; Connections
 
 (def ^:private db-client*
@@ -415,14 +410,15 @@
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     :attrs       - attrs to return, [<attr> ...].
     :consistent? - use strongly (rather than eventually) consistent reads?"
-  [creds table prim-kvs & [{:keys [attrs consistent?]}]]
+  [creds table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
   (as-map
    (.getItem (db-client creds)
     (doto-maybe (GetItemRequest.) g
       :always     (.setTableName       (name table))
       :always     (.setKey             (clj-item->db-item prim-kvs))
       consistent? (.setConsistentRead  g)
-      attrs       (.setAttributesToGet (mapv name g))))))
+      attrs       (.setAttributesToGet (mapv name g))
+      return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))))
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
@@ -441,7 +437,7 @@
                 met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
                   {<attr> false ...} ; Attribute must not exist"
-  [creds table item & [{:keys [return expected]
+  [creds table item & [{:keys [return expected return-cc?]
                         :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
@@ -449,7 +445,8 @@
        :always  (.setTableName    (name table))
        :always  (.setItem         (clj-item->db-item item))
        expected (.setExpected     (expected-values g))
-       return   (.setReturnValues (utils/enum g))))))
+       return   (.setReturnValues (utils/enum g))
+       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
 
 (defn- attribute-updates
   "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
@@ -466,7 +463,7 @@
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
     :expected  - {<attr> <#{<expected-value> false}> ...}."
-  [creds table prim-kvs update-map & [{:keys [return expected]
+  [creds table prim-kvs update-map & [{:keys [return expected return-cc?]
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
@@ -475,12 +472,13 @@
        :always  (.setKey              (clj-item->db-item prim-kvs))
        :always  (.setAttributeUpdates (attribute-updates update-map))
        expected (.setExpected         (expected-values g))
-       return   (.setReturnValues     (utils/enum g))))))
+       return   (.setReturnValues     (utils/enum g))
+       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
 
 (defn delete-item
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
-  [creds table prim-kvs & [{:keys [return expected]
+  [creds table prim-kvs & [{:keys [return expected return-cc?]
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
@@ -488,7 +486,8 @@
        :always  (.setTableName    (name table))
        :always  (.setKey          (clj-item->db-item prim-kvs))
        expected (.setExpected     (expected-values g))
-       return   (.setReturnValues (utils/enum g))))))
+       return   (.setReturnValues (utils/enum g))
+       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
 
 ;;;; API - batch ops
 
@@ -525,17 +524,15 @@
                                           :attrs []}}))
 
 (defn- merge-unprocessed
-  [creds more-f last-result]
+  [more-f last-result]
   (loop [{:keys [items unprocessed consumed-capacity]} last-result]
-    (when (seq unprocessed) (println "REPROCESSING!: " unprocessed))
     (if-not (seq unprocessed)
-      (if items
-        (with-meta items {:consumed-capacity consumed-capacity})
-        last-result)
+      (if items (with-meta items {:consumed-capacity consumed-capacity})
+                last-result)
 
       (let [{items* :items unprocessed* :unprocessed
              consumed-capacity* :consumed-capacity}
-            (more-f creds unprocessed)]
+            (more-f unprocessed)]
 
         (recur (merge {:unprocessed       unprocessed*
                        :consumed-capacity (when consumed-capacity
@@ -543,13 +540,6 @@
                                                consumed-capacity*))}
                       (when (or items items*)
                         {:items (into (or items []) items*)})))))))
-
-(defn- batch-get-item* [creds raw-request]
-  (merge-unprocessed creds batch-get-item*
-   (as-map
-    (.batchGetItem (db-client creds)
-      (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
-        (.setRequestItems raw-request))))))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
@@ -562,8 +552,14 @@
                :consistent? true}
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})"
-  [creds requests]
-  (batch-get-item* creds (batch-request-items requests)))
+  [creds requests & [{:keys [return-cc?] :as opts}]]
+  (let [raw-req (if (:raw? opts) requests (batch-request-items requests))]
+    (merge-unprocessed #(batch-get-item creds % (assoc opts :raw? true))
+     (as-map
+      (.batchGetItem (db-client creds)
+        (doto-maybe (BatchGetItemRequest.) g ; {table-str KeysAndAttributes}
+          :always    (.setRequestItems raw-req)
+          return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))))
 
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
@@ -576,14 +572,6 @@
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
 
-(defn- batch-write-item*
-  [creds raw-request]
-  (merge-unprocessed creds batch-write-item*
-   (as-map
-    (.batchWriteItem (db-client creds)
-      (doto (BatchWriteItemRequest.)
-        (.setRequestItems raw-request))))))
-
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
@@ -593,16 +581,24 @@
      {:users {:put    [{:user-id 1 :username \"sally\"}
                        {:user-id 2 :username \"jane\"}]
               :delete [{:user-id [3 4 5]}]}})"
-  [creds requests]
-  (batch-write-item* creds
-    (utils/name-map
-     ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
-     (fn [table-request]
-       (reduce into []
-         (for [action (keys table-request)
-               :let [items (attr-multi-vs (table-request action))]]
-           (mapv (partial write-request action) items))))
-     requests)))
+  [creds requests & [{:keys [return-cc?] :as opts}]]
+  (let [raw-req
+        (if (:raw? opts) requests
+            (utils/name-map
+             ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+             (fn [table-request]
+               (reduce into []
+                 (for [action (keys table-request)
+                       :let [items (attr-multi-vs (table-request action))]]
+                   (mapv (partial write-request action) items))))
+             requests))]
+
+    (merge-unprocessed #(batch-write-item creds % (assoc opts :raw? true))
+     (as-map
+      (.batchWriteItem (db-client creds)
+        (doto-maybe (BatchWriteItemRequest.) g
+          :always    (.setRequestItems raw-req)
+          return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))))
 
 ;;;; API - queries & scans
 
@@ -637,7 +633,7 @@
 
   For unindexed item retrievel see `scan`."
   [creds table prim-key-conds
-   & [{:keys [last-prim-kvs return index order limit consistent?]
+   & [{:keys [last-prim-kvs return index order limit consistent? return-cc?]
        :or   {order :asc}}]]
   (println (query|scan-conditions prim-key-conds))
   (as-map
@@ -651,6 +647,7 @@
        index           (.setIndexName      g)
        consistent?     (.setConsistentRead g)
        (coll?* return) (.setAttributesToGet (mapv name return))
+       return-cc? (.setReturnConsumedCapacity (utils/enum :total))
        (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
 
 (defn scan
@@ -669,7 +666,8 @@
   For automatic parallelization & segment control see `scan-parallel`.
   For indexed item retrievel see `query`."
   [creds table
-   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment]}]]
+   & [{:keys [attr-conds last-prim-kvs return limit total-segments segment
+              return-cc?]}]]
   (as-map
    (.scan (db-client creds)
      (doto-maybe (ScanRequest.) g
@@ -680,6 +678,7 @@
        total-segments  (.setTotalSegments     (long g))
        segment         (.setSegment           (long g))
        (coll?* return) (.setAttributesToGet (mapv name return))
+       return-cc? (.setReturnConsumedCapacity (utils/enum :total))
        (and return (not (coll?* return))) (.setSelect (utils/enum return))))))
 
 (defn scan-parallel
