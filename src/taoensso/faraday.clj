@@ -70,6 +70,11 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
+;; TODO setReturnConsumedCapacity enum for:
+;; GetItem PutItem UpdateItem DeleteItem
+;; Query Scan
+;; BatchGetItem BatchWriteItem
+
 ;;;; Connections
 
 (def ^:private db-client*
@@ -162,18 +167,20 @@
 (def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
 (def clj-item->db-item (partial utils/name-map    clj-val->db-val))
 
+(defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
+
 (defprotocol AsMap (as-map [x]))
 
 (defmacro ^:private am-item-result [result get-form]
   `(when-let [get-form# ~get-form]
      (with-meta (db-item->clj-item get-form#)
-       {:consumed-capacity (.getConsumedCapacity ~result)})))
+       {:consumed-capacity (cc-units (.getConsumedCapacity ~result))})))
 
 (defmacro ^:private am-query|scan-result [result & [meta]]
   `(let [result# ~result]
      (with-meta (mapv db-item->clj-item (.getItems result#))
        (merge {:count (.getCount result#)
-               :consumed-capacity (.getConsumedCapacity result#)
+               :consumed-capacity (cc-units (.getConsumedCapacity result#))
                :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
               ~meta))))
 
@@ -209,31 +216,33 @@
 
   BatchGetItemResult
   (as-map [r]
-    (with-meta (utils/keyword-map as-map (.getResponses r))
-      {:unprocessed-keys  (utils/keyword-map as-map (.getUnprocessedKeys r))
-       :consumed-capacity (.getConsumedCapacity r)}))
+    {:items             (utils/keyword-map as-map (.getResponses r))
+     :unprocessed       (.getUnprocessedKeys r)
+     :consumed-capacity (cc-units (.getConsumedCapacity r))})
+
   BatchWriteItemResult
   (as-map [r]
-    {:unprocessed-items (utils/keyword-map as-map (.getUnprocessedItems r))
-     :consumed-capacity (.getConsumedCapacity r)})
+    {:unprocessed       (.getUnprocessedItems r)
+     :consumed-capacity (cc-units (.getConsumedCapacity r))})
 
   DescribeTableResult
-  (as-map [r] (let [t (.getTable r)]
-                {:name          (keyword (.getTableName t))
-                 :creation-date (.getCreationDateTime t)
-                 :item-count    (.getItemCount t)
-                 :size          (.getTableSizeBytes t)
-                 :throughput    (as-map (.getProvisionedThroughput t))
-                 :indexes       (as-map (.getLocalSecondaryIndexes t))
-                 :status        (utils/un-enum (.getTableStatus t))
-                 :prim-keys
-                 (let [schema (as-map (.getKeySchema t))
-                       defs   (as-map (.getAttributeDefinitions t))]
-                   (merge-with merge
-                     (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
-                                {} schema)
-                     (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
-                                {} defs)))}))
+  (as-map [r]
+    (let [t (.getTable r)]
+      {:name          (keyword (.getTableName t))
+       :creation-date (.getCreationDateTime t)
+       :item-count    (.getItemCount t)
+       :size          (.getTableSizeBytes t)
+       :throughput    (as-map (.getProvisionedThroughput t))
+       :indexes       (as-map (.getLocalSecondaryIndexes t))
+       :status        (utils/un-enum (.getTableStatus t))
+       :prim-keys
+       (let [schema (as-map (.getKeySchema t))
+             defs   (as-map (.getAttributeDefinitions t))]
+         (merge-with merge
+           (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
+                      {} schema)
+           (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
+                      {} defs)))}))
 
   LocalSecondaryIndexDescription
   (as-map [d] {:name       (keyword (.getIndexName d))
@@ -515,21 +524,32 @@
                                                       :my-range ["0" "1"]}]
                                           :attrs []}}))
 
-;; TODO Add loops+merging for :unprocessed-keys (meta) and :unprocessed-items
+(defn- merge-unprocessed
+  [creds more-f last-result]
+  (loop [{:keys [items unprocessed consumed-capacity]} last-result]
+    (when (seq unprocessed) (println "REPROCESSING!: " unprocessed))
+    (if-not (seq unprocessed)
+      (if items
+        (with-meta items {:consumed-capacity consumed-capacity})
+        last-result)
 
-;; BatchGetItem will return a partial result if the response size limit is
-;; exceeded, the table's provisioned throughput is exceeded, or an internal
-;; processing failure occurs. If a partial result is returned, the operation
-;; returns a value for UnprocessedKeys . You can use this value to retry the
-;; operation starting with the next item to get.
+      (let [{items* :items unprocessed* :unprocessed
+             consumed-capacity* :consumed-capacity}
+            (more-f creds unprocessed)]
 
-;; * The UnprocessedKeys value is in the same form as RequestItems, so the value
-;; can be provided directly to a subsequent BatchGetItem operation. For more
-;; information, see RequestItems in the Request Parameters section.
+        (recur (merge {:unprocessed       unprocessed*
+                       :consumed-capacity (when consumed-capacity
+                                            (+ consumed-capacity
+                                               consumed-capacity*))}
+                      (when (or items items*)
+                        {:items (into (or items []) items*)})))))))
 
-;; Typically, you would call BatchWriteItem in a loop. Each iteration would
-;; check for unprocessed items and submit a new BatchWriteItem request with
-;; those unprocessed items until all items have been processed.
+(defn- batch-get-item* [creds raw-request]
+  (merge-unprocessed creds batch-get-item*
+   (as-map
+    (.batchGetItem (db-client creds)
+      (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
+        (.setRequestItems raw-request))))))
 
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
@@ -543,15 +563,26 @@
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})"
   [creds requests]
-  (as-map
-   (.batchGetItem (db-client creds)
-     (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
-       (.setRequestItems (batch-request-items requests))))))
+  (batch-get-item* creds (batch-request-items requests)))
+
+(comment
+  (def bigval (.getBytes (apply str (range 14000))))
+  (defn- ids [from to] (for [n (range from to)] {:id n :name bigval}))
+  (batch-write-item creds {:faraday.tests.main {:put (ids 0 5)}})
+  (batch-get-item   creds {:faraday.tests.main {:prim-kvs {:id (range 3)}}}))
 
 (defn- write-request [action item]
   (case action
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
+
+(defn- batch-write-item*
+  [creds raw-request]
+  (merge-unprocessed creds batch-write-item*
+   (as-map
+    (.batchWriteItem (db-client creds)
+      (doto (BatchWriteItemRequest.)
+        (.setRequestItems raw-request))))))
 
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
@@ -563,18 +594,15 @@
                        {:user-id 2 :username \"jane\"}]
               :delete [{:user-id [3 4 5]}]}})"
   [creds requests]
-  (as-map
-    (.batchWriteItem (db-client creds)
-      (doto (BatchWriteItemRequest.)
-        (.setRequestItems
-         (utils/name-map
-          ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
-          (fn [table-request]
-            (reduce into []
-             (for [action (keys table-request)
-                   :let [items (attr-multi-vs (table-request action))]]
-               (mapv (partial write-request action) items))))
-          requests))))))
+  (batch-write-item* creds
+    (utils/name-map
+     ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+     (fn [table-request]
+       (reduce into []
+         (for [action (keys table-request)
+               :let [items (attr-multi-vs (table-request action))]]
+           (mapv (partial write-request action) items))))
+     requests)))
 
 ;;;; API - queries & scans
 
