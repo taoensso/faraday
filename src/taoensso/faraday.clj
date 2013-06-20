@@ -635,7 +635,6 @@
   [creds table prim-key-conds
    & [{:keys [last-prim-kvs return index order limit consistent? return-cc?]
        :or   {order :asc}}]]
-  (println (query|scan-conditions prim-key-conds))
   (as-map
    (.query (db-client creds)
      (doto-maybe (QueryRequest.) g
