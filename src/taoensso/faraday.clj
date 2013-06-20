@@ -527,8 +527,6 @@
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})"
   [creds requests]
-  (doto (BatchGetItemRequest.)
-        (.setRequestItems (batch-request-items requests)))
   (as-map
    (.batchGetItem (db-client creds)
      (doto (BatchGetItemRequest.) ; {table-str KeysAndAttributes}
