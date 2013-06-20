@@ -515,6 +515,22 @@
                                                       :my-range ["0" "1"]}]
                                           :attrs []}}))
 
+;; TODO Add loops+merging for :unprocessed-keys (meta) and :unprocessed-items
+
+;; BatchGetItem will return a partial result if the response size limit is
+;; exceeded, the table's provisioned throughput is exceeded, or an internal
+;; processing failure occurs. If a partial result is returned, the operation
+;; returns a value for UnprocessedKeys . You can use this value to retry the
+;; operation starting with the next item to get.
+
+;; * The UnprocessedKeys value is in the same form as RequestItems, so the value
+;; can be provided directly to a subsequent BatchGetItem operation. For more
+;; information, see RequestItems in the Request Parameters section.
+
+;; Typically, you would call BatchWriteItem in a loop. Each iteration would
+;; check for unprocessed items and submit a new BatchWriteItem request with
+;; those unprocessed items until all items have been processed.
+
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
   Limits apply, Ref. http://goo.gl/Bj9TC.
