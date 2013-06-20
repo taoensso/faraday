@@ -169,13 +169,13 @@
 (defmacro ^:private am-item-result [result get-form]
   `(when-let [get-form# ~get-form]
      (with-meta (db-item->clj-item get-form#)
-       {:consumed-capacity (cc-units (.getConsumedCapacity ~result))})))
+       {:cc-units (cc-units (.getConsumedCapacity ~result))})))
 
 (defmacro ^:private am-query|scan-result [result & [meta]]
   `(let [result# ~result]
      (merge {:items (mapv db-item->clj-item (.getItems result#))
              :count (.getCount result#)
-             :consumed-capacity (cc-units (.getConsumedCapacity result#))
+             :cc-units (cc-units (.getConsumedCapacity result#))
              :last-prim-kvs (as-map (.getLastEvaluatedKey result#))}
             ~meta)))
 
@@ -211,14 +211,14 @@
 
   BatchGetItemResult
   (as-map [r]
-    {:items             (utils/keyword-map as-map (.getResponses r))
-     :unprocessed       (.getUnprocessedKeys r)
-     :consumed-capacity (cc-units (.getConsumedCapacity r))})
+    {:items       (utils/keyword-map as-map (.getResponses r))
+     :unprocessed (.getUnprocessedKeys r)
+     :cc-units    (cc-units (.getConsumedCapacity r))})
 
   BatchWriteItemResult
   (as-map [r]
-    {:unprocessed       (.getUnprocessedItems r)
-     :consumed-capacity (cc-units (.getConsumedCapacity r))})
+    {:unprocessed (.getUnprocessedItems r)
+     :cc-units    (cc-units (.getConsumedCapacity r))})
 
   DescribeTableResult
   (as-map [r]
