@@ -267,14 +267,14 @@
 (defn block-while-table-status
   "BLOCKS to poll for a change to table's status. On status change, polling will
   terminate and the table's new description will be returned."
-  [creds table-name status & [{:keys [poll-ms timeout-ms timeout-val]
-                               :or   {poll-ms 5000}}]]
+  [creds table status & [{:keys [poll-ms timeout-ms timeout-val]
+                          :or   {poll-ms 5000}}]]
   (assert (#{:creating :updating :deleting :active} (utils/un-enum status))
           (str "Invalid table status: " status))
   (let [polling-future
         (future
           (loop []
-            (let [current-descr (describe-table creds table-name)]
+            (let [current-descr (describe-table creds table)]
               (if-not (= (:status current-descr) (utils/un-enum status))
                 current-descr
                 (do (Thread/sleep poll-ms)
@@ -400,8 +400,8 @@
        throughput (.setProvisionedThroughput (provisioned-throughput g))))))
 
 (defn delete-table "Deletes a table, go figure."
-  [creds table-name]
-  (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table-name)))))
+  [creds table]
+  (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table)))))
 
 ;;;; API - items
 
