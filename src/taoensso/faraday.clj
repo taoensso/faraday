@@ -287,13 +287,9 @@
           (do (future-cancel polling-future)
               timeout-val))))))
 
-(comment
-  (create-table mc {:name "delete-me5"
-                    :throughput  {:read 1 :write 1}
-                    :hash-keydef {:name :id :type :s}})
-  (def descr (describe-table mc "delete-me5"))
-  (block-while-table-status mc "delete-me5" :creating) ; ~53000ms
-  )
+(comment (create-table mc "delete-me5" {:name :id :type :s})
+         (block-while-table-status mc "delete-me5" :creating) ; ~53000ms
+         (def descr (describe-table mc "delete-me5")))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [key-name key-type]
@@ -353,17 +349,15 @@
 
 (defn create-table
   "Creates a table with options:
-    :name         - Table name.
-    :throughput   - {:read <units> :write <units>}.
-    :hash-keydef  - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    hash-keydef   - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
     :range-keydef - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    :throughput   - {:read <units> :write <units>}.
     :indexes      - [{:name _ :range-keydef _
                       :projection #{:all :keys-only [<attr> ...]}}].
     :block?       - Block for table to actually be active?"
-  [creds {table-name :name
-          :keys [throughput hash-keydef range-keydef indexes block?]
-          :or   {throughput {:read 1 :write 1}}}]
-
+  [creds table-name hash-keydef
+   & [{:keys [range-keydef throughput indexes block?]
+       :or   {throughput {:read 1 :write 1}}}]]
   (let [request-result
         (as-map
          (.createTable (db-client creds)
@@ -379,15 +373,12 @@
       (do (block-while-table-status creds table-name :creating)
           request-result))))
 
-(comment
-  (time (create-table mc {:name "delete-me7"
-                          :throughput  {:read 1 :write 1}
-                          :hash-keydef {:name :id :type :s}
-                          :block?      true})))
+(comment (time (create-table mc "delete-me7" {:name :id :type :s} {:block? true})))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
-  [creds {table-name :name :as opts}]
-  (when-not (describe-table creds table-name) (create-table creds opts)))
+  [creds table-name & opts]
+  (when-not (describe-table creds table-name)
+    (apply create-table creds table-name opts)))
 
 (defn update-table
   "Updates a table. Ref. http://goo.gl/Bj9TC for important throughput
@@ -752,12 +743,10 @@
                  :secret-key ""})
 
   (far/list-tables my-creds)
-
-  (far/create-table my-creds
-    {:name :my-table
-     :throughput {:read 1 :write 1}
-     :hash-key   {:name :id
-                  :type :n}})
+  (far/create-table my-creds :my-table
+    {:name :id :type :n}
+    {:throughput {:read 1 :write 1}
+     })
 
   (far/put-item my-creds
     :my-table

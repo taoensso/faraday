@@ -15,10 +15,8 @@
 
 (defn- setup {:expectations-options :before-run} []
   (println "Setting up testing environment...")
-  (far/ensure-table creds
-    {:name        ttable
-     :hash-keydef {:name :id :type :n}
-     :throughput  {:read 1 :write 1}
+  (far/ensure-table creds ttable {:name :id :type :n}
+    {:throughput  {:read 1 :write 1}
      :block?      true})
   (println "Ready to roll..."))
 

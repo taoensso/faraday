@@ -49,13 +49,12 @@ First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.am
 Well that was easy. How about we create a table? (This is actually one of the most complicated parts of working with DynamoDB since it requires understanding how DynamoDB [provisions capacity](http://aws.amazon.com/dynamodb/pricing/) and how its [primary keys](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey) work. Anyway, we can safely ignore the specifics for now).
 
 ```clojure
-(far/create-table my-creds
-  {:name :my-table
-   :throughput  {:read 1 :write 1}    ; Read & write capacity (units/sec)
-   :hash-keydef {:name :id :type :n}} ; Primary key (:n => number type)
-  )
+(far/create-table my-creds :my-table
+  {:name :id :type :n}            ; Primary key (:n => number type)
+  {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
+   })
 
-;; Wait a minute for the table to be created... maybe grab a tasty sandwich?
+;; Wait a minute for the table to be created... got a sandwich handy?
 
 (far/list-tables my-creds)
 => [:my-table] ; There's our new table!
