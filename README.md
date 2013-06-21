@@ -50,7 +50,7 @@ Well that was easy. How about we create a table? (This is actually one of the mo
 
 ```clojure
 (far/create-table my-creds :my-table
-  {:name :id :type :n}            ; Primary key (:n => number type)
+  [:id :n]  ; Primary key named "id", (:n => number type)
   {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
    })
 

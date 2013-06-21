@@ -287,7 +287,7 @@
           (do (future-cancel polling-future)
               timeout-val))))))
 
-(comment (create-table mc "delete-me5" {:name :id :type :s})
+(comment (create-table mc "delete-me5" [:id :s])
          (block-while-table-status mc "delete-me5" :creating) ; ~53000ms
          (def descr (describe-table mc "delete-me5")))
 
@@ -301,9 +301,9 @@
   "Returns a [{<hash-key> KeySchemaElement}], or
              [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
    vector for use as a table/index primary key."
-  [hash-keydef & [range-keydef]]
-  (cond-> [(key-schema-element (:name hash-keydef) :hash)]
-          range-keydef (conj (key-schema-element (:name range-keydef) :range))))
+  [[hname _ :as hash-keydef] & [[rname _ :as range-keydef]]]
+  (cond-> [(key-schema-element hname :hash)]
+          range-keydef (conj (key-schema-element rname :range))))
 
 (defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
   [{read-units :read write-units :write :as throughput}]
@@ -313,14 +313,16 @@
     (.setReadCapacityUnits  (long read-units))
     (.setWriteCapacityUnits (long write-units))))
 
-(defn- attribute-defs "[{:name _ :type _} ...] defs -> [AttributeDefinition ...]"
+(defn- keydefs "[<name> <type>] defs -> [AttributeDefinition ...]"
   [hash-keydef range-keydef indexes]
   (let [defs (->> (conj [] hash-keydef range-keydef)
                   (concat (mapv :range-keydef indexes))
                   (filterv identity))]
     (mapv
-     (fn [{key-name :name key-type :type :as def}]
-       (assert (and key-name key-type) (str "Malformed def: " def))
+     (fn [[key-name key-type :as def]]
+       (assert (and key-name key-type) (str "Malformed keydef: " def))
+       (assert (#{:s :n :ss :ns :b :bs} key-type)
+               (str "Invalid keydef type: " key-type))
        (doto (AttributeDefinition.)
          (.setAttributeName (name key-name))
          (.setAttributeType (utils/enum key-type))))
@@ -349,8 +351,8 @@
 
 (defn create-table
   "Creates a table with options:
-    hash-keydef   - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
-    :range-keydef - {:name _ :type <#{:s :n :ss :ns :b :bs}>}.
+    hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
+    :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
     :throughput   - {:read <units> :write <units>}.
     :indexes      - [{:name _ :range-keydef _
                       :projection #{:all :keys-only [<attr> ...]}}].
@@ -365,7 +367,7 @@
              (.setTableName (name table-name))
              (.setKeySchema (key-schema hash-keydef range-keydef))
              (.setProvisionedThroughput (provisioned-throughput throughput))
-             (.setAttributeDefinitions  (attribute-defs hash-keydef range-keydef indexes))
+             (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
              (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
 
     (if-not block?
@@ -373,7 +375,7 @@
       (do (block-while-table-status creds table-name :creating)
           request-result))))
 
-(comment (time (create-table mc "delete-me7" {:name :id :type :s} {:block? true})))
+(comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [creds table-name & opts]
@@ -743,8 +745,7 @@
                  :secret-key ""})
 
   (far/list-tables my-creds)
-  (far/create-table my-creds :my-table
-    {:name :id :type :n}
+  (far/create-table my-creds :my-table [:id :n]
     {:throughput {:read 1 :write 1}
      })
 
