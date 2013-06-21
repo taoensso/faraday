@@ -549,7 +549,10 @@
                :attrs    [:timestamp :subject]
                :consistent? true}
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
-                          {:catagory \"recent\"    :id [7 8 9]}]}})"
+                          {:catagory \"recent\"    :id [7 8 9]}]}})
+
+  :max-reqs allows a number of requests to automatically be stitched together
+  (to exceed throughput limits, for example)."
   [creds requests & [{:keys [return-cc? max-reqs] :as opts
                       :or   {max-reqs 5}}]]
   (letfn [(run1 [raw-req]
@@ -580,7 +583,10 @@
    (batch-write-item creds
      {:users {:put    [{:user-id 1 :username \"sally\"}
                        {:user-id 2 :username \"jane\"}]
-              :delete [{:user-id [3 4 5]}]}})"
+              :delete [{:user-id [3 4 5]}]}})
+
+  :max-reqs allows a number of requests to automatically be stitched together
+  (to exceed throughput limits, for example)."
   [creds requests & [{:keys [return-cc? max-reqs] :as opts
                       :or   {max-reqs 5}}]]
   (letfn [(run1 [raw-req]
@@ -707,7 +713,7 @@
 
 ;;;; Misc. helpers
 
-;; TODO Automatic throughput adjustment tools
+;; TODO Automatic throughput (and > 2x) adjustment tools
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
