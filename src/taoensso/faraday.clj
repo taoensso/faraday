@@ -205,10 +205,6 @@
   ScanResult          (as-map [r] (am-query|scan-result r
                                     {:scanned-count (.getScannedCount r)}))
 
-  CreateTableResult   (as-map [r] r) ; TODO
-  UpdateTableResult   (as-map [r] r) ; TODO
-  DeleteTableResult   (as-map [r] r) ; TODO
-
   BatchGetItemResult
   (as-map [r]
     {:items       (utils/keyword-map as-map (.getResponses r))
@@ -220,24 +216,28 @@
     {:unprocessed (.getUnprocessedItems r)
      :cc-units    (cc-units (.getConsumedCapacity r))})
 
-  DescribeTableResult
-  (as-map [r]
-    (let [t (.getTable r)]
-      {:name          (keyword (.getTableName t))
-       :creation-date (.getCreationDateTime t)
-       :item-count    (.getItemCount t)
-       :size          (.getTableSizeBytes t)
-       :throughput    (as-map (.getProvisionedThroughput t))
-       :indexes       (as-map (.getLocalSecondaryIndexes t))
-       :status        (utils/un-enum (.getTableStatus t))
-       :prim-keys
-       (let [schema (as-map (.getKeySchema t))
-             defs   (as-map (.getAttributeDefinitions t))]
-         (merge-with merge
-           (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
-                      {} schema)
-           (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
-                      {} defs)))}))
+  TableDescription
+  (as-map [d]
+    {:name          (keyword (.getTableName d))
+     :creation-date (.getCreationDateTime d)
+     :item-count    (.getItemCount d)
+     :size          (.getTableSizeBytes d)
+     :throughput    (as-map (.getProvisionedThroughput d))
+     :indexes       (as-map (.getLocalSecondaryIndexes d))
+     :status        (utils/un-enum (.getTableStatus d))
+     :prim-keys
+     (let [schema (as-map (.getKeySchema d))
+           defs   (as-map (.getAttributeDefinitions d))]
+       (merge-with merge
+         (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
+                    {} schema)
+         (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
+                    {} defs)))})
+
+  DescribeTableResult (as-map [r] (as-map (.getTable r)))
+  CreateTableResult   (as-map [r] (as-map (.getTableDescription r)))
+  UpdateTableResult   (as-map [r] (as-map (.getTableDescription r)))
+  DeleteTableResult   (as-map [r] (as-map (.getTableDescription r)))
 
   LocalSecondaryIndexDescription
   (as-map [d] {:name       (keyword (.getIndexName d))
@@ -360,7 +360,7 @@
   [creds table-name hash-keydef
    & [{:keys [range-keydef throughput indexes block?]
        :or   {throughput {:read 1 :write 1}}}]]
-  (let [request-result
+  (let [result
         (as-map
          (.createTable (db-client creds)
            (doto (CreateTableRequest.)
@@ -371,9 +371,9 @@
              (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
 
     (if-not block?
-      request-result
+      result
       (do (block-while-table-status creds table-name :creating)
-          request-result))))
+          result))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
@@ -382,15 +382,64 @@
   (when-not (describe-table creds table-name)
     (apply create-table creds table-name opts)))
 
+(defn- throughput-steps
+  "Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
+  x - start, x' - current, x* - goal."
+  [[r w] [r* w*]]
+  (let [step (fn [x* x'] (if (< x* x') x* (min x* (* 2 x'))))]
+    (loop [steps [] [r' w'] [r w]]
+      (if (and (>= r' r*) (>= w' w*))
+        steps
+        (let [[r' w' :as this-step] [(step r* r') (step w* w')]]
+          (recur (conj steps this-step) this-step))))))
+
+(comment (throughput-steps [1 1] [1 1])
+         (throughput-steps [1 1] [12 12])
+         (throughput-steps [3 3] [27 27])
+         (throughput-steps [17 8] [3 22])
+         (throughput-steps [1 1] [300 300]))
+
 (defn update-table
-  "Updates a table. Ref. http://goo.gl/Bj9TC for important throughput
-  upgrade/downgrade limits."
-  [creds {table-name :name :keys [throughput]}]
-  (as-map
-   (.updateTable (db-client creds)
-     (doto-maybe (UpdateTableRequest.) g
-       table-name (.setTableName (name g))
-       throughput (.setProvisionedThroughput (provisioned-throughput g))))))
+  "Updates a table. Allows automatic multi-step adjustments to conform to
+  update limits, Ref. http://goo.gl/Bj9TC.
+
+  Returns a promise to which the final resulting table description will be
+  delivered. Deref this promise to block until update (all steps) complete."
+  [creds table throughput & [{:keys [max-reqs]
+                              :or   {max-reqs 5}}]]
+  (let [{read* :read write* :write} throughput
+        {:keys [status throughput]} (describe-table creds table)
+        {:keys [read write num-decreases-today]} throughput
+
+        decreasing? (or (< read* read) (< write* write))
+        steps  (throughput-steps [read write] [read* write*])
+        nsteps (count steps)]
+    (when-not (empty? steps)
+      (cond (not= status :active)
+            (throw (Exception. (str "Invalid table status: " status)))
+            (and decreasing? (>= num-decreases-today 4)) ; API limit
+            (throw (Exception. (str "Max 4 decreases per 24hr period")))
+            (> nsteps max-reqs)
+            (throw (Exception. (str "`max-reqs` too low, needs reqs: " nsteps)))
+            :else
+            (letfn [(run1 [[r' w']]
+                      (as-map
+                       (.updateTable (db-client creds)
+                         (doto (UpdateTableRequest.)
+                           (.setTableName (name table))
+                           (.setProvisionedThroughput (provisioned-throughput
+                                                       {:read r' :write w'})))))
+                      ;; Returns _new_ descr when ready:
+                      (block-while-table-status creds table :updating))]
+
+              (let [p (promise)]
+                (future (deliver p (peek (mapv run1 steps))))
+                p))))))
+
+(comment
+  (def dt (describe-table creds :faraday.tests.main))
+  (let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
+    @p))
 
 (defn delete-table "Deletes a table, go figure."
   [creds table]
@@ -706,7 +755,7 @@
 
 ;;;; Misc. helpers
 
-;; TODO Automatic throughput (and > 2x) adjustment tools
+;; TODO Automatic throughput adjustment tools
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
