@@ -1,7 +1,7 @@
-Current [semantic](http://semver.org/) version:
+**[API docs](http://ptaoussanis.github.io/faraday/)** | [contact & contributing](#contact--contributing) | [other Clojure libs](https://www.taoensso.com/clojure-libraries) | [Twitter](https://twitter.com/#!/ptaoussanis) | current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.9.0"] ; Alpha - subject to change
+[com.taoensso/faraday "0.9.0"] ; Middle-stage alpha, API still subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -10,14 +10,12 @@ Current [semantic](http://semver.org/) version:
 
 Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](http://goo.gl/hCVxY) recently and are actually pretty decent as of May 2013.
 
-Faraday was adapted from James Reaves' own [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
+Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
 
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
   * **Great performance** (zero overhead to the official Java SDK).
   * Uses [Nippy](https://github.com/ptaoussanis/nippy) to **support Clojure's rich data types** and **high-strength encryption**.
-
-It's still early days. There's probably rough edges, but most of them should be relatively superficial and will be ironed out as the lib sees Real-World-Use™. The goal is to head toward something very much production ready ASAP. **Pull requests, bug reports, and/or suggestions are very, very welcome**!
 
 ## Getting started
 
@@ -102,18 +100,13 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 [Detailed benchmark information](https://docs.google.com/spreadsheet/ccc?key=0AuSXb68FH4uhdE5kTTlocGZKSXppWG9sRzA5Y2pMVkE) is available on Google Docs.
 
-## Project links
+## This project supports the CDS and ClojureWerkz goals
 
-  * [API documentation](http://ptaoussanis.github.io/faraday/).
-  * My other [Clojure libraries](https://www.taoensso.com/clojure-libraries) (Redis & DynamoDB clients, logging+profiling, i18n+L10n, serialization, A/B testing).
+  * [CDS](http://clojure-doc.org/), the **Clojure Documentation Site**, is a **contributer-friendly** community project aimed at producing top-notch, **beginner-friendly** Clojure tutorials and documentation. Awesome resource.
 
-##### This project supports the **CDS and ClojureWerkz project goals**:
+  * [ClojureWerkz](http://clojurewerkz.org/) is a growing collection of open-source, **batteries-included Clojure libraries** that emphasise modern targets, great documentation, and thorough testing. They've got a ton of great stuff, check 'em out!
 
-  * [CDS](http://clojure-doc.org/), the **Clojure Documentation Site**, is a contributer-friendly community project aimed at producing top-notch Clojure tutorials and documentation.
-
-  * [ClojureWerkz](http://clojurewerkz.org/) is a growing collection of open-source, batteries-included **Clojure libraries** that emphasise modern targets, great documentation, and thorough testing.
-
-## Contact & contribution
+## Contact & contributing
 
 Please use the [project's GitHub issues page](https://github.com/ptaoussanis/faraday/issues) for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
 
