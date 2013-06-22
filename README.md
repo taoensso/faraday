@@ -1,7 +1,7 @@
 Current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "0.8.0"] ; Alpha - subject to change
+[com.taoensso/faraday "0.9.0"] ; Alpha - subject to change
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -28,7 +28,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Add the necessary dependency to your [Leiningen](http://leiningen.org/) `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "0.8.0"] ; project.clj
+[com.taoensso/faraday "0.9.0"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
@@ -49,13 +49,12 @@ First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.am
 Well that was easy. How about we create a table? (This is actually one of the most complicated parts of working with DynamoDB since it requires understanding how DynamoDB [provisions capacity](http://aws.amazon.com/dynamodb/pricing/) and how its [primary keys](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey) work. Anyway, we can safely ignore the specifics for now).
 
 ```clojure
-(far/create-table my-creds
-  {:name :my-table
-   :throughput  {:read 1 :write 1}    ; Read & write capacity (units/sec)
-   :hash-keydef {:name :id :type :n}} ; Primary key (:n => number type)
-  )
+(far/create-table my-creds :my-table
+  [:id :n]  ; Primary key named "id", (:n => number type)
+  {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
+   })
 
-;; Wait a minute for the table to be created... maybe grab a tasty sandwich?
+;; Wait a minute for the table to be created... got a sandwich handy?
 
 (far/list-tables my-creds)
 => [:my-table] ; There's our new table!
