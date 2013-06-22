@@ -388,7 +388,7 @@
   [[r w] [r* w*]]
   (let [step (fn [x* x'] (if (< x* x') x* (min x* (* 2 x'))))]
     (loop [steps [] [r' w'] [r w]]
-      (if (and (>= r' r*) (>= w' w*))
+      (if (= [r' w'] [r* w*])
         steps
         (let [[r' w' :as this-step] [(step r* r') (step w* w')]]
           (recur (conj steps this-step) this-step))))))
@@ -438,7 +438,7 @@
 
 (comment
   (def dt (describe-table creds :faraday.tests.main))
-  (let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
+  (when-let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
     @p))
 
 (defn delete-table "Deletes a table, go figure."

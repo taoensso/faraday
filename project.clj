@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "0.9.0"
+(defproject com.taoensso/faraday "0.9.1"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
   :license {:name "Eclipse Public License"
