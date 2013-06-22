@@ -396,9 +396,10 @@
 
   Returns a promise to which the final resulting table description will be
   delivered. Deref this promise to block until update (all steps) complete."
-  [creds table throughput & [{:keys [max-reqs]
-                              :or   {max-reqs 5}}]]
-  (let [{read* :read write* :write} throughput
+  [creds table throughput & [{:keys [span-reqs]
+                              :or   {span-reqs {:max 5}}}]]
+  (let [{max-reqs :max} span-reqs
+        {read* :read write* :write} throughput
         {:keys [status throughput]} (describe-table creds table)
         {:keys [read write num-decreases-today]} throughput
 
@@ -559,18 +560,17 @@
 (defn- merge-more
   "Enables auto paging for batch batch-get/write and query/scan requests.
   Particularly useful for throughput limitations."
-  ;; TODO Add rate-limiting opt merge-more rate-limiting http://goo.gl/i9YxM
-  ;; Perhaps change :max-reqs opt to -> :multi-reqs {:max _ :throttle-ms _}?
-  [more-f max-idx last-result]
+  [more-f {max-reqs :max :keys [throttle-ms]} last-result]
   (loop [{:keys [unprocessed last-prim-kvs] :as last-result} last-result idx 1]
     (let [more (or unprocessed last-prim-kvs)]
-      (if (or (empty? more) (>= idx max-idx))
+      (if (or (empty? more) (>= idx max-reqs))
         (if-let [items (:items last-result)]
           (with-meta items (dissoc last-result :items))
           last-result)
         (let [merge-results (fn [l r] (cond (number? l) (+    l r)
                                            (vector? l) (into l r)
                                            :else               r))]
+          (when throttle-ms (Thread/sleep throttle-ms))
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
 
@@ -586,17 +586,17 @@
      :friends {:prim-kvs [{:catagory \"favorites\" :id [1 2 3]}
                           {:catagory \"recent\"    :id [7 8 9]}]}})
 
-  :max-reqs allows a number of requests to automatically be stitched together
-  (to exceed throughput limits, for example)."
-  [creds requests & [{:keys [return-cc? max-reqs] :as opts
-                      :or   {max-reqs 5}}]]
+  :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
+  automatically be stitched together (to exceed throughput limits, for example)."
+  [creds requests & [{:keys [return-cc? span-reqs] :as opts
+                      :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [raw-req]
             (as-map
              (.batchGetItem (db-client creds)
                (doto-maybe (BatchGetItemRequest.) g ; {table-str KeysAndAttributes}
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
-    (merge-more run1 max-reqs (run1 (batch-request-items requests)))))
+    (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
 
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
@@ -620,17 +620,17 @@
                        {:user-id 2 :username \"jane\"}]
               :delete [{:user-id [3 4 5]}]}})
 
-  :max-reqs allows a number of requests to automatically be stitched together
-  (to exceed throughput limits, for example)."
-  [creds requests & [{:keys [return-cc? max-reqs] :as opts
-                      :or   {max-reqs 5}}]]
+  :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
+  automatically be stitched together (to exceed throughput limits, for example)."
+  [creds requests & [{:keys [return-cc? span-reqs] :as opts
+                      :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [raw-req]
             (as-map
              (.batchWriteItem (db-client creds)
                (doto-maybe (BatchWriteItemRequest.) g
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
-    (merge-more run1 max-reqs
+    (merge-more run1 span-reqs
       (run1
        (utils/name-map
         ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
@@ -663,7 +663,8 @@
   "Retries items from a table (indexed) with options:
     prim-key-conds - {<key-attr> [<comparison-operator> <values>] ...}.
     :last-prim-kvs - Primary key-val from which to eval, useful for paging.
-    :max-reqs      - Max number of requests to automatically stitch together.
+    :span-reqs     - {:max _ :throttle-ms _} controls automatic multi-request
+                     stitching.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
                            [<attr> ...]}.
     :index         - Name of a secondary index to query.
@@ -678,10 +679,10 @@
 
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [creds table prim-key-conds
-   & [{:keys [last-prim-kvs max-reqs return index order limit consistent?
+   & [{:keys [last-prim-kvs span-reqs return index order limit consistent?
               return-cc?] :as opts
-       :or   {max-reqs 5
-              order    :asc}}]]
+       :or   {span-reqs {:max 5}
+              order     :asc}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.query (db-client creds)
@@ -698,7 +699,7 @@
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))
                  (and return (not (coll?* return)))
                  (.setSelect (utils/enum return))))))]
-    (merge-more run1 max-reqs (run1 last-prim-kvs))))
+    (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
@@ -706,7 +707,8 @@
     :limit          - Max num >=1 of items to eval (≠ num of matching items).
                       Useful to prevent harmful sudden bursts of read activity.
     :last-prim-kvs  - Primary key-val from which to eval, useful for paging.
-    :max-reqs       - Max number of requests to automatically stitch together.
+    :span-reqs      - {:max _ :throttle-ms _} controls automatic multi-request
+                      stitching.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
                             [<attr> ...]}.
     :total-segments - Total number of parallel scan segments.
@@ -720,9 +722,9 @@
 
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [creds table
-   & [{:keys [attr-conds last-prim-kvs max-reqs return limit total-segments
+   & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
               segment return-cc?] :as opts
-       :or   {max-reqs 5}}]]
+       :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.scan (db-client creds)
@@ -738,7 +740,7 @@
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))
                  (and return (not (coll?* return)))
                  (.setSelect (utils/enum return))))))]
-    (merge-more run1 max-reqs (run1 last-prim-kvs))))
+    (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
