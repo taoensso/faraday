@@ -264,31 +264,26 @@
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
        (catch ResourceNotFoundException _ nil)))
 
-(defn block-while-table-status
-  "BLOCKS to poll for a change to table's status. On status change, polling will
-  terminate and the table's new description will be returned."
-  [creds table status & [{:keys [poll-ms timeout-ms timeout-val]
+(defn table-status-watch
+  "Creates a future to poll for a change to table's status, and returns a
+  promise to which the table's new description will be delivered. Deref this
+  promise to block until table status changes."
+  [creds table status & [{:keys [poll-ms]
                           :or   {poll-ms 5000}}]]
   (assert (#{:creating :updating :deleting :active} (utils/un-enum status))
           (str "Invalid table status: " status))
-  (let [polling-future
-        (future
-          (loop []
-            (let [current-descr (describe-table creds table)]
-              (if-not (= (:status current-descr) (utils/un-enum status))
-                current-descr
-                (do (Thread/sleep poll-ms)
-                    (recur))))))]
-    (if-not timeout-ms
-      (deref polling-future)
-      (let [deref-result (deref polling-future timeout-ms ::timeout)]
-        (if-not (= deref-result ::timeout)
-          deref-result
-          (do (future-cancel polling-future)
-              timeout-val))))))
+  (let [p (promise)]
+    (future
+      (loop []
+        (let [current-descr (describe-table creds table)]
+          (if-not (= (:status current-descr) (utils/un-enum status))
+            (deliver p current-descr)
+            (do (Thread/sleep poll-ms)
+                (recur))))))
+    p))
 
 (comment (create-table mc "delete-me5" [:id :s])
-         (block-while-table-status mc "delete-me5" :creating) ; ~53000ms
+         @(table-status-watch mc "delete-me5" :creating) ; ~53000ms
          (def descr (describe-table mc "delete-me5")))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
@@ -360,20 +355,16 @@
   [creds table-name hash-keydef
    & [{:keys [range-keydef throughput indexes block?]
        :or   {throughput {:read 1 :write 1}}}]]
-  (let [result
-        (as-map
-         (.createTable (db-client creds)
-           (doto (CreateTableRequest.)
-             (.setTableName (name table-name))
-             (.setKeySchema (key-schema hash-keydef range-keydef))
-             (.setProvisionedThroughput (provisioned-throughput throughput))
-             (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-             (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
-
-    (if-not block?
-      result
-      (do (block-while-table-status creds table-name :creating)
-          result))))
+  (if-not block?
+    (as-map
+     (.createTable (db-client creds)
+       (doto (CreateTableRequest.)
+         (.setTableName (name table-name))
+         (.setKeySchema (key-schema hash-keydef range-keydef))
+         (.setProvisionedThroughput (provisioned-throughput throughput))
+         (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
+         (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))
+    @(table-status-watch creds table-name :creating)))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
@@ -430,7 +421,7 @@
                            (.setProvisionedThroughput (provisioned-throughput
                                                        {:read r' :write w'})))))
                       ;; Returns _new_ descr when ready:
-                      (block-while-table-status creds table :updating))]
+                      @(table-status-watch creds table :updating))]
 
               (let [p (promise)]
                 (future (deliver p (peek (mapv run1 steps))))
