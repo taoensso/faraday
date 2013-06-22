@@ -568,6 +568,8 @@
 (defn- merge-more
   "Enables auto paging for batch batch-get/write and query/scan requests.
   Particularly useful for throughput limitations."
+  ;; TODO Add rate-limiting opt merge-more rate-limiting http://goo.gl/i9YxM
+  ;; Perhaps change :max-reqs opt to -> :multi-reqs {:max _ :throttle-ms _}?
   [more-f max-idx last-result]
   (loop [{:keys [unprocessed last-prim-kvs] :as last-result} last-result idx 1]
     (let [more (or unprocessed last-prim-kvs)]
@@ -676,11 +678,14 @@
     :index         - Name of a secondary index to query.
     :order         - Index scaning order e/o #{:asc :desc}.
     :limit         - Max num >=1 of items to eval (≠ num of matching items).
+                     Useful to prevent harmful sudden bursts of read activity.
     :consistent?   - Use strongly (rather than eventually) consistent reads?
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}.
 
-  For unindexed item retrievel see `scan`."
+  For unindexed item retrievel see `scan`.
+
+  Ref. http://goo.gl/XfGKW for query+scan best practices."
   [creds table prim-key-conds
    & [{:keys [last-prim-kvs max-reqs return index order limit consistent?
               return-cc?] :as opts
@@ -708,6 +713,7 @@
   "Retrieves items from a table (unindexed) with options:
     :attr-conds     - {<attr> [<comparison-operator> <values>] ...}.
     :limit          - Max num >=1 of items to eval (≠ num of matching items).
+                      Useful to prevent harmful sudden bursts of read activity.
     :last-prim-kvs  - Primary key-val from which to eval, useful for paging.
     :max-reqs       - Max number of requests to automatically stitch together.
     :return         - e/o #{:all-attributes :all-projected-attributes :count
@@ -719,7 +725,9 @@
                              :not-null :null :contains :not-contains :in}.
 
   For automatic parallelization & segment control see `scan-parallel`.
-  For indexed item retrievel see `query`."
+  For indexed item retrievel see `query`.
+
+  Ref. http://goo.gl/XfGKW for query+scan best practices."
   [creds table
    & [{:keys [attr-conds last-prim-kvs max-reqs return limit total-segments
               segment return-cc?] :as opts
@@ -754,8 +762,6 @@
          (mapv deref))))
 
 ;;;; Misc. helpers
-
-;; TODO Automatic throughput adjustment tools
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
