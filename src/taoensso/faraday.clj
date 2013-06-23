@@ -398,11 +398,13 @@
   delivered. Deref this promise to block until update (all steps) complete."
   [creds table throughput & [{:keys [span-reqs]
                               :or   {span-reqs {:max 5}}}]]
-  (let [{max-reqs :max} span-reqs
-        {read* :read write* :write} throughput
+  (let [throughput* throughput
+        {read* :read write* :write} throughput*
         {:keys [status throughput]} (describe-table creds table)
         {:keys [read write num-decreases-today]} throughput
-
+        read*  (or read*  read)
+        write* (or write* write)
+        {max-reqs :max} span-reqs
         decreasing? (or (< read* read) (< write* write))
         steps  (throughput-steps [read write] [read* write*])
         nsteps (count steps)]
