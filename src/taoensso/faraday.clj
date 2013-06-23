@@ -406,31 +406,30 @@
         decreasing? (or (< read* read) (< write* write))
         steps  (throughput-steps [read write] [read* write*])
         nsteps (count steps)]
-    (when-not (empty? steps)
-      (cond (not= status :active)
-            (throw (Exception. (str "Invalid table status: " status)))
-            (and decreasing? (>= num-decreases-today 4)) ; API limit
-            (throw (Exception. (str "Max 4 decreases per 24hr period")))
-            (> nsteps max-reqs)
-            (throw (Exception. (str "`max-reqs` too low, needs reqs: " nsteps)))
-            :else
-            (letfn [(run1 [[r' w']]
-                      (as-map
-                       (.updateTable (db-client creds)
-                         (doto (UpdateTableRequest.)
-                           (.setTableName (name table))
-                           (.setProvisionedThroughput (provisioned-throughput
-                                                       {:read r' :write w'})))))
-                      ;; Returns _new_ descr when ready:
-                      @(table-status-watch creds table :updating))]
+    (cond (not= status :active)
+          (throw (Exception. (str "Invalid table status: " status)))
+          (and decreasing? (>= num-decreases-today 4)) ; API limit
+          (throw (Exception. (str "Max 4 decreases per 24hr period")))
+          (> nsteps max-reqs)
+          (throw (Exception. (str "`max-reqs` too low, needs reqs: " nsteps)))
+          :else
+          (letfn [(run1 [[r' w']]
+                    (as-map
+                     (.updateTable (db-client creds)
+                       (doto (UpdateTableRequest.)
+                         (.setTableName (name table))
+                         (.setProvisionedThroughput (provisioned-throughput
+                                                     {:read r' :write w'})))))
+                    ;; Returns _new_ descr when ready:
+                    @(table-status-watch creds table :updating))]
 
-              (let [p (promise)]
-                (future (deliver p (peek (mapv run1 steps))))
-                p))))))
+            (let [p (promise)]
+              (future (deliver p (peek (mapv run1 steps))))
+              p)))))
 
 (comment
   (def dt (describe-table creds :faraday.tests.main))
-  (when-let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
+  (let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
     @p))
 
 (defn delete-table "Deletes a table, go figure."
