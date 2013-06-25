@@ -11,8 +11,7 @@ else
     source $1
 
    if [ "$2" = "--auto" ]; then
-      #lein autoexpect :growl
-      lein autoexpect
+      lein test-auto
    else
       lein test-all
     fi
