@@ -114,6 +114,7 @@
 (defn- freeze?     [x] (or (nippy-tools/wrapped-for-freezing? x)
                            (utils/bytes? x)))
 (defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
+(defn- stringy?    [x] (or (string? x) (keyword? x)))
 (defn- simple-num? [x] (or (instance? Long    x)
                            (instance? Double  x)
                            (instance? Integer x)
@@ -131,10 +132,11 @@
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
   (cond
-   (string? x)
-   (if (.isEmpty ^String x)
-     (throw (Exception. "Invalid DynamoDB value: \"\""))
-     (doto (AttributeValue.) (.setS x)))
+   (stringy? x)
+   (let [^String s (utils/fq-name x)]
+     (if (.isEmpty s)
+       (throw (Exception. "Invalid DynamoDB value: \"\""))
+       (doto (AttributeValue.) (.setS s))))
 
    (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
    (freeze?     x) (doto (AttributeValue.) (.setB (nt-freeze x)))
@@ -143,8 +145,8 @@
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-      (every? string?     x) (doto (AttributeValue.) (.setSS x))
-      (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str x)))
+      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv utils/fq-name x)))
+      (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
       (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))

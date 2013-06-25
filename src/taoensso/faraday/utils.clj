@@ -22,6 +22,13 @@
 (defn keyword-map ([m] (keyword-map nil m)) ([vf m] (map-kvs keyword vf m)))
 (defn name-map    ([m] (name-map    nil m)) ([vf m] (map-kvs name    vf m)))
 
+(defn fq-name "Like `name` but includes namespace in string when present."
+  [x] (if (string? x) x
+          (let [n (name x)]
+            (if-let [ns (namespace x)] (str ns "/" n) n))))
+
+(comment (map fq-name ["foo" :foo :foo.bar/baz]))
+
 (def  enum*   (memoize (fn [x] (-> x (name) (str/upper-case) (str/replace "-" "_")))))
 (def  un-enum (memoize (fn [e] (if (keyword? e) e
                                   (-> e (str/lower-case) (str/replace "_" "-")
