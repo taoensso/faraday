@@ -787,23 +787,37 @@
   (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
                            {:a :A2 :b :B2 :c :C2}]))
 
-;;;; README
+(comment ; README
 
-(comment
-  (require '[taoensso.faraday :as far])
+(require '[taoensso.faraday :as far])
 
-  (def my-creds {:access-key ""
-                 :secret-key ""})
+(def creds {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+            :secret-key "<AWS_DYNAMODB_SECRET_KEY>"}) ; Insert your IAM creds here
 
-  (far/list-tables my-creds)
-  (far/create-table my-creds :my-table [:id :n]
-    {:throughput {:read 1 :write 1}
-     })
+(far/list-tables creds)
+;; => [] ; No tables yet :-(
 
-  (far/put-item my-creds
-    :my-table
-    {:id 0 :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
-                                                    :set      #{1 2 3}
-                                                    :rational (/ 22 7)})})
+(far/create-table creds :my-table
+  [:id :n]  ; Primary key named "id", (:n => number type)
+  {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
+   :block? true ; Block thread during table creation
+   })
 
-  (far/get-item my-creds :my-table {:id 0}))
+;; Wait a minute for the table to be created... got a sandwich handy?
+
+(far/list-tables creds)
+;; => [:my-table] ; There's our new table!
+
+(far/put-item creds
+  :my-table
+  {:id 0 ; Remember that this is our primary (indexed) key
+   :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
+                                            :set      #{1 2 3}
+                                            :rational (/ 22 7)
+                                            ;; ... Any Clojure data goodness
+                                            })})
+
+(far/get-item creds :my-table {:id 0})
+;; => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
+
+)

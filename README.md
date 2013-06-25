@@ -37,31 +37,32 @@ First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.am
 ### Connecting
 
 ```clojure
-(def my-creds {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-               :secret-key "<AWS_DYNAMODB_SECRET_KEY>"}) ; Insert your IAM creds here
+(def creds {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+            :secret-key "<AWS_DYNAMODB_SECRET_KEY>"}) ; Insert your IAM creds here
 
-(far/list-tables my-creds)
+(far/list-tables creds)
 => [] ; No tables yet :-(
 ```
 
 Well that was easy. How about we create a table? (This is actually one of the most complicated parts of working with DynamoDB since it requires understanding how DynamoDB [provisions capacity](http://aws.amazon.com/dynamodb/pricing/) and how its [primary keys](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey) work. Anyway, we can safely ignore the specifics for now).
 
 ```clojure
-(far/create-table my-creds :my-table
+(far/create-table creds :my-table
   [:id :n]  ; Primary key named "id", (:n => number type)
   {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
+   :block? true ; Block thread during table creation
    })
 
 ;; Wait a minute for the table to be created... got a sandwich handy?
 
-(far/list-tables my-creds)
+(far/list-tables creds)
 => [:my-table] ; There's our new table!
 ```
 
 Let's write something to `:my-table` and fetch it back:
 
 ```clojure
-(far/put-item my-creds
+(far/put-item creds
     :my-table
     {:id 0 ; Remember that this is our primary (indexed) key
      :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
@@ -70,7 +71,7 @@ Let's write something to `:my-table` and fetch it back:
                                               ;; ... Any Clojure data goodness
                                               })})
 
-(far/get-item my-creds :my-table {:id 0})
+(far/get-item creds :my-table {:id 0})
 => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
 ```
 
