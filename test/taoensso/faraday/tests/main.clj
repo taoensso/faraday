@@ -13,12 +13,14 @@
 
 (def ttable :faraday.tests.main)
 
-(defn- setup {:expectations-options :before-run} []
+(defn- before-run {:expectations-options :before-run} []
   (println "Setting up testing environment...")
   (far/ensure-table creds ttable {:name :id :type :n}
     {:throughput  {:read 1 :write 1}
      :block?      true})
   (println "Ready to roll..."))
+
+(defn- after-run {:expectations-options :after-run} [])
 
 (comment (far/delete-table creds ttable))
 

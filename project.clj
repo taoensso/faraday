@@ -6,7 +6,7 @@
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.2"]
                  [com.amazonaws/aws-java-sdk "1.4.7"]
-                 [expectations               "1.4.43"]
+                 [expectations               "1.4.48"]
                  [com.taoensso/nippy         "2.0.0-RC1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-master-SNAPSHOT"]]}
