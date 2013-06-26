@@ -357,23 +357,23 @@
   [creds table-name hash-keydef
    & [{:keys [range-keydef throughput indexes block?]
        :or   {throughput {:read 1 :write 1}}}]]
-  (if-not block?
-    (as-map
-     (.createTable (db-client creds)
-       (doto (CreateTableRequest.)
-         (.setTableName (name table-name))
-         (.setKeySchema (key-schema hash-keydef range-keydef))
-         (.setProvisionedThroughput (provisioned-throughput throughput))
-         (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-         (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))
-    @(table-status-watch creds table-name :creating)))
+  (let [result
+        (as-map
+         (.createTable (db-client creds)
+           (doto (CreateTableRequest.)
+             (.setTableName (name table-name))
+             (.setKeySchema (key-schema hash-keydef range-keydef))
+             (.setProvisionedThroughput (provisioned-throughput throughput))
+             (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
+             (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+    (if-not block? result @(table-status-watch creds table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
-  [creds table-name & opts]
+  [creds table-name hash-keydef & [opts]]
   (when-not (describe-table creds table-name)
-    (apply create-table creds table-name opts)))
+    (create-table creds table-name hash-keydef opts)))
 
 (defn- throughput-steps
   "Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
