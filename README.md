@@ -1,4 +1,4 @@
-**[API docs](http://ptaoussanis.github.io/faraday/)** | [contact & contributing](#contact--contributing) | [other Clojure libs](https://www.taoensso.com/clojure-libraries) | [Twitter](https://twitter.com/#!/ptaoussanis) | current [semantic](http://semver.org/) version:
+**[API docs](http://ptaoussanis.github.io/faraday/)** | **[CHANGELOG](https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md)** | [contact & contributing](#contact--contributing) | [other Clojure libs](https://www.taoensso.com/clojure-libraries) | [Twitter](https://twitter.com/#!/ptaoussanis) | current [semantic](http://semver.org/) version:
 
 ```clojure
 [com.taoensso/faraday "0.10.1"] ; Middle-stage alpha, API still subject to change

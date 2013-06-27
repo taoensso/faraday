@@ -1,0 +1,23 @@
+## v0.9.3 → v1.10.1
+  * Fix `create-table`, `ensure-table` regression.
+  * Auto stringify single-arg keywords to match Carmine v2 API.
+    This is _not_ breaking since previous behaviour was just to throw an exception on unfrozen keyword args.
+
+
+## v0.8.0 → v0.9.3
+  * `update-table` now allows throughput specification with just :write or :read units.
+  * Added `merge-more` rate-limiting. See batch-op or query/scan docstrings for details.
+  * **DEPRECATED**: `block-while-status` -> `table-status-watch`.
+  * **BREAKING**: Simplify keydef format: `{:name _ :type _}` -> `[<name> <type>]`.
+  * **BREAKING**: Pull mandatory `create-table`, `ensure-table` args out from opts.
+  * `update-table` now automatic allows multi-step throughput increases. See docstring for details.
+
+
+## For older versions please see the [commit history][]
+
+[commit history]: https://github.com/ptaoussanis/faraday/commits/master
+[API docs]: http://ptaoussanis.github.io/faraday
+[Taoensso libs]: https://www.taoensso.com/clojure-libraries
+[Nippy GitHub]: https://github.com/ptaoussanis/nippy
+[Nippy CHANGELOG]: https://github.com/ptaoussanis/carmine/blob/master/CHANGELOG.md
+[Nippy API docs]: http://ptaoussanis.github.io/nippy
