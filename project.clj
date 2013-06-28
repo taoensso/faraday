@@ -1,11 +1,11 @@
-(defproject com.taoensso/faraday "0.10.1"
+(defproject com.taoensso/faraday "0.10.2"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.2"]
-                 [com.amazonaws/aws-java-sdk "1.4.7"]
+                 [com.amazonaws/aws-java-sdk "1.4.4.2"]
                  [expectations               "1.4.48"]
                  [com.taoensso/nippy         "2.0.0-RC1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
