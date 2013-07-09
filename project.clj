@@ -5,8 +5,8 @@
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.2"]
-                 [com.amazonaws/aws-java-sdk "1.4.4.2"]
-                 [expectations               "1.4.48"]
+                 [com.amazonaws/aws-java-sdk "1.4.4.2"] ; -> 1.4.7
+                 [expectations               "1.4.49"]
                  [com.taoensso/nippy         "2.0.0-RC1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-master-SNAPSHOT"]]}
@@ -18,8 +18,9 @@
             "start-dev"   ["with-profile" "dev,test" "repl" ":headless"]
             "start-bench" ["trampoline" "start-dev"]
             "codox"       ["with-profile" "test" "doc"]}
-  :plugins [[lein-expectations "0.0.7"]
+  :plugins [[lein-expectations "0.0.8"]
             [lein-autoexpect   "0.2.5"]
+            [lein-ancient      "0.4.2"]
             [codox             "0.6.4"]]
   :min-lein-version "2.0.0"
   :global-vars {*warn-on-reflection* true}

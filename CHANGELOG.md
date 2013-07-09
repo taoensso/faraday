@@ -1,4 +1,4 @@
-## v0.9.3 → v1.10.1
+## v0.9.3 → v1.10.2
   * Fix `create-table`, `ensure-table` regression.
   * Auto stringify single-arg keywords to match Carmine v2 API.
     This is _not_ breaking since previous behaviour was just to throw an exception on unfrozen keyword args.
