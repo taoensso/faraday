@@ -646,7 +646,7 @@
 
 ;;;; API - queries & scans
 
-(defn- ^String enum-op [operator]
+(defn- enum-op ^String [operator]
   (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
       utils/enum))
 
