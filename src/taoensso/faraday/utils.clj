@@ -58,8 +58,8 @@
 (defn nnil?  [x] (not (nil? x)))
 (defn coll?* [x] (and (coll? x) (not (map? x ))))
 
-(defmacro doto-maybe "Diabolical cross between `doto`, `cond->` and `as->`."
-  [x name & clauses]
+(defmacro doto-cond "Diabolical cross between `doto`, `cond->` and `as->`."
+  [[name x] & clauses]
   (assert (even? (count clauses)))
   (let [g (gensym)
         pstep (fn [[test-expr step]] `(when-let [~name ~test-expr]

@@ -12,7 +12,7 @@
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
             [taoensso.nippy.tools   :as nippy-tools]
-            [taoensso.faraday.utils :as utils :refer (coll?* doto-maybe)])
+            [taoensso.faraday.utils :as utils :refer (coll?* doto-cond)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -79,13 +79,13 @@
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
      (assert (and access-key secret-key) "Please provide valid IWS credentials!")
      (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-           client-config (doto-maybe (ClientConfiguration.) g
+           client-config (doto-cond [g (ClientConfiguration.)]
                            proxy-port      (.setProxyHost         g)
                            conn-timeout    (.setConnectionTimeout g)
                            max-conns       (.setMaxConnections    g)
                            max-error-retry (.setMaxErrorRetry     g)
                            socket-timeout  (.setSocketTimeout     g))]
-       (doto-maybe (AmazonDynamoDBClient. aws-creds client-config) g
+       (doto-cond [g (AmazonDynamoDBClient. aws-creds client-config)]
          endpoint (.setEndpoint g))))))
 
 (defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
@@ -450,7 +450,7 @@
   [creds table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
   (as-map
    (.getItem (db-client creds)
-    (doto-maybe (GetItemRequest.) g
+    (doto-cond [g (GetItemRequest.)]
       :always     (.setTableName       (name table))
       :always     (.setKey             (clj-item->db-item prim-kvs))
       consistent? (.setConsistentRead  g)
@@ -478,7 +478,7 @@
                         :or   {return :none}}]]
   (as-map
    (.putItem (db-client creds)
-     (doto-maybe (PutItemRequest.) g
+     (doto-cond [g (PutItemRequest.)]
        :always  (.setTableName    (name table))
        :always  (.setItem         (clj-item->db-item item))
        expected (.setExpected     (expected-values g))
@@ -504,7 +504,7 @@
                                        :or   {return :none}}]]
   (as-map
    (.updateItem (db-client creds)
-     (doto-maybe (UpdateItemRequest.) g
+     (doto-cond [g (UpdateItemRequest.)]
        :always  (.setTableName        (name table))
        :always  (.setKey              (clj-item->db-item prim-kvs))
        :always  (.setAttributeUpdates (attribute-updates update-map))
@@ -519,7 +519,7 @@
                             :or   {return :none}}]]
   (as-map
    (.deleteItem (db-client creds)
-     (doto-maybe (DeleteItemRequest.) g
+     (doto-cond [g (DeleteItemRequest.)]
        :always  (.setTableName    (name table))
        :always  (.setKey          (clj-item->db-item prim-kvs))
        expected (.setExpected     (expected-values g))
@@ -550,7 +550,7 @@
   [requests]
   (utils/name-map
    (fn [{:keys [prim-kvs attrs consistent?]}]
-     (doto-maybe (KeysAndAttributes.) g
+     (doto-cond [g (KeysAndAttributes.)]
        attrs       (.setAttributesToGet (mapv name g))
        consistent? (.setConsistentRead  g)
        :always     (.setKeys (attr-multi-vs prim-kvs))))
@@ -596,7 +596,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchGetItem (db-client creds)
-               (doto-maybe (BatchGetItemRequest.) g ; {table-str KeysAndAttributes}
+               (doto-cond [g (BatchGetItemRequest.)] ; {table-str KeysAndAttributes}
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
     (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
@@ -630,7 +630,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchWriteItem (db-client creds)
-               (doto-maybe (BatchWriteItemRequest.) g
+               (doto-cond [g (BatchWriteItemRequest.)]
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
     (merge-more run1 span-reqs
@@ -689,7 +689,7 @@
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.query (db-client creds)
-               (doto-maybe (QueryRequest.) g
+               (doto-cond [g (QueryRequest.)]
                  :always (.setTableName        (name table))
                  :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
                  :always (.setScanIndexForward (case order :asc true :desc false))
@@ -731,7 +731,7 @@
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.scan (db-client creds)
-               (doto-maybe (ScanRequest.) g
+               (doto-cond [g (ScanRequest.)]
                  :always (.setTableName (name table))
                  attr-conds      (.setScanFilter        (query|scan-conditions g))
                  last-prim-kvs   (.setExclusiveStartKey
