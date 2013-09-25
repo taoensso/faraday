@@ -695,7 +695,7 @@
                  :always (.setScanIndexForward (case order :asc true :desc false))
                  last-prim-kvs   (.setExclusiveStartKey
                                   (clj-item->db-item last-prim-kvs))
-                 limit           (.setLimit    (long g))
+                 limit           (.setLimit     (int g))
                  index           (.setIndexName      g)
                  consistent?     (.setConsistentRead g)
                  (coll?* return) (.setAttributesToGet (mapv name return))
@@ -736,9 +736,9 @@
                  attr-conds      (.setScanFilter        (query|scan-conditions g))
                  last-prim-kvs   (.setExclusiveStartKey
                                   (clj-item->db-item last-prim-kvs))
-                 limit           (.setLimit             (long g))
-                 total-segments  (.setTotalSegments     (long g))
-                 segment         (.setSegment           (long g))
+                 limit           (.setLimit             (int g))
+                 total-segments  (.setTotalSegments     (int g))
+                 segment         (.setSegment           (int g))
                  (coll?* return) (.setAttributesToGet (mapv name return))
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))
                  (and return (not (coll?* return)))
