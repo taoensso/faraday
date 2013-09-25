@@ -1,4 +1,9 @@
-## v0.9.3 → v1.10.2
+## v0.10.2 → v0.11.0
+  * Fix broken `:limit` and segment options.
+  * Bump dependencies.
+
+
+## v0.9.3 → v0.10.2
   * Fix `create-table`, `ensure-table` regression.
   * Auto stringify single-arg keywords to match Carmine v2 API.
     This is _not_ breaking since previous behaviour was just to throw an exception on unfrozen keyword args.
