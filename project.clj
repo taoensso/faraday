@@ -5,7 +5,7 @@
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.5"]
-                 [com.amazonaws/aws-java-sdk "1.4.4.2"] ; TODO 1.5.8 breaking?
+                 [com.amazonaws/aws-java-sdk "1.5.8"]
                  [com.taoensso/nippy         "2.1.0"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-master-SNAPSHOT"]]}
