@@ -6,12 +6,11 @@
   :dependencies [[org.clojure/clojure        "1.5.1"]
                  [org.clojure/tools.macro    "0.1.5"]
                  [com.amazonaws/aws-java-sdk "1.4.4.2"] ; TODO 1.5.8 breaking?
-                 [expectations               "1.4.55"]
                  [com.taoensso/nippy         "2.1.0"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-master-SNAPSHOT"]]}
              :dev   {:dependencies []}
-             :test  {:dependencies []}
+             :test  {:dependencies [[expectations "1.4.55"]]}
              :bench {:dependencies [] :jvm-opts ["-server"]}}
   :aliases {"test-all"    ["with-profile" "test,1.5:test,1.6" "expectations"]
             "test-auto"   ["with-profile" "test" "autoexpect"]
