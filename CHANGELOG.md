@@ -1,3 +1,7 @@
+## v0.11.0 → v0.12.0
+  * Bump AWS Java SDK dependency.
+
+
 ## v0.10.2 → v0.11.0
   * Fix broken `:limit` and segment options.
   * Bump dependencies.
