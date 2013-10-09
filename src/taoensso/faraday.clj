@@ -8,7 +8,6 @@
     * key         => hash OR range key => special attribute.
     * primary key => hash key WITH optional range key.
     * attribute   ≠> key (i.e. does not imply)."
-
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
             [taoensso.nippy.tools   :as nippy-tools]
@@ -571,8 +570,8 @@
           (with-meta items (dissoc last-result :items))
           last-result)
         (let [merge-results (fn [l r] (cond (number? l) (+    l r)
-                                           (vector? l) (into l r)
-                                           :else               r))]
+                                            (vector? l) (into l r)
+                                            :else               r))]
           (when throttle-ms (Thread/sleep throttle-ms))
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
