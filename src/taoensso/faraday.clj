@@ -650,20 +650,21 @@
       utils/enum))
 
 (defn- query|scan-conditions
-  "{<attr> [operator <values>] ...} -> {<attr> Condition ...}"
+  "{<attr> [operator <val-or-vals>] ...} -> {<attr> Condition ...}"
   [conditions]
   (when (seq conditions)
     (utils/name-map
-     (fn [[operator values :as condition]]
-       (assert (coll?* values) (str "Malformed condition: " condition))
-       (doto (Condition.)
-         (.setComparisonOperator (enum-op operator))
-         (.setAttributeValueList (mapv clj-val->db-val values))))
+     (fn [[operator val-or-vals & more :as condition]]
+       (assert (not (seq more)) (str "Malformed condition: " condition))
+       (let [vals (if (coll?* val-or-vals) val-or-vals [val-or-vals])]
+         (doto (Condition.)
+           (.setComparisonOperator (enum-op operator))
+           (.setAttributeValueList (mapv clj-val->db-val vals)))))
      conditions)))
 
 (defn query
   "Retries items from a table (indexed) with options:
-    prim-key-conds - {<key-attr> [<comparison-operator> <values>] ...}.
+    prim-key-conds - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
     :last-prim-kvs - Primary key-val from which to eval, useful for paging.
     :span-reqs     - {:max _ :throttle-ms _} controls automatic multi-request
                      stitching.
@@ -674,6 +675,13 @@
     :limit         - Max num >=1 of items to eval (≠ num of matching items).
                      Useful to prevent harmful sudden bursts of read activity.
     :consistent?   - Use strongly (rather than eventually) consistent reads?
+
+  (create-table creds :my-table [:name :s] {:range-keydef [:age :n] :block? true})
+  (do (put-item creds :my-table {:name \"Steve\" :age 24})
+      (put-item creds :my-table {:name \"Susan\" :age 27}))
+  (query creds :my-table {:name [:eq \"Steve\"]
+                          :age  [:between [10 30]]})
+  => [{:age 24, :name \"Steve\"}]
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}.
 
@@ -705,7 +713,7 @@
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
-    :attr-conds     - {<attr> [<comparison-operator> <values>] ...}.
+    :attr-conds     - {<attr> [<comparison-operator> <val-or-vals>] ...}.
     :limit          - Max num >=1 of items to eval (≠ num of matching items).
                       Useful to prevent harmful sudden bursts of read activity.
     :last-prim-kvs  - Primary key-val from which to eval, useful for paging.
@@ -718,6 +726,12 @@
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
                              :not-null :null :contains :not-contains :in}.
+
+  (create-table creds :my-table [:name :s] {:range-keydef [:age :n] :block? true})
+  (do (put-item creds :my-table {:name \"Steve\" :age 24})
+      (put-item creds :my-table {:name \"Susan\" :age 27}))
+  (scan creds :my-table {:attr-conds {:age [:in [24 27]]}})
+  => [{:age 24, :name \"Steve\"} {:age 27, :name \"Susan\"}]
 
   For automatic parallelization & segment control see `scan-parallel`.
   For indexed item retrievel see `query`.
