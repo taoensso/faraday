@@ -14,11 +14,11 @@
              :dev   {:dependencies []}
              :test  {:dependencies [[expectations "1.4.55"]]}
              :bench {:dependencies [] :jvm-opts ["-server"]}}
-  :aliases {"test-all"    ["with-profile" "test,1.5:test,1.6" "expectations"]
-            "test-auto"   ["with-profile" "test" "autoexpect"]
-            "start-dev"   ["with-profile" "dev,test" "repl" ":headless"]
+  :aliases {"test-all"    ["with-profile" "+test,+1.5:+test,+1.6" "expectations"]
+            "test-auto"   ["with-profile" "+test" "autoexpect"]
+            "start-dev"   ["with-profile" "+dev,+test" "repl" ":headless"]
             "start-bench" ["trampoline" "start-dev"]
-            "codox"       ["with-profile" "test" "doc"]}
+            "codox"       ["with-profile" "+test" "doc"]}
   :plugins [[lein-expectations "0.0.8"]
             [lein-autoexpect   "1.0"]
             [lein-ancient      "0.4.4"]
