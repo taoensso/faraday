@@ -69,6 +69,10 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
+;; TODO Add support for splitting data > 64KB over > 1 keys? This may be tough
+;; to do well relative to the payoff. And I'm guessing there may be an official
+;; (Java) lib to offer this capability at some point?
+
 ;;;; Connections
 
 (def ^:private db-client*
