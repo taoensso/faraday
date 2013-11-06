@@ -1,4 +1,4 @@
-## v0.12.0 → v0.13.0
+## v0.12.0 → v1.0.0-RC1
   * REVERT AWS Java SDK dependency bump, seems to be causing some issues - will investigate further later.
   * Add docstring examples for `scan`, `query` condition format.
   * Make `scan`, `query` condition format more forgiving: now accepts single vals like `[:eq "Steve]`.
