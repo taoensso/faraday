@@ -1,7 +1,8 @@
-## v0.12.0 → v1.0.0-RC1
+## v0.12.0 → v1.0.0-RC3
   * REVERT AWS Java SDK dependency bump, seems to be causing some issues - will investigate further later.
   * Add docstring examples for `scan`, `query` condition format.
   * Make `scan`, `query` condition format more forgiving: now accepts single vals like `[:eq "Steve]`.
+  * Creds can now be an empty map (or nil) to use credentials provider chain (amanas).
 
 
 ## v0.11.0 → v0.12.0
