@@ -83,7 +83,8 @@
      (assert (and access-key secret-key) "Please provide valid IWS credentials!")
      (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
            client-config (doto-cond [g (ClientConfiguration.)]
-                           proxy-port      (.setProxyHost         g)
+                           proxy-host      (.setProxyHost         g)
+                           proxy-port      (.setProxyPort         g)
                            conn-timeout    (.setConnectionTimeout g)
                            max-conns       (.setMaxConnections    g)
                            max-error-retry (.setMaxErrorRetry     g)
