@@ -80,17 +80,18 @@
   (memoize
    (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
-     (assert (and access-key secret-key) "Please provide valid IWS credentials!")
-     (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
-           client-config (doto-cond [g (ClientConfiguration.)]
-                           proxy-host      (.setProxyHost         g)
-                           proxy-port      (.setProxyPort         g)
-                           conn-timeout    (.setConnectionTimeout g)
-                           max-conns       (.setMaxConnections    g)
-                           max-error-retry (.setMaxErrorRetry     g)
-                           socket-timeout  (.setSocketTimeout     g))]
-       (doto-cond [g (AmazonDynamoDBClient. aws-creds client-config)]
-         endpoint (.setEndpoint g))))))
+     (if (empty? creds)
+       (AmazonDynamoDBClient.) ; Use credentials provider chain
+       (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+             client-config (doto-cond [g (ClientConfiguration.)]
+                             proxy-host      (.setProxyHost         g)
+                             proxy-port      (.setProxyPort         g)
+                             conn-timeout    (.setConnectionTimeout g)
+                             max-conns       (.setMaxConnections    g)
+                             max-error-retry (.setMaxErrorRetry     g)
+                             socket-timeout  (.setSocketTimeout     g))]
+         (doto-cond [g (AmazonDynamoDBClient. aws-creds client-config)]
+           endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
 
