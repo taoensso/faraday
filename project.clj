@@ -8,7 +8,7 @@
                  ;; TODO ; 1.5.x seems to cause problems with (at least)
                  ;; `create-table`: needs investigation
                  [com.amazonaws/aws-java-sdk "1.4.4.2"]
-                 [com.taoensso/nippy         "2.5.0"]]
+                 [com.taoensso/nippy         "2.5.1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-alpha2"]]}
              :dev   {:dependencies []}
