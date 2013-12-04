@@ -78,11 +78,12 @@
 (def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
   (memoize
-   (fn [{:keys [access-key secret-key endpoint proxy-host proxy-port
+   (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
      (if (empty? creds)
        (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (BasicAWSCredentials. access-key secret-key)
+       (let [aws-creds     (or credentials
+                               (BasicAWSCredentials. access-key secret-key))
              client-config (doto-cond [g (ClientConfiguration.)]
                              proxy-host      (.setProxyHost         g)
                              proxy-port      (.setProxyPort         g)
