@@ -1,3 +1,8 @@
+## v1.0.1 / 2013-12-04
+
+ * Hotfix: add support for arbitrary AWS credentials under `:credentials` key (paraseba).
+
+
 ## v0.12.0 → v1.0.0
   * REVERT AWS Java SDK dependency bump, seems to be causing some issues - will investigate further later.
   * Add docstring examples for `scan`, `query` condition format.

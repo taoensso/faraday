@@ -1,7 +1,7 @@
 **[API docs](http://ptaoussanis.github.io/faraday/)** | **[CHANGELOG](https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md)** | [contact & contributing](#contact--contributing) | [other Clojure libs](https://www.taoensso.com/clojure-libraries) | [Twitter](https://twitter.com/#!/ptaoussanis) | current [semantic](http://semver.org/) version:
 
 ```clojure
-[com.taoensso/faraday "1.0.0"] ; Stable
+[com.taoensso/faraday "1.0.1"] ; Stable
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -26,7 +26,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Add the necessary dependency to your [Leiningen](http://leiningen.org/) `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "1.0.0"] ; project.clj
+[com.taoensso/faraday "1.0.1"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
