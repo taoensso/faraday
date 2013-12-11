@@ -80,9 +80,8 @@
   (memoize
    (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
-     (if (empty? creds)
-       (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (or credentials
+     (if (empty? creds) (AmazonDynamoDBClient.) ; Use credentials provider chain
+       (let [aws-creds     (or credentials ; Use explicit, pre-constructed creds
                                (BasicAWSCredentials. access-key secret-key))
              client-config (doto-cond [g (ClientConfiguration.)]
                              proxy-host      (.setProxyHost         g)
