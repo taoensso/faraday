@@ -575,13 +575,13 @@
   [more-f {max-reqs :max :keys [throttle-ms]} last-result]
   (loop [{:keys [unprocessed last-prim-kvs] :as last-result} last-result idx 1]
     (let [more (or unprocessed last-prim-kvs)]
-      (if (or (empty? more) (>= idx max-reqs))
+      (if (or (empty? more) (nil? max-reqs) (>= idx max-reqs))
         (if-let [items (:items last-result)]
           (with-meta items (dissoc last-result :items))
           last-result)
         (let [merge-results (fn [l r] (cond (number? l) (+    l r)
-                                            (vector? l) (into l r)
-                                            :else               r))]
+                                           (vector? l) (into l r)
+                                           :else               r))]
           (when throttle-ms (Thread/sleep throttle-ms))
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
