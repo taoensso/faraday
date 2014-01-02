@@ -57,7 +57,11 @@
                   (far/get-item creds ttable {:id 1})])))
 
 (expect-let ; Serialization
- [data (dissoc nippy/stress-data :bytes)]
+ ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
+ ;; is reference-based and not structural. `expect` falls back to Java equality,
+ ;; and so will fail when presented with different Java objects that don't themselves
+ ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
+ [data (dissoc nippy/stress-data :throwable :ex-info :exception)]
  {:id 10 :nippy-data data}
  (do (far/put-item creds ttable {:id 10 :nippy-data (far/freeze data)})
      (far/get-item creds ttable {:id 10})))
