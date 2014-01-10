@@ -247,6 +247,10 @@
   UpdateTableResult   (as-map [r] (as-map (.getTableDescription r)))
   DeleteTableResult   (as-map [r] (as-map (.getTableDescription r)))
 
+  Projection
+  (as-map [p] {:projection-type    (.getProjectionType p)
+               :non-key-attributes (.getNonKeyAttributes p)})
+
   LocalSecondaryIndexDescription
   (as-map [d] {:name       (keyword (.getIndexName d))
                :size       (.getIndexSizeBytes d)
