@@ -370,12 +370,12 @@
   (let [result
         (as-map
          (.createTable (db-client creds)
-           (doto (CreateTableRequest.)
-             (.setTableName (name table-name))
-             (.setKeySchema (key-schema hash-keydef range-keydef))
-             (.setProvisionedThroughput (provisioned-throughput throughput))
-             (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-             (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+           (doto-cond [_ (CreateTableRequest.)]
+             :always (.setTableName (name table-name))
+             :always (.setKeySchema (key-schema hash-keydef range-keydef))
+             :always (.setProvisionedThroughput (provisioned-throughput throughput))
+             :always (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
+             indexes (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
     (if-not block? result @(table-status-watch creds table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
