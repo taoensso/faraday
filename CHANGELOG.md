@@ -1,5 +1,7 @@
-## v1.0.1 / 2013-12-04
+## v1.0.2 / 2014-01-24
+ * [#15] Fix issue with aws-java-sdk 1.5.x (paraseba).
 
+## v1.0.1 / 2013-12-04
  * Hotfix: add support for arbitrary AWS credentials under `:credentials` key (paraseba).
 
 
