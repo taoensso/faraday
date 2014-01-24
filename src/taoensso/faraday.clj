@@ -80,9 +80,8 @@
   (memoize
    (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
-     (if (empty? creds)
-       (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (or credentials
+     (if (empty? creds) (AmazonDynamoDBClient.) ; Use credentials provider chain
+       (let [aws-creds     (or credentials ; Use explicit, pre-constructed creds
                                (BasicAWSCredentials. access-key secret-key))
              client-config (doto-cond [g (ClientConfiguration.)]
                              proxy-host      (.setProxyHost         g)
@@ -247,6 +246,10 @@
   UpdateTableResult   (as-map [r] (as-map (.getTableDescription r)))
   DeleteTableResult   (as-map [r] (as-map (.getTableDescription r)))
 
+  Projection
+  (as-map [p] {:projection-type    (.getProjectionType p)
+               :non-key-attributes (.getNonKeyAttributes p)})
+
   LocalSecondaryIndexDescription
   (as-map [d] {:name       (keyword (.getIndexName d))
                :size       (.getIndexSizeBytes d)
@@ -366,12 +369,12 @@
   (let [result
         (as-map
          (.createTable (db-client creds)
-           (doto (CreateTableRequest.)
-             (.setTableName (name table-name))
-             (.setKeySchema (key-schema hash-keydef range-keydef))
-             (.setProvisionedThroughput (provisioned-throughput throughput))
-             (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-             (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+           (doto-cond [_ (CreateTableRequest.)]
+             :always (.setTableName (name table-name))
+             :always (.setKeySchema (key-schema hash-keydef range-keydef))
+             :always (.setProvisionedThroughput (provisioned-throughput throughput))
+             :always (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
+             indexes (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
     (if-not block? result @(table-status-watch creds table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
@@ -572,13 +575,13 @@
   [more-f {max-reqs :max :keys [throttle-ms]} last-result]
   (loop [{:keys [unprocessed last-prim-kvs] :as last-result} last-result idx 1]
     (let [more (or unprocessed last-prim-kvs)]
-      (if (or (empty? more) (>= idx max-reqs))
+      (if (or (empty? more) (nil? max-reqs) (>= idx max-reqs))
         (if-let [items (:items last-result)]
           (with-meta items (dissoc last-result :items))
           last-result)
         (let [merge-results (fn [l r] (cond (number? l) (+    l r)
-                                            (vector? l) (into l r)
-                                            :else               r))]
+                                           (vector? l) (into l r)
+                                           :else               r))]
           (when throttle-ms (Thread/sleep throttle-ms))
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
