@@ -41,6 +41,8 @@
              ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
+             GlobalSecondaryIndex
+             GlobalSecondaryIndexDescription
              Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
@@ -231,6 +233,7 @@
      :size          (.getTableSizeBytes d)
      :throughput    (as-map (.getProvisionedThroughput d))
      :indexes       (as-map (.getLocalSecondaryIndexes d))
+     :gindexes (as-map (.getGlobalSecondaryIndexes d))
      :status        (utils/un-enum (.getTableStatus d))
      :prim-keys
      (let [schema (as-map (.getKeySchema d))
@@ -256,6 +259,15 @@
                :item-count (.getItemCount d)
                :key-schema (as-map (.getKeySchema d))
                :projection (as-map (.getProjection d))})
+
+  GlobalSecondaryIndexDescription
+  (as-map [d] {:name       (keyword (.getIndexName d))
+               :size       (.getIndexSizeBytes d)
+               :throughput (as-map (.getProvisionedThroughput d))
+               :item-count (.getItemCount d)
+               :key-schema (as-map (.getKeySchema d))
+               :projection (as-map (.getProjection d))})
+
   ProvisionedThroughputDescription
   (as-map [d] {:read                (.getReadCapacityUnits d)
                :write               (.getWriteCapacityUnits d)
@@ -320,9 +332,11 @@
     (.setWriteCapacityUnits (long write-units))))
 
 (defn- keydefs "[<name> <type>] defs -> [AttributeDefinition ...]"
-  [hash-keydef range-keydef indexes]
+  [hash-keydef range-keydef indexes gindexes]
   (let [defs (->> (conj [] hash-keydef range-keydef)
                   (concat (mapv :range-keydef indexes))
+                  (concat (mapv :hash-keydef gindexes))
+                  (concat (mapv :range-keydef gindexes))
                   (filterv identity))]
     (mapv
      (fn [[key-name key-type :as def]]
@@ -337,23 +351,47 @@
 (defn- local-indexes
   "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-keydef indexes]
-  (mapv
-   (fn [{index-name :name
-        :keys [range-keydef projection]
-        :or   {projection :all}
-        :as   index}]
-     (assert (and index-name range-keydef projection)
-             (str "Malformed index: " index))
-     (doto (LocalSecondaryIndex.)
-       (.setIndexName  (name index-name))
-       (.setKeySchema  (key-schema hash-keydef range-keydef))
-       (.setProjection
-        (let [pr    (Projection.)
-              ptype (if (coll?* projection) :include projection)]
-          (.setProjectionType pr (utils/enum ptype))
-          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
-          pr))))
-   indexes))
+  (if indexes
+    (mapv
+      (fn [{index-name :name
+            :keys      [range-keydef projection]
+            :or        {projection :all}
+            :as        index}]
+        (assert (and index-name range-keydef projection)
+                (str "Malformed index: " index))
+        (doto (LocalSecondaryIndex.)
+          (.setIndexName (name index-name))
+          (.setKeySchema (key-schema hash-keydef range-keydef))
+          (.setProjection
+            (let [pr (Projection.)
+                  ptype (if (coll?* projection) :include projection)]
+              (.setProjectionType pr (utils/enum ptype))
+              (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
+              pr))))
+      indexes)))
+
+(defn- global-indexes
+  "[{:name _ :hash-keydef _ :range-keydef _ :throughput _ :projection _} ...] gindexes -> [GlobalSecondaryIndex ...]"
+  [gindexes]
+  (if gindexes
+    (mapv
+      (fn [{index-name :name
+            :keys      [hash-keydef range-keydef throughput projection]
+            :or        {projection :all}
+            :as        index}]
+        (assert (and index-name hash-keydef projection throughput)
+                (str "Malformed index: " index))
+        (doto (GlobalSecondaryIndex.)
+          (.setIndexName (name index-name))
+          (.setKeySchema (key-schema hash-keydef range-keydef))
+          (.setProvisionedThroughput (provisioned-throughput throughput))
+          (.setProjection
+            (let [pr (Projection.)
+                  ptype (if (coll?* projection) :include projection)]
+              (.setProjectionType pr (utils/enum ptype))
+              (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
+              pr))))
+      gindexes)))
 
 (defn create-table
   "Creates a table with options:
@@ -364,7 +402,7 @@
                       :projection #{:all :keys-only [<attr> ...]}}].
     :block?       - Block for table to actually be active?"
   [creds table-name hash-keydef
-   & [{:keys [range-keydef throughput indexes block?]
+   & [{:keys [range-keydef throughput indexes gindexes block?]
        :or   {throughput {:read 1 :write 1}}}]]
   (let [result
         (as-map
@@ -373,8 +411,9 @@
              :always (.setTableName (name table-name))
              :always (.setKeySchema (key-schema hash-keydef range-keydef))
              :always (.setProvisionedThroughput (provisioned-throughput throughput))
-             :always (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-             indexes (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+             :always (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes gindexes))
+             :always (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes))
+             gindexes (.setGlobalSecondaryIndexes (global-indexes gindexes)))))]
     (if-not block? result @(table-status-watch creds table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
