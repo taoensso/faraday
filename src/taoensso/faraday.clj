@@ -41,6 +41,8 @@
              ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
+             GlobalSecondaryIndex
+             GlobalSecondaryIndexDescription
              Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
@@ -229,8 +231,10 @@
      :creation-date (.getCreationDateTime d)
      :item-count    (.getItemCount d)
      :size          (.getTableSizeBytes d)
-     :throughput    (as-map (.getProvisionedThroughput d))
-     :indexes       (as-map (.getLocalSecondaryIndexes d))
+     :throughput    (as-map (.getProvisionedThroughput  d))
+     :indexes       (as-map (.getLocalSecondaryIndexes  d)) ; DEPRECATED
+     :lsindexes     (as-map (.getLocalSecondaryIndexes  d))
+     :gsindexes     (as-map (.getGlobalSecondaryIndexes d))
      :status        (utils/un-enum (.getTableStatus d))
      :prim-keys
      (let [schema (as-map (.getKeySchema d))
@@ -256,6 +260,15 @@
                :item-count (.getItemCount d)
                :key-schema (as-map (.getKeySchema d))
                :projection (as-map (.getProjection d))})
+
+  GlobalSecondaryIndexDescription
+  (as-map [d] {:name       (keyword (.getIndexName d))
+               :size       (.getIndexSizeBytes d)
+               :item-count (.getItemCount d)
+               :key-schema (as-map (.getKeySchema d))
+               :projection (as-map (.getProjection d))
+               :throughput (as-map (.getProvisionedThroughput d))})
+
   ProvisionedThroughputDescription
   (as-map [d] {:read                (.getReadCapacityUnits d)
                :write               (.getWriteCapacityUnits d)
@@ -320,9 +333,11 @@
     (.setWriteCapacityUnits (long write-units))))
 
 (defn- keydefs "[<name> <type>] defs -> [AttributeDefinition ...]"
-  [hash-keydef range-keydef indexes]
+  [hash-keydef range-keydef lsindexes gsindexes]
   (let [defs (->> (conj [] hash-keydef range-keydef)
-                  (concat (mapv :range-keydef indexes))
+                  (concat (mapv :range-keydef lsindexes))
+                  (concat (mapv :hash-keydef  gsindexes))
+                  (concat (mapv :range-keydef gsindexes))
                   (filterv identity))]
     (mapv
      (fn [[key-name key-type :as def]]
@@ -334,47 +349,82 @@
          (.setAttributeType (utils/enum key-type))))
      defs)))
 
-(defn- local-indexes
+(defn- local-2nd-indexes
   "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-keydef indexes]
-  (mapv
-   (fn [{index-name :name
-        :keys [range-keydef projection]
-        :or   {projection :all}
-        :as   index}]
-     (assert (and index-name range-keydef projection)
-             (str "Malformed index: " index))
-     (doto (LocalSecondaryIndex.)
-       (.setIndexName  (name index-name))
-       (.setKeySchema  (key-schema hash-keydef range-keydef))
-       (.setProjection
-        (let [pr    (Projection.)
-              ptype (if (coll?* projection) :include projection)]
-          (.setProjectionType pr (utils/enum ptype))
-          (when (= ptype :include) (.setNonKeyAttributes pr (mapv name projection)))
-          pr))))
-   indexes))
+  (when indexes
+    (mapv
+      (fn [{index-name :name
+           :keys      [range-keydef projection]
+           :or        {projection :all}
+           :as        index}]
+        (assert (and index-name range-keydef projection)
+                (str "Malformed local secondary index (LSI): " index))
+        (doto (LocalSecondaryIndex.)
+          (.setIndexName (name index-name))
+          (.setKeySchema (key-schema hash-keydef range-keydef))
+          (.setProjection
+            (let [pr (Projection.)
+                  ptype (if (coll?* projection) :include projection)]
+              (.setProjectionType pr (utils/enum ptype))
+              (when (= ptype :include)
+                (.setNonKeyAttributes pr (mapv name projection)))
+              pr))))
+      indexes)))
+
+(defn- global-2nd-indexes
+  "[{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
+  indexes -> [GlobalSecondaryIndex ...]"
+  [indexes]
+  (when indexes
+    (mapv
+      (fn [{index-name :name
+           :keys      [hash-keydef range-keydef throughput projection]
+           :or        {projection :all}
+           :as        index}]
+        (assert (and index-name hash-keydef projection throughput)
+                (str "Malformed global secondary index (GSI): " index))
+        (doto (GlobalSecondaryIndex.)
+          (.setIndexName (name index-name))
+          (.setKeySchema (key-schema hash-keydef range-keydef))
+          (.setProjection
+            (let [pr (Projection.)
+                  ptype (if (coll?* projection) :include projection)]
+              (.setProjectionType pr (utils/enum ptype))
+              (when (= ptype :include)
+                (.setNonKeyAttributes pr (mapv name projection)))
+              pr))
+          (.setProvisionedThroughput (provisioned-throughput throughput))))
+      indexes)))
 
 (defn create-table
   "Creates a table with options:
     hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
     :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
     :throughput   - {:read <units> :write <units>}.
-    :indexes      - [{:name _ :range-keydef _
+    :lsindexes    - [{:name _ :range-keydef _
                       :projection #{:all :keys-only [<attr> ...]}}].
+    :gsindexes    - [{:name _ :hash-keydef _ :range-keydef _
+                      :projection #{:all :keys-only [<attr> ...]}
+                      :throughput _}].
     :block?       - Block for table to actually be active?"
   [creds table-name hash-keydef
-   & [{:keys [range-keydef throughput indexes block?]
-       :or   {throughput {:read 1 :write 1}}}]]
-  (let [result
+   & [{:keys [range-keydef throughput lsindexes gsindexes block?]
+       :or   {throughput {:read 1 :write 1}} :as opts}]]
+  (let [lsindexes (or lsindexes (:indexes opts)) ; DEPRECATED
+        result
         (as-map
          (.createTable (db-client creds)
            (doto-cond [_ (CreateTableRequest.)]
              :always (.setTableName (name table-name))
              :always (.setKeySchema (key-schema hash-keydef range-keydef))
              :always (.setProvisionedThroughput (provisioned-throughput throughput))
-             :always (.setAttributeDefinitions  (keydefs hash-keydef range-keydef indexes))
-             indexes (.setLocalSecondaryIndexes (local-indexes hash-keydef indexes)))))]
+             :always (.setAttributeDefinitions
+                      (keydefs hash-keydef range-keydef lsindexes gsindexes))
+             lsindexes (.setLocalSecondaryIndexes
+                        (local-2nd-indexes hash-keydef lsindexes))
+             gsindexes (.setGlobalSecondaryIndexes
+                        (global-2nd-indexes gsindexes)))))]
     (if-not block? result @(table-status-watch creds table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
@@ -680,7 +730,7 @@
                      stitching.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
                            [<attr> ...]}.
-    :index         - Name of a secondary index to query.
+    :index         - Name of a local or global secondary index to query.
     :order         - Index scaning order e/o #{:asc :desc}.
     :limit         - Max num >=1 of items to eval (≠ num of matching items).
                      Useful to prevent harmful sudden bursts of read activity.
