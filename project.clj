@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.0.2"
+(defproject com.taoensso/faraday "1.0.3"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
   :license {:name "Eclipse Public License"
@@ -7,7 +7,7 @@
                  [org.clojure/tools.macro    "0.1.5"]
                  ;; TODO ; 1.5.x seems to cause problems with (at least)
                  ;; `create-table`: needs investigation
-                 [com.amazonaws/aws-java-sdk "1.4.4.2"]
+                 [com.amazonaws/aws-java-sdk "1.7.1"]
                  [com.taoensso/nippy         "2.5.1"]]
   :profiles {:1.5   {:dependencies [[org.clojure/clojure "1.5.1"]]}
              :1.6   {:dependencies [[org.clojure/clojure "1.6.0-alpha2"]]}
