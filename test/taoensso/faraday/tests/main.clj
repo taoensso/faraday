@@ -61,7 +61,8 @@
  ;; is reference-based and not structural. `expect` falls back to Java equality,
  ;; and so will fail when presented with different Java objects that don't themselves
  ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
- [data (dissoc nippy/stress-data :throwable :ex-info :exception)]
+ [data ;; nippy/stress-data-comparable ; Awaiting Nippy v2.6
+  (dissoc nippy/stress-data :bytes :throwable :exception :ex-info)]
  {:id 10 :nippy-data data}
  (do (far/put-item creds ttable {:id 10 :nippy-data (far/freeze data)})
      (far/get-item creds ttable {:id 10})))
