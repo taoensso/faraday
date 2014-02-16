@@ -1,3 +1,7 @@
+## v1.1.0 / 2014 Feb 16
+ * [#23] Add support for Global Secondary Indexes (GSIs) (rakeshp)
+ * Bump AWS JDK SDK to 1.7.1.
+
 ## v1.0.2 / 2014-01-24
  * [#15] Fix issue with aws-java-sdk 1.5.x (paraseba).
 
