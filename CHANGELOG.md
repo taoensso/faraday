@@ -1,5 +1,8 @@
+## v1.1.1 / 2014 Feb 17
+ * [#24] call `distinct` on attr defs (rakeshp).
+
 ## v1.1.0 / 2014 Feb 16
- * [#23] Add support for Global Secondary Indexes (GSIs) (rakeshp)
+ * [#23] Add support for Global Secondary Indexes (GSIs) (rakeshp).
  * Bump AWS JDK SDK to 1.7.1.
 
 ## v1.0.2 / 2014-01-24
