@@ -338,7 +338,8 @@
                   (concat (mapv :range-keydef lsindexes))
                   (concat (mapv :hash-keydef  gsindexes))
                   (concat (mapv :range-keydef gsindexes))
-                  (filterv identity))]
+                  (filterv identity)
+                  (distinct))]
     (mapv
      (fn [[key-name key-type :as def]]
        (assert (and key-name key-type) (str "Malformed keydef: " def))
