@@ -6,6 +6,8 @@
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
+(comment (test/run-tests '[taoensso.faraday.tests.main]))
+
 ;;;; Config & setup
 
 (defonce creds {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
