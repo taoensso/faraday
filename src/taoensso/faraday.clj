@@ -10,8 +10,9 @@
     * attribute   ≠> key (i.e. does not imply)."
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
+            [taoensso.encore        :as encore :refer (doto-cond)]
             [taoensso.nippy.tools   :as nippy-tools]
-            [taoensso.faraday.utils :as utils :refer (coll?* doto-cond)])
+            [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -113,13 +114,13 @@
 (def ^:private nt-freeze (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
 (def ^:private nt-thaw   (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
 
-(utils/defalias with-thaw-opts nippy-tools/with-thaw-opts)
-(utils/defalias freeze         nippy-tools/wrap-for-freezing
+(encore/defalias with-thaw-opts nippy-tools/with-thaw-opts)
+(encore/defalias freeze         nippy-tools/wrap-for-freezing
   "Forces argument of any type to be subject to automatic de/serialization with
   Nippy.")
 
 (defn- freeze?     [x] (or (nippy-tools/wrapped-for-freezing? x)
-                           (utils/bytes? x)))
+                           (encore/bytes? x)))
 (defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- stringy?    [x] (or (string? x) (keyword? x)))
 (defn- simple-num? [x] (or (instance? Long    x)
@@ -140,7 +141,7 @@
   ^AttributeValue [x]
   (cond
    (stringy? x)
-   (let [^String s (utils/fq-name x)]
+   (let [^String s (encore/fq-name x)]
      (if (.isEmpty s)
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
@@ -152,7 +153,7 @@
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv utils/fq-name x)))
+      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
       (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
       (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"

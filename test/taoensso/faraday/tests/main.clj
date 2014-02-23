@@ -1,7 +1,7 @@
 (ns taoensso.faraday.tests.main
   (:require [expectations           :as test :refer :all]
+            [taoensso.encore        :as encore]
             [taoensso.faraday       :as far]
-            [taoensso.faraday.utils :as utils]
             [taoensso.nippy         :as nippy]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
@@ -69,7 +69,7 @@
 
 (expect-let ; "Unserialized" bytes
  [data (byte-array (mapv byte [0 1 2]))]
- #(utils/ba= data %)
+ #(encore/ba= data %)
  (do (far/put-item creds ttable {:id 11 :ba-data data})
      (:ba-data (far/get-item creds ttable {:id 11}))))
 
