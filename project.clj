@@ -11,9 +11,9 @@
                 *assert* true}
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.amazonaws/aws-java-sdk "1.7.1"]
    [com.taoensso/encore        "0.8.0"]
-   [com.taoensso/nippy         "2.5.2"]]
+   [com.taoensso/nippy         "2.5.2"]
+   [com.amazonaws/aws-java-sdk "1.7.1"]]
 
   :test-paths ["test" "src"]
   :profiles
