@@ -109,6 +109,8 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 ## Contact & contributing
 
+`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (emacs) or your IDE.
+
 Please use the project's GitHub [issues page][] for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
 
 Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Cheers!
@@ -127,6 +129,7 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [CDS]: <http://clojure-doc.org/>
 [ClojureWerkz]: <http://clojurewerkz.org/>
 [issues page]: <https://github.com/ptaoussanis/faraday/issues>
+[Cider]: <https://github.com/clojure-emacs/cider>
 [commit history]: <https://github.com/ptaoussanis/faraday/commits/master>
 [taoensso.com]: <https://www.taoensso.com>
 [Eclipse Public License]: <https://raw2.github.com/ptaoussanis/faraday/master/LICENSE>
