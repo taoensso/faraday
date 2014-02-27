@@ -68,7 +68,9 @@
              ResourceInUseException
              ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
+            com.amazonaws.auth.AWSCredentials
             com.amazonaws.auth.BasicAWSCredentials
+            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
@@ -79,20 +81,32 @@
 ;;;; Connections
 
 (def ^:private db-client*
-  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
+  "Returns a new AmazonDynamoDBClient instance for the supplied client opts:
+    (db-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
+                 :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}),
+    (db-client* {:creds my-AWSCredentials-instance}),
+    etc."
   (memoize
-   (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
-               conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
-     (if (empty? creds) (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (or credentials ; Use explicit, pre-constructed creds
-                               (BasicAWSCredentials. access-key secret-key))
-             client-config (doto-cond [g (ClientConfiguration.)]
-                             proxy-host      (.setProxyHost         g)
-                             proxy-port      (.setProxyPort         g)
-                             conn-timeout    (.setConnectionTimeout g)
-                             max-conns       (.setMaxConnections    g)
-                             max-error-retry (.setMaxErrorRetry     g)
-                             socket-timeout  (.setSocketTimeout     g))]
+   (fn [{:keys [creds access-key secret-key endpoint proxy-host proxy-port
+               conn-timeout max-conns max-error-retry socket-timeout]
+        :as client-opts}]
+     (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
+       (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
+             _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
+             aws-creds ; Actual AWSCredentials instance
+             (cond
+              creds      creds ; Given explicit AWSCredentials
+              access-key (BasicAWSCredentials. access-key secret-key)
+              :else      (DefaultAWSCredentialsProviderChain.))
+
+             client-config
+             (doto-cond [g (ClientConfiguration.)]
+               proxy-host      (.setProxyHost         g)
+               proxy-port      (.setProxyPort         g)
+               conn-timeout    (.setConnectionTimeout g)
+               max-conns       (.setMaxConnections    g)
+               max-error-retry (.setMaxErrorRetry     g)
+               socket-timeout  (.setSocketTimeout     g))]
          (doto-cond [g (AmazonDynamoDBClient. aws-creds client-config)]
            endpoint (.setEndpoint g)))))))
 
