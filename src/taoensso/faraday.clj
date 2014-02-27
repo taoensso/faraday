@@ -68,6 +68,7 @@
              ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.BasicAWSCredentials
+            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
@@ -83,8 +84,9 @@
    (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
                conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
      (if (empty? creds) (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (or credentials ; Use explicit, pre-constructed creds
-                               (BasicAWSCredentials. access-key secret-key))
+       (let [aws-creds     (cond credentials credentials ; Use explicit, pre-constructed creds
+                                 access-key (BasicAWSCredentials. access-key secret-key)
+                                 :else (DefaultAWSCredentialsProviderChain.))
              client-config (doto-cond [g (ClientConfiguration.)]
                              proxy-host      (.setProxyHost         g)
                              proxy-port      (.setProxyPort         g)
