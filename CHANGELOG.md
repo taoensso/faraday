@@ -1,4 +1,4 @@
-## Pending / unreleased
+## v1.2.0 / 2014 Feb 28
 
 ### New
 
