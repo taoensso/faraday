@@ -10,8 +10,9 @@
     * attribute   ≠> key (i.e. does not imply)."
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
+            [taoensso.encore        :as encore :refer (doto-cond)]
             [taoensso.nippy.tools   :as nippy-tools]
-            [taoensso.faraday.utils :as utils :refer (coll?* doto-cond)])
+            [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import  [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
@@ -67,7 +68,9 @@
              ResourceInUseException
              ResourceNotFoundException]
             com.amazonaws.ClientConfiguration
+            com.amazonaws.auth.AWSCredentials
             com.amazonaws.auth.BasicAWSCredentials
+            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
@@ -78,24 +81,36 @@
 ;;;; Connections
 
 (def ^:private db-client*
-  "Returns a new AmazonDynamoDBClient instance for the supplied IAM credentials."
+  "Returns a new AmazonDynamoDBClient instance for the supplied client opts:
+    (db-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
+                 :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}),
+    (db-client* {:creds my-AWSCredentials-instance}),
+    etc."
   (memoize
-   (fn [{:keys [credentials access-key secret-key endpoint proxy-host proxy-port
-               conn-timeout max-conns max-error-retry socket-timeout] :as creds}]
-     (if (empty? creds) (AmazonDynamoDBClient.) ; Use credentials provider chain
-       (let [aws-creds     (or credentials ; Use explicit, pre-constructed creds
-                               (BasicAWSCredentials. access-key secret-key))
-             client-config (doto-cond [g (ClientConfiguration.)]
-                             proxy-host      (.setProxyHost         g)
-                             proxy-port      (.setProxyPort         g)
-                             conn-timeout    (.setConnectionTimeout g)
-                             max-conns       (.setMaxConnections    g)
-                             max-error-retry (.setMaxErrorRetry     g)
-                             socket-timeout  (.setSocketTimeout     g))]
+   (fn [{:keys [creds access-key secret-key endpoint proxy-host proxy-port
+               conn-timeout max-conns max-error-retry socket-timeout]
+        :as client-opts}]
+     (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
+       (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
+             _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
+             aws-creds ; Actual AWSCredentials instance
+             (cond
+              creds      creds ; Given explicit AWSCredentials
+              access-key (BasicAWSCredentials. access-key secret-key)
+              :else      (DefaultAWSCredentialsProviderChain.))
+
+             client-config
+             (doto-cond [g (ClientConfiguration.)]
+               proxy-host      (.setProxyHost         g)
+               proxy-port      (.setProxyPort         g)
+               conn-timeout    (.setConnectionTimeout g)
+               max-conns       (.setMaxConnections    g)
+               max-error-retry (.setMaxErrorRetry     g)
+               socket-timeout  (.setSocketTimeout     g))]
          (doto-cond [g (AmazonDynamoDBClient. aws-creds client-config)]
            endpoint (.setEndpoint g)))))))
 
-(defn- db-client ^AmazonDynamoDBClient [creds] (db-client* creds))
+(defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
 
 ;;;; Exceptions
 
@@ -113,13 +128,13 @@
 (def ^:private nt-freeze (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
 (def ^:private nt-thaw   (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
 
-(utils/defalias with-thaw-opts nippy-tools/with-thaw-opts)
-(utils/defalias freeze         nippy-tools/wrap-for-freezing
+(encore/defalias with-thaw-opts nippy-tools/with-thaw-opts)
+(encore/defalias freeze         nippy-tools/wrap-for-freezing
   "Forces argument of any type to be subject to automatic de/serialization with
   Nippy.")
 
 (defn- freeze?     [x] (or (nippy-tools/wrapped-for-freezing? x)
-                           (utils/bytes? x)))
+                           (encore/bytes? x)))
 (defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
 (defn- stringy?    [x] (or (string? x) (keyword? x)))
 (defn- simple-num? [x] (or (instance? Long    x)
@@ -140,7 +155,7 @@
   ^AttributeValue [x]
   (cond
    (stringy? x)
-   (let [^String s (utils/fq-name x)]
+   (let [^String s (encore/fq-name x)]
      (if (.isEmpty s)
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
@@ -152,7 +167,7 @@
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv utils/fq-name x)))
+      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
       (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
       (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
@@ -279,12 +294,13 @@
 ;;;; API - tables
 
 (defn list-tables "Returns a vector of table names."
-  [creds] (->> (db-client creds) (.listTables) (.getTableNames) (mapv keyword)))
+  [client-opts]
+  (->> (db-client client-opts) (.listTables) (.getTableNames) (mapv keyword)))
 
 (defn describe-table
   "Returns a map describing a table, or nil if the table doesn't exist."
-  [creds table]
-  (try (as-map (.describeTable (db-client creds)
+  [client-opts table]
+  (try (as-map (.describeTable (db-client client-opts)
                 (doto (DescribeTableRequest.) (.setTableName (name table)))))
        (catch ResourceNotFoundException _ nil)))
 
@@ -292,14 +308,14 @@
   "Creates a future to poll for a change to table's status, and returns a
   promise to which the table's new description will be delivered. Deref this
   promise to block until table status changes."
-  [creds table status & [{:keys [poll-ms]
-                          :or   {poll-ms 5000}}]]
+  [client-opts table status & [{:keys [poll-ms]
+                                :or   {poll-ms 5000}}]]
   (assert (#{:creating :updating :deleting :active} (utils/un-enum status))
           (str "Invalid table status: " status))
   (let [p (promise)]
     (future
       (loop []
-        (let [current-descr (describe-table creds table)]
+        (let [current-descr (describe-table client-opts table)]
           (if-not (= (:status current-descr) (utils/un-enum status))
             (deliver p current-descr)
             (do (Thread/sleep poll-ms)
@@ -409,13 +425,13 @@
                       :projection #{:all :keys-only [<attr> ...]}
                       :throughput _}].
     :block?       - Block for table to actually be active?"
-  [creds table-name hash-keydef
+  [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts)) ; DEPRECATED
         result
         (as-map
-         (.createTable (db-client creds)
+         (.createTable (db-client client-opts)
            (doto-cond [_ (CreateTableRequest.)]
              :always (.setTableName (name table-name))
              :always (.setKeySchema (key-schema hash-keydef range-keydef))
@@ -426,14 +442,14 @@
                         (local-2nd-indexes hash-keydef lsindexes))
              gsindexes (.setGlobalSecondaryIndexes
                         (global-2nd-indexes gsindexes)))))]
-    (if-not block? result @(table-status-watch creds table-name :creating))))
+    (if-not block? result @(table-status-watch client-opts table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
 (defn ensure-table "Creates a table iff it doesn't already exist."
-  [creds table-name hash-keydef & [opts]]
-  (when-not (describe-table creds table-name)
-    (create-table creds table-name hash-keydef opts)))
+  [client-opts table-name hash-keydef & [opts]]
+  (when-not (describe-table client-opts table-name)
+    (create-table client-opts table-name hash-keydef opts)))
 
 (defn- throughput-steps
   "Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
@@ -458,11 +474,11 @@
 
   Returns a promise to which the final resulting table description will be
   delivered. Deref this promise to block until update (all steps) complete."
-  [creds table throughput & [{:keys [span-reqs]
-                              :or   {span-reqs {:max 5}}}]]
+  [client-opts table throughput & [{:keys [span-reqs]
+                                    :or   {span-reqs {:max 5}}}]]
   (let [throughput* throughput
         {read* :read write* :write} throughput*
-        {:keys [status throughput]} (describe-table creds table)
+        {:keys [status throughput]} (describe-table client-opts table)
         {:keys [read write num-decreases-today]} throughput
         read*  (or read*  read)
         write* (or write* write)
@@ -479,26 +495,26 @@
           :else
           (letfn [(run1 [[r' w']]
                     (as-map
-                     (.updateTable (db-client creds)
+                     (.updateTable (db-client client-opts)
                        (doto (UpdateTableRequest.)
                          (.setTableName (name table))
                          (.setProvisionedThroughput (provisioned-throughput
                                                      {:read r' :write w'})))))
                     ;; Returns _new_ descr when ready:
-                    @(table-status-watch creds table :updating))]
+                    @(table-status-watch client-opts table :updating))]
 
             (let [p (promise)]
               (future (deliver p (peek (mapv run1 steps))))
               p)))))
 
 (comment
-  (def dt (describe-table creds :faraday.tests.main))
-  (let [p (update-table creds :faraday.tests.main {:read 1 :write 1})]
+  (def dt (describe-table client-opts :faraday.tests.main))
+  (let [p (update-table client-opts :faraday.tests.main {:read 1 :write 1})]
     @p))
 
 (defn delete-table "Deletes a table, go figure."
-  [creds table]
-  (as-map (.deleteTable (db-client creds) (DeleteTableRequest. (name table)))))
+  [client-opts table]
+  (as-map (.deleteTable (db-client client-opts) (DeleteTableRequest. (name table)))))
 
 ;;;; API - items
 
@@ -507,9 +523,9 @@
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     :attrs       - Attrs to return, [<attr> ...].
     :consistent? - Use strongly (rather than eventually) consistent reads?"
-  [creds table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
+  [client-opts table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
   (as-map
-   (.getItem (db-client creds)
+   (.getItem (db-client client-opts)
     (doto-cond [g (GetItemRequest.)]
       :always     (.setTableName       (name table))
       :always     (.setKey             (clj-item->db-item prim-kvs))
@@ -534,10 +550,10 @@
                 met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
                   {<attr> false ...} ; Attribute must not exist"
-  [creds table item & [{:keys [return expected return-cc?]
-                        :or   {return :none}}]]
+  [client-opts table item & [{:keys [return expected return-cc?]
+                              :or   {return :none}}]]
   (as-map
-   (.putItem (db-client creds)
+   (.putItem (db-client client-opts)
      (doto-cond [g (PutItemRequest.)]
        :always  (.setTableName    (name table))
        :always  (.setItem         (clj-item->db-item item))
@@ -560,10 +576,10 @@
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
     :expected  - {<attr> <#{<expected-value> false}> ...}."
-  [creds table prim-kvs update-map & [{:keys [return expected return-cc?]
-                                       :or   {return :none}}]]
+  [client-opts table prim-kvs update-map & [{:keys [return expected return-cc?]
+                                             :or   {return :none}}]]
   (as-map
-   (.updateItem (db-client creds)
+   (.updateItem (db-client client-opts)
      (doto-cond [g (UpdateItemRequest.)]
        :always  (.setTableName        (name table))
        :always  (.setKey              (clj-item->db-item prim-kvs))
@@ -575,10 +591,10 @@
 (defn delete-item
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
-  [creds table prim-kvs & [{:keys [return expected return-cc?]
-                            :or   {return :none}}]]
+  [client-opts table prim-kvs & [{:keys [return expected return-cc?]
+                                  :or   {return :none}}]]
   (as-map
-   (.deleteItem (db-client creds)
+   (.deleteItem (db-client client-opts)
      (doto-cond [g (DeleteItemRequest.)]
        :always  (.setTableName    (name table))
        :always  (.setKey          (clj-item->db-item prim-kvs))
@@ -641,7 +657,7 @@
   "Retrieves a batch of items in a single request.
   Limits apply, Ref. http://goo.gl/Bj9TC.
 
-  (batch-get-item creds
+  (batch-get-item client-opts
     {:users   {:prim-kvs {:name \"alice\"}}
      :posts   {:prim-kvs {:id [1 2 3]}
                :attrs    [:timestamp :subject]
@@ -651,11 +667,11 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [creds requests & [{:keys [return-cc? span-reqs] :as opts
-                      :or   {span-reqs {:max 5}}}]]
+  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
+                            :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [raw-req]
             (as-map
-             (.batchGetItem (db-client creds)
+             (.batchGetItem (db-client client-opts)
                (doto-cond [g (BatchGetItemRequest.)] ; {table-str KeysAndAttributes}
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
@@ -664,9 +680,9 @@
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
   (defn- ids [from to] (for [n (range from to)] {:id n :name bigval}))
-  (batch-write-item creds {:faraday.tests.main {:put (ids 0 10)}})
-  (batch-get-item   creds {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
-  (scan creds :faraday.tests.main))
+  (batch-write-item client-opts {:faraday.tests.main {:put (ids 0 10)}})
+  (batch-get-item   client-opts {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
+  (scan client-opts :faraday.tests.main))
 
 (defn- write-request [action item]
   (case action
@@ -678,18 +694,18 @@
    Limits apply, Ref. http://goo.gl/Bj9TC. No transaction guarantees are
    provided, nor conditional puts. Request execution order is undefined.
 
-   (batch-write-item creds
+   (batch-write-item client-opts
      {:users {:put    [{:user-id 1 :username \"sally\"}
                        {:user-id 2 :username \"jane\"}]
               :delete [{:user-id [3 4 5]}]}})
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [creds requests & [{:keys [return-cc? span-reqs] :as opts
-                      :or   {span-reqs {:max 5}}}]]
+  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
+                            :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [raw-req]
             (as-map
-             (.batchWriteItem (db-client creds)
+             (.batchWriteItem (db-client client-opts)
                (doto-cond [g (BatchWriteItemRequest.)]
                  :always    (.setRequestItems raw-req)
                  return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
@@ -737,11 +753,13 @@
                      Useful to prevent harmful sudden bursts of read activity.
     :consistent?   - Use strongly (rather than eventually) consistent reads?
 
-  (create-table creds :my-table [:name :s] {:range-keydef [:age :n] :block? true})
-  (do (put-item creds :my-table {:name \"Steve\" :age 24})
-      (put-item creds :my-table {:name \"Susan\" :age 27}))
-  (query creds :my-table {:name [:eq \"Steve\"]
-                          :age  [:between [10 30]]})
+  (create-table client-opts :my-table [:name :s]
+    {:range-keydef [:age :n] :block? true})
+
+  (do (put-item client-opts :my-table {:name \"Steve\" :age 24})
+      (put-item client-opts :my-table {:name \"Susan\" :age 27}))
+  (query client-opts :my-table {:name [:eq \"Steve\"]
+                                :age  [:between [10 30]]})
   => [{:age 24, :name \"Steve\"}]
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}.
@@ -749,14 +767,14 @@
   For unindexed item retrievel see `scan`.
 
   Ref. http://goo.gl/XfGKW for query+scan best practices."
-  [creds table prim-key-conds
+  [client-opts table prim-key-conds
    & [{:keys [last-prim-kvs span-reqs return index order limit consistent?
               return-cc?] :as opts
        :or   {span-reqs {:max 5}
               order     :asc}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.query (db-client creds)
+             (.query (db-client client-opts)
                (doto-cond [g (QueryRequest.)]
                  :always (.setTableName        (name table))
                  :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
@@ -788,23 +806,25 @@
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
                              :not-null :null :contains :not-contains :in}.
 
-  (create-table creds :my-table [:name :s] {:range-keydef [:age :n] :block? true})
-  (do (put-item creds :my-table {:name \"Steve\" :age 24})
-      (put-item creds :my-table {:name \"Susan\" :age 27}))
-  (scan creds :my-table {:attr-conds {:age [:in [24 27]]}})
+  (create-table client-opts :my-table [:name :s]
+    {:range-keydef [:age :n] :block? true})
+
+  (do (put-item client-opts :my-table {:name \"Steve\" :age 24})
+      (put-item client-opts :my-table {:name \"Susan\" :age 27}))
+  (scan client-opts :my-table {:attr-conds {:age [:in [24 27]]}})
   => [{:age 24, :name \"Steve\"} {:age 27, :name \"Susan\"}]
 
   For automatic parallelization & segment control see `scan-parallel`.
   For indexed item retrievel see `query`.
 
   Ref. http://goo.gl/XfGKW for query+scan best practices."
-  [creds table
+  [client-opts table
    & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
               segment return-cc?] :as opts
        :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.scan (db-client creds)
+             (.scan (db-client client-opts)
                (doto-cond [g (ScanRequest.)]
                  :always (.setTableName (name table))
                  attr-conds      (.setScanFilter        (query|scan-conditions g))
@@ -825,9 +845,9 @@
   `scan` results.
 
   Ref. http://goo.gl/KLwnn (official parallel scan documentation)."
-  [creds table total-segments & [opts]]
+  [client-opts table total-segments & [opts]]
   (let [opts (assoc opts :total-segments total-segments)]
-    (->> (mapv (fn [seg] (future (scan creds table (assoc opts :segment seg))))
+    (->> (mapv (fn [seg] (future (scan client-opts table (assoc opts :segment seg))))
                (range total-segments))
          (mapv deref))))
 
@@ -865,13 +885,15 @@
 
 (require '[taoensso.faraday :as far])
 
-(def creds {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-            :secret-key "<AWS_DYNAMODB_SECRET_KEY>"}) ; Insert your IAM creds here
+(def client-opts
+  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
+  )
 
-(far/list-tables creds)
+(far/list-tables client-opts)
 ;; => [] ; No tables yet :-(
 
-(far/create-table creds :my-table
+(far/create-table client-opts :my-table
   [:id :n]  ; Primary key named "id", (:n => number type)
   {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
    :block? true ; Block thread during table creation
@@ -879,10 +901,10 @@
 
 ;; Wait a minute for the table to be created... got a sandwich handy?
 
-(far/list-tables creds)
+(far/list-tables client-opts)
 ;; => [:my-table] ; There's our new table!
 
-(far/put-item creds
+(far/put-item client-opts
   :my-table
   {:id 0 ; Remember that this is our primary (indexed) key
    :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
@@ -891,7 +913,7 @@
                                             ;; ... Any Clojure data goodness
                                             })})
 
-(far/get-item creds :my-table {:id 0})
+(far/get-item client-opts :my-table {:id 0})
 ;; => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
 
 )

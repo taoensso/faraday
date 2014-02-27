@@ -1,7 +1,7 @@
-**[API docs](http://ptaoussanis.github.io/faraday/)** | **[CHANGELOG](https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md)** | [contact & contributing](#contact--contributing) | [other Clojure libs](https://www.taoensso.com/clojure-libraries) | [Twitter](https://twitter.com/#!/ptaoussanis) | current [semantic](http://semver.org/) version:
+**[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/faraday "1.1.1"] ; Stable
+[com.taoensso/faraday "1.2.0"] ; Stable
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -23,10 +23,10 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 
 ### Dependencies
 
-Add the necessary dependency to your [Leiningen](http://leiningen.org/) `project.clj` and `require` the library in your ns:
+Add the necessary dependency to your [Leiningen][] `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "1.1.1"] ; project.clj
+[com.taoensso/faraday "1.2.0"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
@@ -37,17 +37,19 @@ First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.am
 ### Connecting
 
 ```clojure
-(def creds {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-            :secret-key "<AWS_DYNAMODB_SECRET_KEY>"}) ; Insert your IAM creds here
+(def client-opts
+  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
+  )
 
-(far/list-tables creds)
+(far/list-tables client-opts)
 => [] ; No tables yet :-(
 ```
 
 Well that was easy. How about we create a table? (This is actually one of the most complicated parts of working with DynamoDB since it requires understanding how DynamoDB [provisions capacity](http://aws.amazon.com/dynamodb/pricing/) and how its [primary keys](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey) work. Anyway, we can safely ignore the specifics for now).
 
 ```clojure
-(far/create-table creds :my-table
+(far/create-table client-opts :my-table
   [:id :n]  ; Primary key named "id", (:n => number type)
   {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
    :block? true ; Block thread during table creation
@@ -55,14 +57,14 @@ Well that was easy. How about we create a table? (This is actually one of the mo
 
 ;; Wait a minute for the table to be created... got a sandwich handy?
 
-(far/list-tables creds)
+(far/list-tables client-opts)
 => [:my-table] ; There's our new table!
 ```
 
 Let's write something to `:my-table` and fetch it back:
 
 ```clojure
-(far/put-item creds
+(far/put-item client-opts
     :my-table
     {:id 0 ; Remember that this is our primary (indexed) key
      :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
@@ -71,7 +73,7 @@ Let's write something to `:my-table` and fetch it back:
                                               ;; ... Any Clojure data goodness
                                               })})
 
-(far/get-item creds :my-table {:id 0})
+(far/get-item client-opts :my-table {:id 0})
 => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
 ```
 
@@ -103,16 +105,33 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 ## This project supports the CDS and ![ClojureWerkz](https://raw.github.com/clojurewerkz/clojurewerkz.org/master/assets/images/logos/clojurewerkz_long_h_50.png) goals
 
-  * [CDS](http://clojure-doc.org/), the **Clojure Documentation Site**, is a **contributer-friendly** community project aimed at producing top-notch, **beginner-friendly** Clojure tutorials and documentation. Awesome resource.
+  * [CDS][], the **Clojure Documentation Site**, is a **contributer-friendly** community project aimed at producing top-notch, **beginner-friendly** Clojure tutorials and documentation. Awesome resource.
 
-  * [ClojureWerkz](http://clojurewerkz.org/) is a growing collection of open-source, **batteries-included Clojure libraries** that emphasise modern targets, great documentation, and thorough testing. They've got a ton of great stuff, check 'em out!
+  * [ClojureWerkz][] is a growing collection of open-source, **batteries-included Clojure libraries** that emphasise modern targets, great documentation, and thorough testing. They've got a ton of great stuff, check 'em out!
 
 ## Contact & contributing
 
-Please use the [project's GitHub issues page](https://github.com/ptaoussanis/faraday/issues) for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
+`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (emacs) or your IDE.
 
-Otherwise reach me (Peter Taoussanis) at [taoensso.com](https://www.taoensso.com) or on Twitter ([@ptaoussanis](https://twitter.com/#!/ptaoussanis)). Cheers!
+Please use the project's GitHub [issues page][] for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
+
+Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Cheers!
 
 ## License
 
-Copyright &copy; 2013 Peter Taoussanis. Distributed under the [Eclipse Public License](http://www.eclipse.org/legal/epl-v10.html), the same as Clojure.
+Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
+
+
+[API docs]: <http://ptaoussanis.github.io/faraday/>
+[CHANGELOG]: <https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md>
+[other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
+[Twitter]: <https://twitter.com/ptaoussanis>
+[semantic]: <http://semver.org/>
+[Leiningen]: <http://leiningen.org/>
+[CDS]: <http://clojure-doc.org/>
+[ClojureWerkz]: <http://clojurewerkz.org/>
+[issues page]: <https://github.com/ptaoussanis/faraday/issues>
+[Cider]: <https://github.com/clojure-emacs/cider>
+[commit history]: <https://github.com/ptaoussanis/faraday/commits/master>
+[taoensso.com]: <https://www.taoensso.com>
+[Eclipse Public License]: <https://raw2.github.com/ptaoussanis/faraday/master/LICENSE>
