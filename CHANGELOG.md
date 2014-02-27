@@ -1,8 +1,14 @@
 ## Pending / unreleased
 
+### New
+
+ * `db-client*` can now auto-create a DefaultAWSCredentialsProviderChain instance (joelittlejohn).
+
 ### Changes
 
  * Moved most utils to external `encore` dependency.
+ * All fns now take a 'client-opts' arg rather than 'creds' arg. This is non-breaking + purely aesthetic but better represents the arg's purpose.
+ * **DEPRECATED**: When providing your own AWSCredentials instance in client-opts please use the `:creds` arg (was `:credentials` before).
 
 
 ## v1.1.1 / 2014 Feb 17
