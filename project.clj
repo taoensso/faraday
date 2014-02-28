@@ -20,7 +20,7 @@
   {;; :default [:base :system :user :provided :dev]
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0-beta1"]]}
    :test {:dependencies [[expectations            "1.4.56"]
-                         [reiddraper/simple-check "0.5.6"]]
+                         [org.clojure/test.check  "0.5.7"]]
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.2.2"]]}
    :dev* [:dev {:jvm-opts ^:replace ["-server"]
