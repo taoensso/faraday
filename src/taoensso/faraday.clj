@@ -93,7 +93,7 @@
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
        (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
              _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
-             aws-creds ; Actual AWSCredentials instance
+             ^AWSCredentials aws-creds
              (cond
               creds      creds ; Given explicit AWSCredentials
               access-key (BasicAWSCredentials. access-key secret-key)
