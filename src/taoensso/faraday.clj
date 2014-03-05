@@ -152,7 +152,7 @@
   (assert-precision "12345678901234567890123456789012345678")
   (assert-precision 10))
 
-(defn- ddb-native-num? [x]
+(defn- ddb-num? [x]
   "Is `x` a number type natively storable by DynamoDB? Note that DDB stores _all_
   numbers as exact-value strings with <= 38 digits of precision. For greater
   precision, use `freeze`.
@@ -166,7 +166,7 @@
       (and (instance? BigDecimal x) (assert-precision x))
       (and (instance? BigInteger x) (assert-precision x))))
 
-(defn- num->ddb-native-num
+(defn- num->ddb-num
   "Coerce any special Clojure types that'd trip up the DDB Java client."
   [x]
   (cond (instance? BigInt x) (biginteger x)
@@ -197,16 +197,16 @@
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
 
-   (ddb-native-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?         x) (doto (AttributeValue.) (.setB (nt-freeze x)))
+   (ddb-num? x) (doto (AttributeValue.) (.setN (str x)))
+   (freeze?  x) (doto (AttributeValue.) (.setB (nt-freeze x)))
 
    (set? x)
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-      (every? stringy?        x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
-      (every? ddb-native-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
-      (every? freeze?         x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
+      (every? stringy? x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
+      (every? ddb-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
+      (every? freeze?  x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 
