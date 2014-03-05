@@ -139,6 +139,19 @@
                         (encore/bytes? x)))
 (defn- stringy? [x] (or (string? x) (keyword? x)))
 
+(defn- assert-precision [x]
+  (let [^BigDecimal dec (if (string? x) (BigDecimal. ^String x) (bigdec x))]
+    (assert (<= (.precision dec) 38)
+      (str "DynamoDB numbers have <= 38 digits of precision. See `freeze` for "
+           "arbitrary-precision binary serialization."))
+    true))
+
+(comment
+  (assert-precision "0.00000000000000000000000000000000000001")
+  (assert-precision "0.12345678901234567890123456789012345678")
+  (assert-precision "12345678901234567890123456789012345678")
+  (assert-precision 10))
+
 (defn- ddb-native-num? [x]
   "Is `x` a number type natively storable by DynamoDB? Note that DDB stores _all_
   numbers as exact-value strings with <= 38 digits of precision. For greater
@@ -148,10 +161,10 @@
       (instance? Double  x)
       (instance? Integer x)
       (instance? Float   x)
-      ;;
-      (instance? BigInt     x)
-      (instance? BigDecimal x)
-      (instance? BigInteger x)))
+      ;;; High-precision types:
+      (and (instance? BigInt     x) (assert-precision x))
+      (and (instance? BigDecimal x) (assert-precision x))
+      (and (instance? BigInteger x) (assert-precision x))))
 
 (defn- num->ddb-native-num
   "Coerce any special Clojure types that'd trip up the DDB Java client."
