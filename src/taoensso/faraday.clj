@@ -13,7 +13,8 @@
             [taoensso.encore        :as encore :refer (doto-cond)]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
-  (:import  [com.amazonaws.services.dynamodbv2.model
+  (:import  [clojure.lang BigInt]
+            [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
              AttributeValueUpdate
@@ -133,23 +134,46 @@
   "Forces argument of any type to be subject to automatic de/serialization with
   Nippy.")
 
-(defn- freeze?     [x] (or (nippy-tools/wrapped-for-freezing? x)
-                           (encore/bytes? x)))
-(defn- str->num    [^String s] (if (.contains s ".") (Double. s) (Long. s)))
-(defn- stringy?    [x] (or (string? x) (keyword? x)))
-(defn- simple-num? [x] (or (instance? Long    x)
-                           (instance? Double  x)
-                           (instance? Integer x)
-                           (instance? Float   x)))
+
+(defn- freeze?  [x] (or (nippy-tools/wrapped-for-freezing? x)
+                        (encore/bytes? x)))
+(defn- stringy? [x] (or (string? x) (keyword? x)))
+
+(defn- ddb-native-num? [x]
+  "Is `x` a number type natively storable by DynamoDB? Note that DDB stores _all_
+  numbers as exact-value strings with <= 38 digits of precision. For greater
+  precision, use `freeze`.
+  Ref. http://goo.gl/jzzsIW"
+  (or (instance? Long    x)
+      (instance? Double  x)
+      (instance? Integer x)
+      (instance? Float   x)
+      ;;
+      (instance? BigInt     x)
+      (instance? BigDecimal x)
+      (instance? BigInteger x)))
+
+(defn- num->ddb-native-num
+  "Coerce any special Clojure types that'd trip up the DDB Java client."
+  [x]
+  (cond (instance? BigInt x) (biginteger x)
+        :else x))
+
+(defn- ddb-num-str->num [^String s]
+  ;;; In both cases we'll err on the side of caution, assuming the most
+  ;;; accurate possible type
+  (if (.contains s ".")
+    (BigDecimal. s)
+    (bigint (BigInteger. s))))
 
 (defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
   (or (.getS x)
-      (some->> (.getN  x) str->num)
+      (some->> (.getN  x) ddb-num-str->num)
       (some->> (.getB  x) nt-thaw)
       (some->> (.getSS x) (into #{}))
-      (some->> (.getNS x) (mapv str->num) (into #{}))
-      (some->> (.getBS x) (mapv nt-thaw) (into #{}))))
+      (some->> (.getNS x) (mapv ddb-num-str->num) (into #{}))
+      (some->> (.getBS x) (mapv nt-thaw)          (into #{}))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -160,16 +184,16 @@
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
 
-   (simple-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?     x) (doto (AttributeValue.) (.setB (nt-freeze x)))
+   (ddb-native-num? x) (doto (AttributeValue.) (.setN (str x)))
+   (freeze?         x) (doto (AttributeValue.) (.setB (nt-freeze x)))
 
    (set? x)
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-      (every? stringy?    x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
-      (every? simple-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
-      (every? freeze?     x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
+      (every? stringy?        x) (doto (AttributeValue.) (.setSS (mapv encore/fq-name x)))
+      (every? ddb-native-num? x) (doto (AttributeValue.) (.setNS (mapv str  x)))
+      (every? freeze?         x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
                                     " or more than one type")))))
 

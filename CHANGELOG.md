@@ -1,3 +1,16 @@
+## Pending / unreleased
+
+> **NB**: There are **important changes** in this release that should be non-breaking in most cases, but that you should take note of!
+
+### Changes
+
+ * **IMPORTANT** (_usually_ non-breaking): numbers are now returned from DDB as `BigInt`s (previously `Long`s) and `BigDecimal`s (previously `Double`s). This better reflects that way DDB is actually storing numbers internally, and helps preserve number accuracy in some cases.
+
+### New
+
+ * Can now write _unfrozen_ numbers of type: `BigDecimal`, `BigInt`, `BigInteger`. In all cases DDB is limited to 38 bits of precision (use `freeze` when you need more precision).
+
+
 ## v1.2.0 / 2014 Feb 28
 
 ### New
