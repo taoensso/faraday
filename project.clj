@@ -13,7 +13,8 @@
   [[org.clojure/clojure        "1.5.1"]
    [com.taoensso/encore        "0.9.2"]
    [com.taoensso/nippy         "2.5.2"]
-   [com.amazonaws/aws-java-sdk "1.7.1"]]
+   [com.amazonaws/aws-java-sdk "1.7.1" :exclusions [joda-time]]
+   [joda-time                  "2.3"]]
 
   :test-paths ["test" "src"]
   :profiles

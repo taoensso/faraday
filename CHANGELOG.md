@@ -5,6 +5,7 @@
 ### Changes
 
  * **IMPORTANT** (_usually_ non-breaking): numbers are now returned from DDB as `BigInt`s (previously `Long`s) and `BigDecimal`s (previously `Double`s). This better reflects that way DDB is actually storing numbers internally, and helps preserve number accuracy in some cases.
+ * Fix slow lein builds by replacing the joda-time version range used by aws-java-sdk with an explicit dependency on joda-time 2.3.
 
 ### New
 
