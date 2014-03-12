@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.2.0"
+(defproject com.taoensso/faraday "1.3.0-RC1"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
@@ -11,16 +11,17 @@
                 *assert* true}
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "0.9.2"]
-   [com.taoensso/nippy         "2.5.2"]
-   [com.amazonaws/aws-java-sdk "1.7.1"]]
+   [com.taoensso/encore        "0.9.8"]
+   [com.taoensso/nippy         "2.6.0-RC1"]
+   [com.amazonaws/aws-java-sdk "1.7.1" :exclusions [joda-time]]
+   [joda-time                  "2.3"]]
 
   :test-paths ["test" "src"]
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0-beta1"]]}
    :test {:dependencies [[expectations            "1.4.56"]
-                         [reiddraper/simple-check "0.5.6"]]
+                         [org.clojure/test.check  "0.5.7"]]
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.2.2"]]}
    :dev* [:dev {:jvm-opts ^:replace ["-server"]
@@ -29,10 +30,8 @@
    :dev
    [:1.6 :test
     {:dependencies []
-     :plugins []}]}
-
-  :plugins [[lein-ancient "0.5.4"]
-            [codox        "0.6.7"]]
+     :plugins [[lein-ancient "0.5.4"]
+               [codox        "0.6.7"]]}]}
 
   ;; :codox {:sources ["target/classes"]} ; cljx
   :aliases
