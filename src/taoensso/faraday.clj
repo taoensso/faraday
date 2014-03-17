@@ -97,11 +97,11 @@
              _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
              _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
              ^AWSCredentials aws-creds
-             (when-not provider (cond
-                                 creds      creds ; Given explicit AWSCredentials
-                                 access-key (BasicAWSCredentials. access-key secret-key)
-                                 :else      (DefaultAWSCredentialsProviderChain.)))
-
+             (when-not provider
+               (cond
+                creds      creds ; Given explicit AWSCredentials
+                access-key (BasicAWSCredentials. access-key secret-key)
+                :else      (DefaultAWSCredentialsProviderChain.)))
              client-config
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
