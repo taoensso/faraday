@@ -1,3 +1,8 @@
+## v1.3.0-RC2 / 2014 Mar 20
+
+ * [#28] NEW: Add AWSCredentialsProvider support (marcuswr).
+
+
 ## v1.3.0-RC1 / 2014 Mar 12
 
 > **NB**: There are **important changes** in this release that should be non-breaking in most cases, but that you should take note of!

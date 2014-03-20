@@ -2,7 +2,7 @@
 
 ```clojure
 [com.taoensso/faraday "1.2.0"]     ; Stable
-[com.taoensso/faraday "1.3.0-RC1"] ; Improved number accuracy, see CHANGELOG for details
+[com.taoensso/faraday "1.3.0-RC2"] ; Improved number accuracy, see CHANGELOG for details
 ```
 
 # Faraday, a Clojure DynamoDB client
