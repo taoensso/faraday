@@ -43,6 +43,12 @@ First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.am
    :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
   )
 
+;; or
+
+(def client-opts
+     {:provider <AWS_CREDENTIALS_PROVIDER>} ; Your Favorite AWSCredentialsProvider here
+)
+
 (far/list-tables client-opts)
 => [] ; No tables yet :-(
 ```
