@@ -1,9 +1,10 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/faraday "1.2.0"]     ; Stable
-[com.taoensso/faraday "1.3.0-RC2"] ; Improved number accuracy, see CHANGELOG for details
+[com.taoensso/faraday "1.3.0"] ; Stable
 ```
+
+v1.3.x is a **significant, backwards-compatible release**. Please see the [CHANGELOG][] for details.
 
 # Faraday, a Clojure DynamoDB client
 
@@ -27,7 +28,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Add the necessary dependency to your [Leiningen][] `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "1.2.0"] ; project.clj
+[com.taoensso/faraday "1.3.0"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
@@ -102,19 +103,11 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Farady. The most useful doc is probably on the [DynamoDB data model](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html).
 
-## Performance (TODO)
+## Performance
 
 Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazon.com/sdkforjava/):
 
 ![Performance comparison chart](https://github.com/ptaoussanis/faraday/raw/master/benchmarks/chart.png)
-
-[Detailed benchmark information](https://docs.google.com/spreadsheet/ccc?key=0AuSXb68FH4uhdE5kTTlocGZKSXppWG9sRzA5Y2pMVkE) is available on Google Docs.
-
-## This project supports the CDS and ![ClojureWerkz](https://raw.github.com/clojurewerkz/clojurewerkz.org/master/assets/images/logos/clojurewerkz_long_h_50.png) goals
-
-  * [CDS][], the **Clojure Documentation Site**, is a **contributer-friendly** community project aimed at producing top-notch, **beginner-friendly** Clojure tutorials and documentation. Awesome resource.
-
-  * [ClojureWerkz][] is a growing collection of open-source, **batteries-included Clojure libraries** that emphasise modern targets, great documentation, and thorough testing. They've got a ton of great stuff, check 'em out!
 
 ## Contact & contributing
 
@@ -130,7 +123,8 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 
 
 [API docs]: <http://ptaoussanis.github.io/faraday/>
-[CHANGELOG]: <https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md>
+[CHANGELOG_]: <https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md>
+[CHANGELOG]: <https://github.com/ptaoussanis/faraday/releases>
 [other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
 [Twitter]: <https://twitter.com/ptaoussanis>
 [semantic]: <http://semver.org/>

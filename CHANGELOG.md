@@ -1,9 +1,4 @@
-## v1.3.0-RC2 / 2014 Mar 20
-
- * [#28] NEW: Add AWSCredentialsProvider support (marcuswr).
-
-
-## v1.3.0-RC1 / 2014 Mar 12
+## v1.3.0 / 2014 Mar 30
 
 > **NB**: There are **important changes** in this release that should be non-breaking in most cases, but that you should take note of!
 
@@ -15,6 +10,7 @@
 ### New
 
  * Can now write _unfrozen_ numbers of type: `BigDecimal`, `BigInt`, `BigInteger`. In all cases DDB is limited to 38 bits of precision (use `freeze` when you need more precision).
+ * [#28] Add AWSCredentialsProvider support (marcuswr).
 
 
 ## v1.2.0 / 2014 Feb 28
