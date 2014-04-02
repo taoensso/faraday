@@ -110,4 +110,14 @@
      [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
                      [(far/get-item *client-opts* ttable {:id  0})
                       (far/get-item *client-opts* ttable {:id  1})
-                      (far/get-item *client-opts* ttable {:id -1})]))))
+                      (far/get-item *client-opts* ttable {:id -1})]))
+
+    ;; test list-tables lazy sequence
+    ;; generate more than 100 tables to hit the batch size limit
+    ;; of list-tables
+    (let [tables (map keyword (map #(str "test_" %) (range 102)))]
+      (doseq [table tables] (far/ensure-table *client-opts* [:id :n]
+                                              {:throughput  {:read 1 :write 1}
+                                               :block?      true}))
+      (expect true (> (count (far/list-tables *client-opts*)) 100))
+      (doseq [table tables] (far/delete-table *client-opts*)))))

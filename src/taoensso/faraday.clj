@@ -332,9 +332,18 @@
 
 ;;;; API - tables
 
-(defn list-tables "Returns a vector of table names."
+(defn list-tables "Returns a lazy sequence of table names."
   [client-opts]
-  (->> (db-client client-opts) (.listTables) (.getTableNames) (mapv keyword)))
+  (letfn [(step [^String offset]
+            (lazy-seq
+             (let [chunk (if (nil? offset)
+                    (mapv keyword (.getTableNames (.listTables (db-client client-opts))))
+                    (mapv keyword (.getTableNames (.listTables (db-client client-opts) offset))))
+                   last-key (last chunk)]
+               (if last-key
+                 (concat chunk (step (name last-key)))
+                 chunk))))]
+    (step nil)))
 
 (defn describe-table
   "Returns a map describing a table, or nil if the table doesn't exist."
