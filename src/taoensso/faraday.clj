@@ -336,10 +336,12 @@
   [client-opts]
   (letfn [(step [^String offset]
             (lazy-seq
-             (let [chunk (if (nil? offset)
-                    (mapv keyword (.getTableNames (.listTables (db-client client-opts))))
-                    (mapv keyword (.getTableNames (.listTables (db-client client-opts) offset))))
-                   last-key (last chunk)]
+             (let [client   (db-client client-opts)
+                   result   (if (nil? offset)
+                              (.listTables client)
+                              (.listTables client offset))
+                   last-key (.getLastEvaluatedTableName result)
+                   chunk    (map keyword (.getTableNames result))]
                (if last-key
                  (concat chunk (step (name last-key)))
                  chunk))))]
