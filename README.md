@@ -34,20 +34,37 @@ Add the necessary dependency to your [Leiningen][] `project.clj` and `require` t
 
 ### Preparing a database
 
-First thing is to make sure you've got an **[AWS DynamoDB account](http://aws.amazon.com/dynamodb/)** (there's a **free tier** with 100MB of storage and limited read+write throughput). Next you'll need credentials for an IAM user with read+write access to your DynamoDB tables (see the **IAM section of your AWS Management Console**). Ready?
+First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [instruction from AWS](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tools.DynamoDBLocal.html) (don't worry, you basically just download a JAR file and run it) or use `brew install dynamodb-local` if you're on OSX and is using Homebrew.
+
+Once DynamoDB Local is up and running in your terminal, you should see something like...
+
+```sh
+$ dynamodb-local
+2014-04-30 16:08:51.050:INFO:oejs.Server:jetty-8.1.12.v20130726
+2014-04-30 16:08:51.104:INFO:oejs.AbstractConnector:Started SelectChannelConnector@0.0.0.0:8000
+```
+
+Ready?
 
 ### Connecting
 
 ```clojure
 (def client-opts
-  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
+  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; For production, put your IAM keys here
+
+   ;; This line below is the only line that is added for DynamoDB Local.
+   ;; Remove it (and add your IAM keys above) to run your code in production.
+   :endpoint "http://localhost:8000"
   )
 
 ;; or
 
 (def client-opts
-     {:provider <AWS_CREDENTIALS_PROVIDER>} ; Your Favorite AWSCredentialsProvider here
+     {:provider <AWS_CREDENTIALS_PROVIDER> ; Your Favorite AWSCredentialsProvider here
+      :endpoint "http://localhost:8000"    ; For DynamoDB Local
+     }
+
 )
 
 (far/list-tables client-opts)
