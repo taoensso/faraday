@@ -34,6 +34,10 @@ Add the necessary dependency to your [Leiningen][] `project.clj` and `require` t
 
 ### Preparing a database
 
+You have a couple of options to try out DynamoDB. 1) Run a Local instance, or 2) spin up an instance on AWS.
+
+#### DynamoDB Local
+
 First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [instruction from AWS](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tools.DynamoDBLocal.html) (don't worry, you basically just download a JAR file and run it) or use `brew install dynamodb-local` if you're on OSX and is using Homebrew.
 
 Once DynamoDB Local is up and running in your terminal, you should see something like...
@@ -43,6 +47,12 @@ $ dynamodb-local
 2014-04-30 16:08:51.050:INFO:oejs.Server:jetty-8.1.12.v20130726
 2014-04-30 16:08:51.104:INFO:oejs.AbstractConnector:Started SelectChannelConnector@0.0.0.0:8000
 ```
+
+Then proceed to connecting with your local instance in the next section.
+
+#### Spin up an instance on AWS
+
+Make sure you've got an **[AWS DynamoDB account](http://aws.amazon.com/dynamodb/)** (there's a **free tier** with 100MB of storage and limited read+write throughput). Next you'll need credentials for an IAM user with read+write access to your DynamoDB tables (see the **IAM section of your AWS Management Console**).
 
 Ready?
 
