@@ -779,7 +779,7 @@
      conditions)))
 
 (defn query
-  "Retries items from a table (indexed) with options:
+  "Retrieves items from a table (indexed) with options:
     prim-key-conds - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
     :last-prim-kvs - Primary key-val from which to eval, useful for paging.
     :span-reqs     - {:max _ :throttle-ms _} controls automatic multi-request
