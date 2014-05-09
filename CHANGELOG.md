@@ -1,3 +1,8 @@
+## v1.3.1 / 2014 May 9
+
+ * [#32] Fix deserialization of falsey values (were returning as nil) (@pegotezzi).
+
+
 ## v1.3.0 / 2014 Mar 30
 
 > **NB**: There are **important changes** in this release that should be non-breaking in most cases, but that you should take note of!
