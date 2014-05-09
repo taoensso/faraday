@@ -1,7 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contributing](#contact--contributing) | current ([semantic][]) version:
 
 ```clojure
-[com.taoensso/faraday "1.3.1"] ; Stable
+[com.taoensso/faraday "1.3.2"] ; Stable
 ```
 
 v1.3.x is a **significant, backwards-compatible release**. Please see the [CHANGELOG][] for details.
