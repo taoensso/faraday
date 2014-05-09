@@ -11,9 +11,9 @@
                 *assert* true}
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.1.0"]
-   [com.taoensso/nippy         "2.6.0"]
-   [com.amazonaws/aws-java-sdk "1.7.5" :exclusions [joda-time]]
+   [com.taoensso/encore        "1.6.0"]
+   [com.taoensso/nippy         "2.6.3"]
+   [com.amazonaws/aws-java-sdk "1.7.8" :exclusions [joda-time]]
    [joda-time                  "2.3"]]
 
   :test-paths ["test" "src"]
