@@ -1,4 +1,4 @@
-## v1.3.1 / 2014 May 9
+## v1.3.2 / 2014 May 9
 
  * [#32] Fix deserialization of falsey values (were returning as nil) (@pegotezzi).
 
