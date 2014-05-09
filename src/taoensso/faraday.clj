@@ -182,20 +182,13 @@
 
 (defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
-  (let [[type x*]
-        (or (when-let [x* (.getS  x)] [:s  x*])
-            (when-let [x* (.getN  x)] [:n  x*])
-            (when-let [x* (.getB  x)] [:b  x*])
-            (when-let [x* (.getSS x)] [:ss x*])
-            (when-let [x* (.getNS x)] [:ns x*])
-            (when-let [x* (.getBS x)] [:bs x*]))]
-    (case type
-      :s  (->> x*)
-      :n  (->> x* ddb-num-str->num)
-      :b  (->> x* nt-thaw)
-      :ss (->> x* (into #{}))
-      :ns (->> x* (mapv ddb-num-str->num) (into #{}))
-      :bs (->> x* (mapv nt-thaw)          (into #{})))))
+  (or (.getS x)
+      (some->> (.getN  x) ddb-num-str->num)
+      (some->> (.getSS x) (into #{}))
+      (some->> (.getNS x) (mapv ddb-num-str->num) (into #{}))
+      (some->> (.getBS x) (mapv nt-thaw)          (into #{}))
+      (some->> (.getB  x) nt-thaw) ; Last, may be falsey
+      ))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
