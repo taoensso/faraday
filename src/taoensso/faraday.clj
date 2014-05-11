@@ -793,6 +793,7 @@
   "Retrieves items from a table (indexed) with options:
     prim-key-conds - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
     :last-prim-kvs - Primary key-val from which to eval, useful for paging.
+    :query-filter  - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
     :span-reqs     - {:max _ :throttle-ms _} controls automatic multi-request
                      stitching.
     :return        - e/o #{:all-attributes :all-projected-attributes :count
@@ -818,7 +819,7 @@
 
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table prim-key-conds
-   & [{:keys [last-prim-kvs span-reqs return index order limit consistent?
+   & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
               return-cc?] :as opts
        :or   {span-reqs {:max 5}
               order     :asc}}]]
@@ -831,6 +832,7 @@
                  :always (.setScanIndexForward (case order :asc true :desc false))
                  last-prim-kvs   (.setExclusiveStartKey
                                   (clj-item->db-item last-prim-kvs))
+                 query-filter    (.setQueryFilter (query|scan-conditions query-filter))
                  limit           (.setLimit     (int g))
                  index           (.setIndexName      g)
                  consistent?     (.setConsistentRead g)
