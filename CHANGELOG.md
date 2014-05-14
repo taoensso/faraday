@@ -1,6 +1,12 @@
+## v1.4.0 / 2014 May 15
+
+ * [#29] **CHANGE**: `list-tables` now returns a lazy seq and supports >100 tables (@marcuswr, @paraseba).
+ * [#34] **NEW**: Add `:query-filter` support to `query` fn (@bpot).
+
+
 ## v1.3.2 / 2014 May 9
 
- * [#32] Fix deserialization of falsey values (were returning as nil) (@pegotezzi).
+ * [#32] **FIX**: deserialization of falsey values (were returning as nil) (@pegotezzi).
 
 
 ## v1.3.0 / 2014 Mar 30
