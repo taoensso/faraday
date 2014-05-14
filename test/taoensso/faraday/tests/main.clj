@@ -103,11 +103,26 @@
       i1 {:id 1 :name "bar"}
       i2 {:id 2 :name "baz"}
       creds        (BasicAWSCredentials. (:access-key *client-opts*) (:secret-key *client-opts*))
-      provider     (StaticCredentialsProvider. creds)]
-  (binding [*client-opts* (merge {:provider provider} (when-let [endpoint (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")] {:endpoint endpoint}))]
+      provider     (StaticCredentialsProvider. creds)
+      endpoint     (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")]
+  (binding [*client-opts* (merge {:provider provider} (when endpoint {:endpoint endpoint}))]
     (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
     (expect                             ; Batch put
      [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
                      [(far/get-item *client-opts* ttable {:id  0})
                       (far/get-item *client-opts* ttable {:id  1})
-                      (far/get-item *client-opts* ttable {:id -1})]))))
+                      (far/get-item *client-opts* ttable {:id -1})]))
+
+    ;; test list-tables lazy sequence
+    ;; generate more than 100 tables to hit the batch size limit
+    ;; of list-tables
+    ;; since this creates a large number of tables, only run this
+    ;; when the endpoint matches localhost
+    (when (.contains endpoint "localhost")
+      (let [tables (map keyword (map #(str "test_" %) (range 102)))]
+        (doseq [table tables] (far/ensure-table *client-opts* table
+                                                [:id :n]
+                                                {:throughput  {:read 1 :write 1}
+                                                 :block?      true}))
+        (expect true (> (count (far/list-tables *client-opts*)) 100))
+        (doseq [table tables] (far/delete-table *client-opts* table))))))
