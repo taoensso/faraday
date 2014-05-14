@@ -1,10 +1,10 @@
 (ns taoensso.faraday.tests.main
-  (:require [expectations           :as test :refer :all]
-            [taoensso.encore        :as encore]
-            [taoensso.faraday       :as far]
-            [taoensso.nippy         :as nippy])
-  (:import [com.amazonaws.auth BasicAWSCredentials]
-           [com.amazonaws.internal StaticCredentialsProvider]))
+  (:require [expectations     :as test :refer :all]
+            [taoensso.encore  :as encore]
+            [taoensso.faraday :as far]
+            [taoensso.nippy   :as nippy])
+  (:import  [com.amazonaws.auth BasicAWSCredentials]
+            [com.amazonaws.internal StaticCredentialsProvider]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
@@ -13,13 +13,15 @@
 ;;;; Config & setup
 
 (def ^:dynamic *client-opts*
-  (merge {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
-          :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")}
-         (when-let [endpoint (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")] {:endpoint endpoint})))
+  {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
+   :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")
+   :endpoint   (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")})
 
 (def ttable :faraday.tests.main)
 
 (defn- before-run {:expectations-options :before-run} []
+  (assert (and (:access-key *client-opts*)
+               (:secret-key *client-opts*)))
   (println "Setting up testing environment...")
   (far/ensure-table *client-opts* ttable [:id :n]
     {:throughput  {:read 1 :write 1}
@@ -97,32 +99,41 @@
 ;; (expect (interaction (println anything&)) (println 5))
 ;; (expect (interaction (println Long))      (println 5))
 
-
-;; Test AWSCredentialProvider
+;;; Test AWSCredentialProvider
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}
       i2 {:id 2 :name "baz"}
-      creds        (BasicAWSCredentials. (:access-key *client-opts*) (:secret-key *client-opts*))
-      provider     (StaticCredentialsProvider. creds)
-      endpoint     (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")]
-  (binding [*client-opts* (merge {:provider provider} (when endpoint {:endpoint endpoint}))]
-    (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
-    (expect                             ; Batch put
-     [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
-                     [(far/get-item *client-opts* ttable {:id  0})
-                      (far/get-item *client-opts* ttable {:id  1})
-                      (far/get-item *client-opts* ttable {:id -1})]))
+      creds    (BasicAWSCredentials. (:access-key *client-opts*)
+                                     (:secret-key *client-opts*))
+      provider (StaticCredentialsProvider. creds)
+      endpoint (:endpoint *client-opts*)]
 
-    ;; test list-tables lazy sequence
-    ;; generate more than 100 tables to hit the batch size limit
-    ;; of list-tables
-    ;; since this creates a large number of tables, only run this
-    ;; when the endpoint matches localhost
-    (when (.contains endpoint "localhost")
-      (let [tables (map keyword (map #(str "test_" %) (range 102)))]
-        (doseq [table tables] (far/ensure-table *client-opts* table
-                                                [:id :n]
-                                                {:throughput  {:read 1 :write 1}
-                                                 :block?      true}))
-        (expect true (> (count (far/list-tables *client-opts*)) 100))
-        (doseq [table tables] (far/delete-table *client-opts* table))))))
+  (binding [*client-opts* {:provider provider
+                           :endpoint endpoint}]
+
+    (expect ; Batch put
+      [i0 i1 nil]
+      (do
+        (far/batch-write-item *client-opts*
+          {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
+        ;;
+        (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
+        [(far/get-item *client-opts* ttable {:id  0})
+         (far/get-item *client-opts* ttable {:id  1})
+         (far/get-item *client-opts* ttable {:id -1})]))))
+
+;;; Test `list-tables` lazy sequence
+;; Creates a _large_ number of tables so only run locally
+(let [endpoint (:endpoint *client-opts*)]
+  (when (and endpoint (.contains ^String endpoint "localhost"))
+    (expect
+      (let [;; Generate > 100 tables to exceed the batch size limit:
+            tables (map #(keyword (str "test_" %)) (range 102))]
+        (doseq [table tables]
+          (far/ensure-table *client-opts* table [:id :n]
+            {:throughput  {:read 1 :write 1}
+             :block?      true}))
+        (let [table-count (count (far/list-tables *client-opts*))]
+          (doseq [table tables]
+            (far/delete-table *client-opts* table))
+          (> table-count 100))))))
