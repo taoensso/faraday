@@ -11,6 +11,7 @@
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
             [taoensso.encore        :as encore :refer (doto-cond)]
+            [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import  [clojure.lang BigInt]
@@ -128,8 +129,18 @@
 
 ;;;; Coercion - values
 
-(def ^:private nt-freeze (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
-(def ^:private nt-thaw   (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
+(def ^:private nt-freeze  (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
+;; (def ^:private nt-thaw (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
+
+(defn- nt-thaw [bb]
+  (let [ba          (.array ^ByteBuffer bb)
+        serialized? (#'nippy/try-parse-header ba)]
+    (if-not serialized?
+      ba ; No Nippy header => assume non-serialized binary data (e.g. other client)
+      (try ; Header match _may_ have been a fluke (though v. unlikely)
+        (nippy-tools/thaw ba)
+        (catch Exception e
+          ba)))))
 
 (encore/defalias with-thaw-opts nippy-tools/with-thaw-opts)
 (encore/defalias freeze         nippy-tools/wrap-for-freezing
