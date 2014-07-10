@@ -12,17 +12,17 @@
 
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.6.0"]
+   [com.taoensso/encore        "1.7.0"]
    [com.taoensso/nippy         "2.6.3"]
-   [com.amazonaws/aws-java-sdk "1.7.8.1" :exclusions [joda-time]]
+   [com.amazonaws/aws-java-sdk "1.8.6" :exclusions [joda-time]]
    [joda-time                  "2.3"]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
-   :test {:dependencies [[expectations           "1.4.56"]
-                         [org.clojure/test.check "0.5.7"]]
+   :test {:dependencies [[expectations           "2.0.7"]
+                         [org.clojure/test.check "0.5.8"]]
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.2.2"]]}
 
