@@ -668,19 +668,23 @@
 (defn- attr-multi-vs
   "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
-  (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
+  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
     (reduce (fn [r attr-multi-vs]
               (let [attrs (keys attr-multi-vs)
-                    vs    (mapv ensure-coll (vals attr-multi-vs))]
+                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
                 (when (> (count (filter next vs)) 1)
                   (-> (Exception. "Can range over only a single attr's values")
                       (throw)))
                 (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
                               (apply utils/cartesian-product vs)))))
-            [] (ensure-coll attr-multi-vs-map))))
+            [] (ensure-sequential attr-multi-vs-map))))
 
-(comment (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
-         (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
+(comment
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
+  )
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
