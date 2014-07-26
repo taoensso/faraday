@@ -1,7 +1,7 @@
 ## v1.5.0 / 2014 July 26
 
  * **NEW**: allow reading of binary values written with other (non-serializing) clients.
- * Fix [#36]: Batch writes weren't allowing set values.
+ * **Fix** [#36]: Batch writes weren't allowing set values.
 
 
 ## v1.4.0 / 2014 May 15
