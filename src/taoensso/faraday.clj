@@ -11,6 +11,7 @@
   {:author "Peter Taoussanis"}
   (:require [clojure.string         :as str]
             [taoensso.encore        :as encore :refer (doto-cond)]
+            [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import  [clojure.lang BigInt]
@@ -128,8 +129,18 @@
 
 ;;;; Coercion - values
 
-(def ^:private nt-freeze (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
-(def ^:private nt-thaw   (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
+(def ^:private nt-freeze  (comp #(ByteBuffer/wrap %) nippy-tools/freeze))
+;; (def ^:private nt-thaw (comp nippy-tools/thaw #(.array ^ByteBuffer %)))
+
+(defn- nt-thaw [bb]
+  (let [ba          (.array ^ByteBuffer bb)
+        serialized? (#'nippy/try-parse-header ba)]
+    (if-not serialized?
+      ba ; No Nippy header => assume non-serialized binary data (e.g. other client)
+      (try ; Header match _may_ have been a fluke (though v. unlikely)
+        (nippy-tools/thaw ba)
+        (catch Exception e
+          ba)))))
 
 (encore/defalias with-thaw-opts nippy-tools/with-thaw-opts)
 (encore/defalias freeze         nippy-tools/wrap-for-freezing
@@ -657,19 +668,23 @@
 (defn- attr-multi-vs
   "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
-  (let [ensure-coll (fn [x] (if (coll?* x) x [x]))]
+  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
     (reduce (fn [r attr-multi-vs]
               (let [attrs (keys attr-multi-vs)
-                    vs    (mapv ensure-coll (vals attr-multi-vs))]
+                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
                 (when (> (count (filter next vs)) 1)
                   (-> (Exception. "Can range over only a single attr's values")
                       (throw)))
                 (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
                               (apply utils/cartesian-product vs)))))
-            [] (ensure-coll attr-multi-vs-map))))
+            [] (ensure-sequential attr-multi-vs-map))))
 
-(comment (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]})
-         (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
+(comment
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
+  )
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
