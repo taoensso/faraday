@@ -18,6 +18,7 @@
    :endpoint   (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")})
 
 (def ttable :faraday.tests.main)
+(def range-table :faraday.tests.range)
 
 (defn- before-run {:expectations-options :before-run} []
   (assert (and (:access-key *client-opts*)
@@ -26,6 +27,10 @@
   (far/ensure-table *client-opts* ttable [:id :n]
     {:throughput  {:read 1 :write 1}
      :block?      true})
+  (far/ensure-table *client-opts* range-table [:title :s]
+    {:range-keydef [:number :n]
+     :throughput   {:read 1 :write 1}
+     :block?       true})
   (println "Ready to roll..."))
 
 (defn- after-run {:expectations-options :after-run} [])
@@ -63,6 +68,26 @@
    [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [0 1]}}})
                  [(far/get-item *client-opts* ttable {:id 0})
                   (far/get-item *client-opts* ttable {:id 1})])))
+
+;;;; Range queries
+(let [j0 {:title "One" :number 0}
+      j1 {:title "One" :number 1}
+      k0 {:title "Two" :number 0}
+      k1 {:title "Two" :number 1}]
+
+  (far/batch-write-item *client-opts*
+    {range-table {:put [j0 j1 k0 k1]}})
+
+  (expect ; Query, normal ordering
+    [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
+
+  (expect ; Query, reverse ordering
+    [j1 j0] (far/query *client-opts* range-table {:title [:eq "One"]}
+              {:order :desc}))
+
+  (expect ; Query with :limit
+    [j0] (far/query *client-opts* range-table {:title [:eq "One"]}
+           {:limit 1 :span-reqs {:max 1}})))
 
 (expect-let ; Serialization
  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
