@@ -1,3 +1,5 @@
+> This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
+
 ## v1.5.0 / 2014 July 26
 
  * **NEW**: allow reading of binary values written with other (non-serializing) clients.
