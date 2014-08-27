@@ -912,6 +912,13 @@
   `scan` results.
 
   Ref. http://goo.gl/KLwnn (official parallel scan documentation)."
+
+  ;; TODO GitHub #17:
+  ;; http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Scan.html
+  ;; In a parallel scan, a Scan request that includes ExclusiveStartKey must
+  ;; specify the same segment whose previous Scan returned the corresponding
+  ;; value of LastEvaluatedKey.
+
   [client-opts table total-segments & [opts]]
   (let [opts (assoc opts :total-segments total-segments)]
     (->> (mapv (fn [seg] (future (scan client-opts table (assoc opts :segment seg))))
