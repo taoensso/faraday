@@ -31,6 +31,7 @@
     {:range-keydef [:number :n]
      :throughput   {:read 1 :write 1}
      :block?       true})
+
   (println "Ready to roll..."))
 
 (defn- after-run {:expectations-options :after-run} [])
@@ -42,7 +43,8 @@
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}]
 
-  (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
+  (defn- basic-setup {:expectations-options :before-run} []
+    (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}}))
 
   (expect ; Batch put
    [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
@@ -75,8 +77,9 @@
       k0 {:title "Two" :number 0}
       k1 {:title "Two" :number 1}]
 
-  (far/batch-write-item *client-opts*
-    {range-table {:put [j0 j1 k0 k1]}})
+  (defn- range-setup {:expectations-options :before-run} []
+    (far/batch-write-item *client-opts*
+      {range-table {:put [j0 j1 k0 k1]}}))
 
   (expect ; Query, normal ordering
     [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
