@@ -103,7 +103,10 @@
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
                socket-timeout  (.setSocketTimeout     g))]
-         (doto-cond [g (AmazonDynamoDBClient. (or provider aws-creds) client-config)]
+         
+         (doto-cond [g (if provider
+                         (AmazonDynamoDBClient. ^AWSCredentialsProvider provider client-config)
+                         (AmazonDynamoDBClient. ^AWSCredentials creds client-config))]
            endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
