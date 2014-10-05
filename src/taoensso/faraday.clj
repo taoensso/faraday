@@ -9,30 +9,30 @@
     * primary key => hash key WITH optional range key.
     * attribute   ≠> key (i.e. does not imply)."
   {:author "Peter Taoussanis"}
-  (:require [clojure.string         :as str]
-            [taoensso.encore        :as encore :refer (doto-cond)]
-            [taoensso.nippy         :as nippy]
-            [taoensso.nippy.tools   :as nippy-tools]
-            [taoensso.faraday.utils :as utils :refer (coll?*)])
+  (:require [clojure.string            :as str]
+            [taoensso.encore           :as encore :refer (doto-cond)]
+            [taoensso.nippy            :as nippy]
+            [taoensso.nippy.tools      :as nippy-tools]
+            [taoensso.faraday.utils    :as utils :refer (coll?*)]
+            [taoensso.faraday.requests :as reqs]
+            [taoensso.faraday.coercion :refer [db-item->clj-item
+                                               db-val->clj-val
+                                               clj-item->db-item]])
   (:import  [clojure.lang BigInt]
             [com.amazonaws.services.dynamodbv2.model
+             BatchGetItemRequest
+             BatchWriteItemRequest             
              AttributeDefinition
              AttributeValue
              AttributeValueUpdate
-             BatchGetItemRequest
              BatchGetItemResult
-             BatchWriteItemRequest
              BatchWriteItemResult
              Condition
              ConsumedCapacity
-             CreateTableRequest
              CreateTableResult
-             DeleteItemRequest
              DeleteItemResult
              DeleteRequest
-             DeleteTableRequest
              DeleteTableResult
-             DescribeTableRequest
              DescribeTableResult
              ExpectedAttributeValue
              GetItemRequest
@@ -40,7 +40,6 @@
              ItemCollectionMetrics
              KeysAndAttributes
              KeySchemaElement
-             ListTablesRequest
              ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
@@ -49,19 +48,12 @@
              Projection
              ProvisionedThroughput
              ProvisionedThroughputDescription
-             PutItemRequest
              PutItemResult
-             PutRequest
-             QueryRequest
              QueryResult
-             ScanRequest
              ScanResult
              TableDescription
-             UpdateItemRequest
              UpdateItemResult
-             UpdateTableRequest
              UpdateTableResult
-             WriteRequest
              ConditionalCheckFailedException
              InternalServerErrorException
              ItemCollectionSizeLimitExceededException
@@ -260,7 +252,7 @@
   "Returns a map describing a table, or nil if the table doesn't exist."
   [client-opts table]
   (try (as-map (.describeTable (db-client client-opts)
-                (describe-table-request table)))
+                ^DescribeTableRequest (reqs/describe-table-request table)))
        (catch ResourceNotFoundException _ nil)))
 
 (defn table-status-watch
@@ -285,94 +277,6 @@
          @(table-status-watch mc "delete-me5" :creating) ; ~53000ms
          (def descr (describe-table mc "delete-me5")))
 
-(defn- key-schema-element "Returns a new KeySchemaElement object."
-  [key-name key-type]
-  (doto (KeySchemaElement.)
-    (.setAttributeName (name key-name))
-    (.setKeyType (utils/enum key-type))))
-
-(defn- key-schema
-  "Returns a [{<hash-key> KeySchemaElement}], or
-             [{<hash-key> KeySchemaElement} {<range-key> KeySchemaElement}]
-   vector for use as a table/index primary key."
-  [[hname _ :as hash-keydef] & [[rname _ :as range-keydef]]]
-  (cond-> [(key-schema-element hname :hash)]
-          range-keydef (conj (key-schema-element rname :range))))
-
-(defn- provisioned-throughput "Returns a new ProvisionedThroughput object."
-  [{read-units :read write-units :write :as throughput}]
-  (assert (and read-units write-units)
-          (str "Malformed throughput: " throughput))
-  (doto (ProvisionedThroughput.)
-    (.setReadCapacityUnits  (long read-units))
-    (.setWriteCapacityUnits (long write-units))))
-
-(defn- keydefs "[<name> <type>] defs -> [AttributeDefinition ...]"
-  [hash-keydef range-keydef lsindexes gsindexes]
-  (let [defs (->> (conj [] hash-keydef range-keydef)
-                  (concat (mapv :range-keydef lsindexes))
-                  (concat (mapv :hash-keydef  gsindexes))
-                  (concat (mapv :range-keydef gsindexes))
-                  (filterv identity)
-                  (distinct))]
-    (mapv
-     (fn [[key-name key-type :as def]]
-       (assert (and key-name key-type) (str "Malformed keydef: " def))
-       (assert (#{:s :n :ss :ns :b :bs} key-type)
-               (str "Invalid keydef type: " key-type))
-       (doto (AttributeDefinition.)
-         (.setAttributeName (name key-name))
-         (.setAttributeType (utils/enum key-type))))
-     defs)))
-
-(defn- local-2nd-indexes
-  "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
-  [hash-keydef indexes]
-  (when indexes
-    (mapv
-      (fn [{index-name :name
-           :keys      [range-keydef projection]
-           :or        {projection :all}
-           :as        index}]
-        (assert (and index-name range-keydef projection)
-                (str "Malformed local secondary index (LSI): " index))
-        (doto (LocalSecondaryIndex.)
-          (.setIndexName (name index-name))
-          (.setKeySchema (key-schema hash-keydef range-keydef))
-          (.setProjection
-            (let [pr (Projection.)
-                  ptype (if (coll?* projection) :include projection)]
-              (.setProjectionType pr (utils/enum ptype))
-              (when (= ptype :include)
-                (.setNonKeyAttributes pr (mapv name projection)))
-              pr))))
-      indexes)))
-
-(defn- global-2nd-indexes
-  "[{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
-  indexes -> [GlobalSecondaryIndex ...]"
-  [indexes]
-  (when indexes
-    (mapv
-      (fn [{index-name :name
-           :keys      [hash-keydef range-keydef throughput projection]
-           :or        {projection :all}
-           :as        index}]
-        (assert (and index-name hash-keydef projection throughput)
-                (str "Malformed global secondary index (GSI): " index))
-        (doto (GlobalSecondaryIndex.)
-          (.setIndexName (name index-name))
-          (.setKeySchema (key-schema hash-keydef range-keydef))
-          (.setProjection
-            (let [pr (Projection.)
-                  ptype (if (coll?* projection) :include projection)]
-              (.setProjectionType pr (utils/enum ptype))
-              (when (= ptype :include)
-                (.setNonKeyAttributes pr (mapv name projection)))
-              pr))
-          (.setProvisionedThroughput (provisioned-throughput throughput))))
-      indexes)))
-
 (defn create-table
   "Creates a table with options:
     hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
@@ -392,7 +296,7 @@
         (as-map
          (.createTable
           (db-client client-opts)
-          (create-table-request table-name hash-keydef opts)))]
+          (reqs/create-table-request table-name hash-keydef opts)))]
     (if-not block? result @(table-status-watch client-opts table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
@@ -448,7 +352,7 @@
                     (as-map
                      (.updateTable
                       (db-client client-opts)
-                      (update-table-request table throughput-steps)))
+                      (reqs/update-table-request table throughput-steps)))
                     ;; Returns _new_ descr when ready:
                     @(table-status-watch client-opts table :updating))]
 
@@ -463,7 +367,7 @@
 
 (defn delete-table "Deletes a table, go figure."
   [client-opts table]
-  (as-map (.deleteTable (db-client client-opts) (delete-table-request table))))
+  (as-map (.deleteTable (db-client client-opts) ^DeleteTableRequest (reqs/delete-table-request table))))
 
 ;;;; API - items
 
@@ -475,17 +379,7 @@
   [client-opts table prim-kvs & [opts]]
   (as-map
    (.getItem (db-client client-opts)
-    (get-item-request table prim-kvs opts))))
-
-(defn- expected-values
-  "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
-  [expected-map]
-  (when (seq expected-map)
-    (utils/name-map
-     #(if (= false %)
-        (ExpectedAttributeValue. false)
-        (ExpectedAttributeValue. (clj-val->db-val %)))
-     expected-map)))
+    (reqs/get-item-request table prim-kvs opts))))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
@@ -499,16 +393,7 @@
                               :as   opts}]]
   (as-map
    (.putItem (db-client client-opts)
-     (put-item-request table item opts))))
-
-(defn- attribute-updates
-  "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
-  [update-map]
-  (when (seq update-map)
-    (utils/name-map
-     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
-                                              (utils/enum action)))
-     update-map)))
+     (reqs/put-item-request table item opts))))
 
 (defn update-item
   "Updates an item in a table by its primary key with options:
@@ -521,7 +406,7 @@
                                              :as   opts}]]
   (as-map
    (.updateItem (db-client client-opts)
-     (update-item-request table prim-kvs update-map opts))))
+     (reqs/update-item-request table prim-kvs update-map opts))))
 
 
 (defn delete-item
@@ -532,7 +417,7 @@
                                   :as   opts}]]
   (as-map
    (.deleteItem (db-client client-opts)
-     (delete-item-request table prim-kvs opts))))
+     (reqs/delete-item-request table prim-kvs opts))))
 
 ;;;; API - batch ops
 
@@ -541,6 +426,21 @@
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
   )
+
+(defn- attr-multi-vs
+  "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
+  [attr-multi-vs-map]
+  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+    (reduce (fn [r attr-multi-vs]
+              (let [attrs (keys attr-multi-vs)
+                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
+                (when (> (count (filter next vs)) 1)
+                  (-> (Exception. "Can range over only a single attr's values")
+                      (throw)))
+                (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                              (apply utils/cartesian-product vs)))))
+            [] (ensure-sequential attr-multi-vs-map))))
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
@@ -593,7 +493,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchGetItem (db-client client-opts)
-               (batch-get-item-request return-cc? raw-req))))]
+               ^BatchGetItemRequest (reqs/batch-get-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
 
 (comment
@@ -620,7 +520,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchWriteItem (db-client client-opts)
-               (batch-write-item-request return-cc? raw-req))))]
+               ^BatchWriteItemRequest (reqs/batch-write-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs
       (run1
        (utils/name-map
@@ -629,14 +529,10 @@
           (reduce into []
             (for [action (keys table-request)
                   :let [items (attr-multi-vs (table-request action))]]
-              (mapv (partial write-request action) items))))
+              (mapv (partial reqs/write-request action) items))))
         requests)))))
 
 ;;;; API - queries & scans
-
-(defn- enum-op ^String [operator]
-  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
-      utils/enum))
 
 (defn query
   "Retrieves items from a table (indexed) with options:
@@ -677,7 +573,7 @@
             (as-map
              (.query
               (db-client client-opts)
-              (query-request table prim-key-conds opts))))]
+              (reqs/query-request table prim-key-conds opts))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan
@@ -715,7 +611,7 @@
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.scan (db-client client-opts)
-               (scan-request table opts))))]
+               (reqs/scan-request table opts))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
