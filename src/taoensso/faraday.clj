@@ -21,7 +21,9 @@
   (:import  [clojure.lang BigInt]
             [com.amazonaws.services.dynamodbv2.model
              BatchGetItemRequest
-             BatchWriteItemRequest             
+             BatchWriteItemRequest
+             DescribeTableRequest
+             DeleteTableRequest
              AttributeDefinition
              AttributeValue
              AttributeValueUpdate
@@ -103,10 +105,8 @@
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
                socket-timeout  (.setSocketTimeout     g))]
-         
-         (doto-cond [g (if provider
-                         (AmazonDynamoDBClient. ^AWSCredentialsProvider provider client-config)
-                         (AmazonDynamoDBClient. ^AWSCredentials creds client-config))]
+
+         (doto-cond [g (AmazonDynamoDBClient. (or provider aws-creds) client-config)]
            endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
@@ -293,7 +293,7 @@
     :block?       - Block for table to actually be active?"
   [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
-       :or   {throughput {:read 1 :write 1}} :as opts}]]
+       :as   opts}]]
   (let [lsindexes (or lsindexes (:indexes opts)) ; DEPRECATED
         result
         (as-map
@@ -392,7 +392,6 @@
                   {<attr> <expected-value> ...}
                   {<attr> false ...} ; Attribute must not exist"
   [client-opts table item & [{:keys [return expected return-cc?]
-                              :or   {return :none}
                               :as   opts}]]
   (as-map
    (.putItem (db-client client-opts)
@@ -405,7 +404,6 @@
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
     :expected  - {<attr> <#{<expected-value> false}> ...}."
   [client-opts table prim-kvs update-map & [{:keys [return expected return-cc?]
-                                             :or   {return :none}
                                              :as   opts}]]
   (as-map
    (.updateItem (db-client client-opts)
@@ -416,7 +414,6 @@
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
   [client-opts table prim-kvs & [{:keys [return expected return-cc?]
-                                  :or   {return :none}
                                   :as   opts}]]
   (as-map
    (.deleteItem (db-client client-opts)
@@ -569,9 +566,8 @@
   [client-opts table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
               return-cc?]
-       :or   {span-reqs {:max 5}
-              order     :asc}
-       :as opts}]]
+       :or   {span-reqs {:max 5}}
+       :as   opts}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.query
@@ -609,12 +605,12 @@
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table
    & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
-              segment return-cc?] :as opts
-       :or   {span-reqs {:max 5}}}]]
+              segment return-cc?]
+       :or   {span-reqs {:max 5}} :as opts}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.scan (db-client client-opts)
-               (reqs/scan-request table opts))))]
+                    (reqs/scan-request table opts))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
