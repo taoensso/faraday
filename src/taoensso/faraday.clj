@@ -128,7 +128,7 @@
   "Forces argument of any type to be subject to automatic de/serialization with
   Nippy.")
 
-(defn cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
+(defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
 
 (defprotocol AsMap (as-map [x]))
 
@@ -564,9 +564,8 @@
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
-              return-cc?]
-       :or   {span-reqs {:max 5}}
-       :as   opts}]]
+              return-cc?] :as opts
+       :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.query
