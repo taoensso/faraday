@@ -125,7 +125,7 @@
   (doto (DescribeTableRequest.) (.setTableName (name table))))
 
 (defn create-table-request
-  [client-opts table-name hash-keydef
+  [table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts))]
