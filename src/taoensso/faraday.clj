@@ -20,21 +20,21 @@
                                                clj-item->db-item]])
   (:import  [clojure.lang BigInt]
             [com.amazonaws.services.dynamodbv2.model
-             BatchGetItemRequest
-             BatchWriteItemRequest
-             DescribeTableRequest
-             DeleteTableRequest
              AttributeDefinition
              AttributeValue
+             BatchGetItemRequest
              AttributeValueUpdate
              BatchGetItemResult
+             BatchWriteItemRequest
              BatchWriteItemResult
              Condition
              ConsumedCapacity
              CreateTableResult
              DeleteItemResult
              DeleteRequest
+             DeleteTableRequest
              DeleteTableResult
+             DescribeTableRequest
              DescribeTableResult
              ExpectedAttributeValue
              GetItemRequest
