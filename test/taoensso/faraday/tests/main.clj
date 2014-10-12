@@ -44,7 +44,7 @@
 
 (defn- after-run {:expectations-options :after-run} [])
 
-;(comment (far/delete-table *client-opts* ttable))
+(comment (far/delete-table *client-opts* ttable))
 
 ;;;; Basic API
 
@@ -202,8 +202,8 @@
          (far/get-item *client-opts* ttable {:id  1})
          (far/get-item *client-opts* ttable {:id -1})]))))
 
-;; Test `list-tables` lazy sequence
-; Creates a _large_ number of tables so only run locally
+;;; Test `list-tables` lazy sequence
+;; Creates a _large_ number of tables so only run locally
 (let [endpoint (:endpoint *client-opts*)]
   (when (and endpoint (.contains ^String endpoint "localhost"))
     (expect

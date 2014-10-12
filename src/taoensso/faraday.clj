@@ -22,8 +22,8 @@
             [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
-             BatchGetItemRequest
              AttributeValueUpdate
+             BatchGetItemRequest
              BatchGetItemResult
              BatchWriteItemRequest
              BatchWriteItemResult
@@ -105,7 +105,6 @@
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
                socket-timeout  (.setSocketTimeout     g))]
-
          (doto-cond [g (AmazonDynamoDBClient. (or provider aws-creds) client-config)]
            endpoint (.setEndpoint g)))))))
 
@@ -129,9 +128,9 @@
   "Forces argument of any type to be subject to automatic de/serialization with
   Nippy.")
 
-(defprotocol AsMap (as-map [x]))
-
 (defn cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
+
+(defprotocol AsMap (as-map [x]))
 
 (defmacro ^:private am-item-result [result get-form]
   `(when-let [get-form# ~get-form]
@@ -240,10 +239,10 @@
   [client-opts]
   (letfn [(step [^String offset]
             (lazy-seq
-             (let [client (db-client client-opts)
-                   result (if (nil? offset)
-                            (.listTables client)
-                            (.listTables client offset))
+             (let [client   (db-client client-opts)
+                   result   (if (nil? offset)
+                              (.listTables client)
+                              (.listTables client offset))
                    last-key (.getLastEvaluatedTableName result)
                    chunk    (map keyword (.getTableNames result))]
                (if last-key
@@ -421,12 +420,6 @@
 
 ;;;; API - batch ops
 
-(comment
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
-  )
-
 (defn- attr-multi-vs
   "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
@@ -441,6 +434,12 @@
                 (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
                               (apply utils/cartesian-product vs)))))
             [] (ensure-sequential attr-multi-vs-map))))
+
+(comment
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
+  )
 
 (defn- batch-request-items
   "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
@@ -605,8 +604,8 @@
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table
    & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
-              segment return-cc?]
-       :or   {span-reqs {:max 5}} :as opts}]]
+              segment return-cc?] :as opts
+       :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
              (.scan (db-client client-opts)
@@ -655,39 +654,39 @@
   (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
                            {:a :A2 :b :B2 :c :C2}]))
 
-(comment                                ; README
+(comment ; README
 
-  (require '[taoensso.faraday :as far])
+(require '[taoensso.faraday :as far])
 
-  (def client-opts
-    {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-     :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
-    )
-
-  (far/list-tables client-opts)
-  ;; => [] ; No tables yet :-(
-
-  (far/create-table client-opts :my-table
-                    [:id :n] ; Primary key named "id", (:n => number type)
-                    {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
-                     :block? true ; Block thread during table creation
-                     })
-
-  ;; Wait a minute for the table to be created... got a sandwich handy?
-
-  (far/list-tables client-opts)
-  ;; => [:my-table] ; There's our new table!
-
-  (far/put-item client-opts
-                :my-table
-                {:id 0 ; Remember that this is our primary (indexed) key
-                 :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
-                                                          :set      #{1 2 3}
-                                                          :rational (/ 22 7)
-                                                          ;; ... Any Clojure data goodness
-                                                          })})
-
-  (far/get-item client-opts :my-table {:id 0})
-  ;; => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
-
+(def client-opts
+  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
   )
+
+(far/list-tables client-opts)
+;; => [] ; No tables yet :-(
+
+(far/create-table client-opts :my-table
+  [:id :n]  ; Primary key named "id", (:n => number type)
+  {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
+   :block? true ; Block thread during table creation
+   })
+
+;; Wait a minute for the table to be created... got a sandwich handy?
+
+(far/list-tables client-opts)
+;; => [:my-table] ; There's our new table!
+
+(far/put-item client-opts
+  :my-table
+  {:id 0 ; Remember that this is our primary (indexed) key
+   :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
+                                            :set      #{1 2 3}
+                                            :rational (/ 22 7)
+                                            ;; ... Any Clojure data goodness
+                                            })})
+
+(far/get-item client-opts :my-table {:id 0})
+;; => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
+
+)
