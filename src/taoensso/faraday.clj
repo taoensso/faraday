@@ -354,7 +354,7 @@
                     (as-map
                      (.updateTable
                       (db-client client-opts)
-                      (reqs/update-table-request table throughput-steps)))
+                      (reqs/update-table-request table {:read r' :write w'})))
                     ;; Returns _new_ descr when ready:
                     @(table-status-watch client-opts table :updating))]
 

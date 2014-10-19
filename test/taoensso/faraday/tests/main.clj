@@ -51,7 +51,7 @@
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}]
 
-  (after-setup!    
+  (after-setup!
    #(far/batch-write-item *client-opts*
                           {ttable {:delete [{:id 0} {:id 1} {:id 2}]}}))
 
@@ -84,7 +84,7 @@
 
   (after-setup!
     #(far/delete-item *client-opts* ttable {:id 10}))
-  
+
   (expect
    {:id 10 :name "baz"}
    (do
@@ -202,18 +202,37 @@
          (far/get-item *client-opts* ttable {:id  1})
          (far/get-item *client-opts* ttable {:id -1})]))))
 
+(def local-dynamo?
+  (let [endpoint (:endpoint *client-opts*)]
+    (and endpoint (.contains ^String endpoint "localhost"))))
+
 ;;; Test `list-tables` lazy sequence
 ;; Creates a _large_ number of tables so only run locally
-(let [endpoint (:endpoint *client-opts*)]
-  (when (and endpoint (.contains ^String endpoint "localhost"))
+(when local-dynamo?
+  (expect
+   (let [ ;; Generate > 100 tables to exceed the batch size limit:
+         tables (map #(keyword (str "test_" %)) (range 102))]
+     (doseq [table tables]
+       (far/ensure-table *client-opts* table [:id :n]
+                         {:throughput  {:read 1 :write 1}
+                          :block?      true}))
+     (let [table-count (count (far/list-tables *client-opts*))]
+       (doseq [table tables]
+         (far/delete-table *client-opts* table))
+       (> table-count 100))))
+
+  (let [update-t :faraday.tests.update-table]
+    (after-setup!
+     #(do
+        (when (far/describe-table *client-opts* update-t)
+          (far/delete-table *client-opts* update-t))
+        (far/create-table
+         *client-opts* update-t [:id :n]
+         {:throughput {:read 1 :write 1} :block? true})))
+
     (expect
-      (let [;; Generate > 100 tables to exceed the batch size limit:
-            tables (map #(keyword (str "test_" %)) (range 102))]
-        (doseq [table tables]
-          (far/ensure-table *client-opts* table [:id :n]
-            {:throughput  {:read 1 :write 1}
-             :block?      true}))
-        (let [table-count (count (far/list-tables *client-opts*))]
-          (doseq [table tables]
-            (far/delete-table *client-opts* table))
-          (> table-count 100))))))
+     {:read 2 :write 2}
+     (-> (far/update-table *client-opts* update-t {:read 2 :write 2})
+         deref
+         :throughput
+         (select-keys #{:read :write})))))
