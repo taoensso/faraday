@@ -26,7 +26,12 @@
             KeysAndAttributes
             WriteRequest
             PutRequest
-            DeleteRequest]))
+            DeleteRequest
+            QueryRequest
+            ScanRequest
+            Condition
+            ComparisonOperator
+            Select]))
 
 (expect
  "describe-table-name"
@@ -234,3 +239,45 @@
            (DeleteRequest. {"k" (doto (AttributeValue.)
                                   (.setN "0"))}))]}
    (.getRequestItems req)))
+
+(let [req ^QueryRequest (reqs/query-request
+                         :query
+                         {:name [:eq "Steve"]
+                          :age [:between [10 30]]}
+                         {:return :all-projected-attributes
+                          :index "lsindex"
+                          :order :desc
+                          :limit 2})]
+  (expect "query" (.getTableName req))
+  (expect
+   {"name" (doto (Condition.)
+             (.setComparisonOperator ComparisonOperator/EQ)
+             (.setAttributeValueList [(AttributeValue. "Steve")]))
+    "age" (doto (Condition.)
+            (.setComparisonOperator ComparisonOperator/BETWEEN)
+            (.setAttributeValueList [(doto (AttributeValue.)
+                                       (.setN "10"))
+                                     (doto (AttributeValue.)
+                                       (.setN "30"))]))}
+   (.getKeyConditions req))
+  (expect (str Select/ALL_PROJECTED_ATTRIBUTES) (.getSelect req))
+  (expect "lsindex" (.getIndexName req))
+  (expect false? (.getScanIndexForward req))
+  (expect 2 (.getLimit req)))
+
+(let [req ^ScanRequest (reqs/scan-request
+                        :scan
+                        {:attr-conds {:age [:in [24 27]]}
+                         :return :count
+                         :limit 10})]
+  (expect "scan" (.getTableName req))
+  (expect 10 (.getLimit req))
+  (expect
+   {"age" (doto (Condition.)
+            (.setComparisonOperator ComparisonOperator/IN)
+            (.setAttributeValueList [(doto (AttributeValue.)
+                                       (.setN "24"))
+                                     (doto (AttributeValue.)
+                                       (.setN "27"))]))}
+   (.getScanFilter req))
+  (expect (str Select/COUNT) (.getSelect req)))
