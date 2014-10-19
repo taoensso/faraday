@@ -30,7 +30,8 @@
              ScanRequest
              UpdateItemRequest
              UpdateTableRequest
-             WriteRequest]))
+             WriteRequest
+             KeysAndAttributes]))
 
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [key-name key-type]
@@ -210,6 +211,42 @@
     expected (.setExpected     (expected-values g))
     return   (.setReturnValues (utils/enum g))
     return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
+
+(defn attr-multi-vs
+  "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
+  [attr-multi-vs-map]
+  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+    (reduce (fn [r attr-multi-vs]
+              (let [attrs (keys attr-multi-vs)
+                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
+                (when (> (count (filter next vs)) 1)
+                  (-> (Exception. "Can range over only a single attr's values")
+                      (throw)))
+                (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                              (apply utils/cartesian-product vs)))))
+            [] (ensure-sequential attr-multi-vs-map))))
+
+(comment
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
+  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
+  )
+
+(defn batch-request-items
+  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+  [requests]
+  (utils/name-map
+   (fn [{:keys [prim-kvs attrs consistent?]}]
+     (doto-cond [g (KeysAndAttributes.)]
+       attrs       (.setAttributesToGet (mapv name g))
+       consistent? (.setConsistentRead  g)
+       :always     (.setKeys (attr-multi-vs prim-kvs))))
+   requests))
+
+(comment (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
+                                                      :my-range ["0" "1"]}]
+                                          :attrs []}}))
 
 (defn batch-get-item-request
   [return-cc? raw-req]

@@ -22,7 +22,11 @@
             BatchGetItemRequest
             BatchWriteItemRequest
             AttributeValueUpdate
-            AttributeAction]))
+            AttributeAction
+            KeysAndAttributes
+            WriteRequest
+            PutRequest
+            DeleteRequest]))
 
 (expect
  "describe-table-name"
@@ -129,12 +133,13 @@
   ^PutItemRequest
   (reqs/put-item-request :put-item-table-name {:x 1})))
 
-(let [req ^PutItemRequest (reqs/put-item-request
-                           :put-item-table-name
-                           {:c1 "hey" :c2 1}
-                           {:return :updated-new
-                            :expected {:e1 "expected value"
-                                       :e2 false}})]
+(let [req
+      ^PutItemRequest (reqs/put-item-request
+                       :put-item-table-name
+                       {:c1 "hey" :c2 1}
+                       {:return :updated-new
+                        :expected {:e1 "expected value"
+                                   :e2 false}})]
   (expect (str ReturnValue/UPDATED_NEW) (.getReturnValues req))
   (expect {"c1" (AttributeValue. "hey")
            "c2" (doto (AttributeValue.)
@@ -145,14 +150,16 @@
            "e2" (ExpectedAttributeValue. false)}
           (.getExpected req)))
 
-(let [req ^UpdateItemRequest (reqs/update-item-request
-                              :update-item
-                              {:x 1}
-                              {:y [:put 2]
-                               :z [:add "xyz"]
-                               :a [:delete]}
-                              {:expected {:e1 "expected!"}
-                               :return :updated-old})]
+(let [req
+      ^UpdateItemRequest (reqs/update-item-request
+                          :update-item
+                          {:x 1}
+                          {:y [:put 2]
+                           :z [:add "xyz"]
+                           :a [:delete]}
+                          {:expected {:e1 "expected!"}
+                           :return :updated-old})]
+  
   (expect "update-item" (.getTableName req))
   (expect {"x" (doto (AttributeValue.)
                  (.setN "1"))}
@@ -171,11 +178,13 @@
                   (.setValue (AttributeValue. "expected!")))}
           (.getExpected req)))
 
-(let [req ^DeleteItemRequest (reqs/delete-item-request
-                              :delete-item
-                              {:k1 "val" :r1 -3}
-                              {:return :all-new
-                               :expected {:e1 1}})]
+(let [req
+      ^DeleteItemRequest (reqs/delete-item-request
+                          :delete-item
+                          {:k1 "val" :r1 -3}
+                          {:return :all-new
+                           :expected {:e1 1}})]
+  
   (expect "delete-item" (.getTableName req))
   (expect {"k1" (AttributeValue. "val")
            "r1" (doto (AttributeValue.)
@@ -186,3 +195,42 @@
                                (.setN "1"))))}
           (.getExpected req))
   (expect (str ReturnValue/ALL_NEW) (.getReturnValues req)))
+
+(let [req
+      ^BatchGetItemRequest
+      (reqs/batch-get-item-request
+       false
+       (reqs/batch-request-items
+        {:t1 {:prim-kvs {:t1-k1 -10}
+              :attrs [:some-other-guy]}
+         :t2 {:prim-kvs {:t2-k1 ["x" "y" "z"]}}}))]
+  (expect
+   {"t1" (doto (KeysAndAttributes.)
+           (.setKeys [{"t1-k1" (doto (AttributeValue.)
+                                 (.setN "-10"))}])
+           (.setAttributesToGet ["some-other-guy"]))
+    "t2" (doto (KeysAndAttributes.)
+           (.setKeys [{"t2-k1" (AttributeValue. "x")}
+                      {"t2-k1" (AttributeValue. "y")}
+                      {"t2-k1" (AttributeValue. "z")}]))}
+   (.getRequestItems req)))
+
+(let [req
+      ^BatchWriteItemRequest
+      (reqs/batch-write-item-request
+       false
+       {"t1" (map
+              #(reqs/write-request :put %)
+              (reqs/attr-multi-vs {:k ["x" "y"]}))
+        "t2" (map
+              #(reqs/write-request :delete %)
+              (reqs/attr-multi-vs {:k [0]}))})]
+  (expect
+   {"t1" [(WriteRequest.
+           (PutRequest. {"k" (AttributeValue. "x")}))
+          (WriteRequest.
+           (PutRequest. {"k" (AttributeValue. "y")}))]
+    "t2" [(WriteRequest.
+           (DeleteRequest. {"k" (doto (AttributeValue.)
+                                  (.setN "0"))}))]}
+   (.getRequestItems req)))
