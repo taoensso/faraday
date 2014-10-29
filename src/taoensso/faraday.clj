@@ -95,14 +95,15 @@
         :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
        (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
-             _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
+             _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
              _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
+             ^AWSCredentialsProvider provider provider
              ^AWSCredentials aws-creds
              (when-not provider
                (cond
-                creds      creds ; Given explicit AWSCredentials
-                access-key (BasicAWSCredentials. access-key secret-key)
-                :else      (DefaultAWSCredentialsProviderChain.)))
+                 creds      creds ; Given explicit AWSCredentials
+                 access-key (BasicAWSCredentials. access-key secret-key)
+                 :else      (DefaultAWSCredentialsProviderChain.)))
              client-config
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
@@ -111,7 +112,9 @@
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
                socket-timeout  (.setSocketTimeout     g))]
-         (doto-cond [g (AmazonDynamoDBClient. (or provider aws-creds) client-config)]
+         (doto-cond [g (if provider
+                         (AmazonDynamoDBClient. provider  client-config)
+                         (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
