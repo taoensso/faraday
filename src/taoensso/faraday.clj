@@ -196,13 +196,33 @@
 
 (defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
-  (or (.getS x)
-      (some->> (.getN  x) ddb-num-str->num)
-      (some->> (.getSS x) (into #{}))
-      (some->> (.getNS x) (mapv ddb-num-str->num) (into #{}))
-      (some->> (.getBS x) (mapv nt-thaw)          (into #{}))
-      (some->> (.getB  x) nt-thaw) ; Last, may be falsey
-      ))
+  (let [[x type]
+        (or
+          (some-> (.getS    x) (vector :s))
+          (some-> (.getN    x) (vector :n))
+          (some-> (.getNULL x) (vector :null))
+          (some-> (.getBOOL x) (vector :bool))
+          (some-> (.getSS   x) (vector :ss))
+          (some-> (.getNS   x) (vector :ns))
+          (some-> (.getBS   x) (vector :bs))
+          (some-> (.getB    x) (vector :b))
+          (some-> (.getM    x) (vector :m))
+          (some-> (.getL    x) (vector :l)))]
+
+    (case type
+      :s    x
+      :n    (ddb-num-str->num x)
+      :null nil
+      :bool (boolean  x)
+      :ss   (into #{} x)
+      :ns   (into #{} (mapv ddb-num-str->num x))
+      :bs   (into #{} (mapv nt-thaw          x))
+      :b    (nt-thaw  x)
+
+      ;;; TODO Completely untested
+      :l (mapv db-val->clj-val x)
+      :m (zipmap (mapv keyword         (.keySet ^java.util.HashMap x))
+                 (mapv db-val->clj-val (.values ^java.util.HashMap x))))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -213,9 +233,17 @@
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
 
-   (ddb-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?  x) (doto (AttributeValue.) (.setB (nt-freeze x)))
+   (nil? x)              (doto (AttributeValue.) (.setNULL true))
+   (instance? Boolean x) (doto (AttributeValue.) (.setBOOL x))
+   (ddb-num? x)          (doto (AttributeValue.) (.setN (str x)))
+   (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
 
+   ;;; TODO Completely untested
+   (vector?  x) (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))
+   (map?     x) (doto (AttributeValue.) (.setM (encore/map-kvs
+                                                 (fn [k _] (name k))
+                                                 (fn [_ v] (clj-val->db-val v))
+                                                 x)))
    (set? x)
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
