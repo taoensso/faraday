@@ -125,32 +125,32 @@
 ;; (expect (interaction (println Long))      (println 5))
 
 ;;; Test AWSCredentialProvider
-(let [i0 {:id 0 :name "foo"}
-      i1 {:id 1 :name "bar"}
-      i2 {:id 2 :name "baz"}
-      creds    (BasicAWSCredentials. (:access-key *client-opts*)
-                                     (:secret-key *client-opts*))
-      provider (StaticCredentialsProvider. creds)
-      endpoint (:endpoint *client-opts*)]
+(when-let [endpoint (:endpoint *client-opts*)]
+  (let [i0 {:id 0 :name "foo"}
+        i1 {:id 1 :name "bar"}
+        i2 {:id 2 :name "baz"}
+        creds    (BasicAWSCredentials. (:access-key *client-opts*)
+                   (:secret-key *client-opts*))
+        provider (StaticCredentialsProvider. creds)]
 
-  (binding [*client-opts* {:provider provider
-                           :endpoint endpoint}]
+    (binding [*client-opts* {:provider provider
+                             :endpoint endpoint}]
 
-    (expect ; Batch put
-      [i0 i1 nil]
-      (do
-        (far/batch-write-item *client-opts*
-          {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
-        ;;
-        (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
-        [(far/get-item *client-opts* ttable {:id  0})
-         (far/get-item *client-opts* ttable {:id  1})
-         (far/get-item *client-opts* ttable {:id -1})]))))
+      (expect ; Batch put
+        [i0 i1 nil]
+        (do
+          (far/batch-write-item *client-opts*
+            {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
+          ;;
+          (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
+          [(far/get-item *client-opts* ttable {:id  0})
+           (far/get-item *client-opts* ttable {:id  1})
+           (far/get-item *client-opts* ttable {:id -1})])))))
 
 ;;; Test `list-tables` lazy sequence
 ;; Creates a _large_ number of tables so only run locally
-(let [endpoint (:endpoint *client-opts*)]
-  (when (and endpoint (.contains ^String endpoint "localhost"))
+(when-let [endpoint (:endpoint *client-opts*)]
+  (when (.contains ^String endpoint "localhost")
     (expect
       (let [;; Generate > 100 tables to exceed the batch size limit:
             tables (map #(keyword (str "test_" %)) (range 102))]
