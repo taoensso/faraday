@@ -432,8 +432,10 @@
          (.setAttributeType (utils/enum key-type))))
      defs)))
 
-(defn- local-2nd-indexes
-  "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
+(defn local-2nd-indexes
+  "Implementation detail.
+
+  [{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-keydef indexes]
   (when indexes
     (mapv
@@ -455,8 +457,10 @@
               pr))))
       indexes)))
 
-(defn- global-2nd-indexes
-  "[{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
+(defn global-2nd-indexes
+  "Implementation detail.
+
+  [{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
   indexes -> [GlobalSecondaryIndex ...]"
   [indexes]
   (when indexes
@@ -525,8 +529,10 @@
   (when-not (describe-table client-opts table-name)
     (create-table client-opts table-name hash-keydef opts)))
 
-(defn- throughput-steps
-  "Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
+(defn throughput-steps
+  "Implementation detail.
+
+  Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
   x - start, x' - current, x* - goal."
   [[r w] [r* w*]]
   (let [step (fn [x* x'] (if (< x* x') x* (min x* (* 2 x'))))]
@@ -662,6 +668,7 @@
      (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
                                               (utils/enum action)))
      update-map)))
+
 (defn update-item-request
   [table prim-kvs update-map & [{:keys [return expected return-cc?]
                                  :or   {return :none}}]]
@@ -707,8 +714,10 @@
 
 ;;;; API - batch ops
 
-(defn- attr-multi-vs
-  "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
+(defn attr-multi-vs
+  "Implementation detail.
+
+  [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
   (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
         ensure-sequential (fn [x] (if (sequential? x) x [x]))]
@@ -728,8 +737,10 @@
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
   )
 
-(defn- batch-request-items
-  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+(defn batch-request-items
+  "Implementation detail.
+
+  {<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
   [requests]
   (utils/name-map
    (fn [{:keys [prim-kvs attrs consistent?]}]
@@ -796,7 +807,8 @@
   (batch-get-item   client-opts {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
   (scan client-opts :faraday.tests.main))
 
-(defn- write-request [action item]
+(defn write-request [action item]
+  "Implementation detail"
   (case action
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
