@@ -20,6 +20,11 @@
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
 
+(def run-after-setup (atom #{}))
+
+(defn- after-setup! [thunk]
+  (swap! run-after-setup conj thunk))
+
 (defn- before-run {:expectations-options :before-run} []
   (assert (and (:access-key *client-opts*)
                (:secret-key *client-opts*)))
@@ -31,6 +36,10 @@
     {:range-keydef [:number :n]
      :throughput   {:read 1 :write 1}
      :block?       true})
+
+  (doseq [thunk @run-after-setup]
+    (thunk))
+
   (println "Ready to roll..."))
 
 (defn- after-run {:expectations-options :after-run} [])
@@ -42,7 +51,9 @@
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}]
 
-  (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
+  (after-setup!
+   #(far/batch-write-item *client-opts*
+                          {ttable {:delete [{:id 0} {:id 1} {:id 2}]}}))
 
   (expect ; Batch put
    [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
@@ -69,14 +80,58 @@
                  [(far/get-item *client-opts* ttable {:id 0})
                   (far/get-item *client-opts* ttable {:id 1})])))
 
-;;;; Range queries
+(let [i {:id 10 :name "update me"}]
+
+  (after-setup!
+    #(far/delete-item *client-opts* ttable {:id 10}))
+
+  (expect
+   {:id 10 :name "baz"}
+   (do
+     (far/put-item *client-opts* ttable i)
+     (far/update-item
+        *client-opts* ttable {:id 10} {:name [:put "baz"]} {:return :all-new})))
+
+  (expect
+   #= (far/ex :conditional-check-failed)
+   (far/update-item *client-opts* ttable
+       {:id 10} {:name [:put "baz"]}
+       {:expected {:name "garbage"}})))
+
+(let [items [{:id 11 :name "eleven" :test "batch"}
+             {:id 12 :name "twelve" :test "batch"}
+             {:id 13 :name "thirteen" :test "batch"}]
+      [i1 i2 i3] items]
+
+  (after-setup!
+   (fn [] (far/batch-write-item
+          *client-opts* {ttable {:delete (map #(select-keys % #{:id}) items)}})))
+
+  (expect
+   [i1]
+   (do (far/batch-write-item *client-opts* {ttable {:put items}})
+       (far/scan *client-opts* ttable
+                 {:attr-conds {:name [:eq "eleven"]}})))
+
+  (expect
+   #{i1 i3}
+   (into #{} (far/scan *client-opts* ttable
+                       {:attr-conds {:name [:ne "twelve"]
+                                     :test [:eq "batch"]}})))
+
+  (expect
+   (repeat 3 {:test "batch"})
+   (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
+                                   :return [:test]})))
+
+;;;; range queries
 (let [j0 {:title "One" :number 0}
       j1 {:title "One" :number 1}
       k0 {:title "Two" :number 0}
       k1 {:title "Two" :number 1}]
 
-  (far/batch-write-item *client-opts*
-    {range-table {:put [j0 j1 k0 k1]}})
+  (after-setup!
+    #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1]}}))
 
   (expect ; Query, normal ordering
     [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
@@ -147,18 +202,37 @@
          (far/get-item *client-opts* ttable {:id  1})
          (far/get-item *client-opts* ttable {:id -1})]))))
 
+(def local-dynamo?
+  (let [endpoint (:endpoint *client-opts*)]
+    (and endpoint (.contains ^String endpoint "localhost"))))
+
 ;;; Test `list-tables` lazy sequence
 ;; Creates a _large_ number of tables so only run locally
-(let [endpoint (:endpoint *client-opts*)]
-  (when (and endpoint (.contains ^String endpoint "localhost"))
+(when local-dynamo?
+  (expect
+   (let [ ;; Generate > 100 tables to exceed the batch size limit:
+         tables (map #(keyword (str "test_" %)) (range 102))]
+     (doseq [table tables]
+       (far/ensure-table *client-opts* table [:id :n]
+                         {:throughput  {:read 1 :write 1}
+                          :block?      true}))
+     (let [table-count (count (far/list-tables *client-opts*))]
+       (doseq [table tables]
+         (far/delete-table *client-opts* table))
+       (> table-count 100))))
+
+  (let [update-t :faraday.tests.update-table]
+    (after-setup!
+     #(do
+        (when (far/describe-table *client-opts* update-t)
+          (far/delete-table *client-opts* update-t))
+        (far/create-table
+         *client-opts* update-t [:id :n]
+         {:throughput {:read 1 :write 1} :block? true})))
+
     (expect
-      (let [;; Generate > 100 tables to exceed the batch size limit:
-            tables (map #(keyword (str "test_" %)) (range 102))]
-        (doseq [table tables]
-          (far/ensure-table *client-opts* table [:id :n]
-            {:throughput  {:read 1 :write 1}
-             :block?      true}))
-        (let [table-count (count (far/list-tables *client-opts*))]
-          (doseq [table tables]
-            (far/delete-table *client-opts* table))
-          (> table-count 100))))))
+     {:read 2 :write 2}
+     (-> (far/update-table *client-opts* update-t {:read 2 :write 2})
+         deref
+         :throughput
+         (select-keys #{:read :write})))))
