@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.5.0"
+(defproject com.taoensso/faraday "1.6.0-SNAPSHOT"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
@@ -14,7 +14,7 @@
   [[org.clojure/clojure        "1.5.1"]
    [com.taoensso/encore        "1.7.0"]
    [com.taoensso/nippy         "2.6.3"]
-   [com.amazonaws/aws-java-sdk "1.8.6" :exclusions [joda-time]]
+   [com.amazonaws/aws-java-sdk "1.9.3" :exclusions [joda-time]]
    [joda-time                  "2.3"]]
 
   :profiles

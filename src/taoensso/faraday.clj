@@ -195,10 +195,14 @@
   [^AttributeValue x]
   (or (.getS x)
       (some->> (.getN  x) ddb-num-str->num)
+      (some->> (.getBOOL x) (boolean))
       (some->> (.getSS x) (into #{}))
       (some->> (.getNS x) (mapv ddb-num-str->num) (into #{}))
       (some->> (.getBS x) (mapv nt-thaw)          (into #{}))
       (some->> (.getB  x) nt-thaw) ; Last, may be falsey
+      ; Not doing .getNULL as this block is nil by default
+      ; and if getNULL is false and we've exhausted this block,
+      ; then it's still nil anyway
       ))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
@@ -210,8 +214,10 @@
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
 
-   (ddb-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?  x) (doto (AttributeValue.) (.setB (nt-freeze x)))
+   (nil? x)              (doto (AttributeValue.) (.setNULL true))
+   (ddb-num? x)          (doto (AttributeValue.) (.setN (str x)))
+   (instance? Boolean x) (doto (AttributeValue.) (.setBOOL x))
+   (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
 
    (set? x)
    (if (empty? x)
