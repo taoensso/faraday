@@ -389,16 +389,15 @@
                  chunk))))]
     (step nil)))
 
-(defn describe-table-request
-  "Implementation detail"
-  [table]
+(defn describe-table-request "Implementation detail."
+  ^DescribeTableRequest [table]
   (doto (DescribeTableRequest.) (.setTableName (name table))))
 
 (defn describe-table
   "Returns a map describing a table, or nil if the table doesn't exist."
   [client-opts table]
   (try (as-map (.describeTable (db-client client-opts)
-                ^DescribeTableRequest (describe-table-request table)))
+                 (describe-table-request table)))
        (catch ResourceNotFoundException _ nil)))
 
 (defn table-status-watch
@@ -465,7 +464,6 @@
 
 (defn local-2nd-indexes
   "Implementation detail.
-
   [{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-keydef indexes]
   (when indexes
@@ -490,7 +488,6 @@
 
 (defn global-2nd-indexes
   "Implementation detail.
-
   [{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
   indexes -> [GlobalSecondaryIndex ...]"
   [indexes]
@@ -515,8 +512,7 @@
           (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
-(defn create-table-request
-  "Implementation detail"
+(defn create-table-request "Implementation detail."
   [table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
@@ -562,7 +558,6 @@
 
 (defn throughput-steps
   "Implementation detail.
-
   Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
   x - start, x' - current, x* - goal."
   [[r w] [r* w*]]
@@ -579,8 +574,7 @@
          (throughput-steps [17 8] [3 22])
          (throughput-steps [1 1] [300 300]))
 
-(defn update-table-request
-  "Implementation detail"
+(defn update-table-request "Implementation detail."
   [table throughput]
   (doto (UpdateTableRequest.)
     (.setTableName (name table))
@@ -627,19 +621,17 @@
   (let [p (update-table client-opts :faraday.tests.main {:read 1 :write 1})]
     @p))
 
-(defn delete-table-request
-  "Implementation detail"
-  [table]
+(defn delete-table-request "Implementation detail."
+  ^DeleteTableRequest [table]
   (DeleteTableRequest. (name table)))
 
 (defn delete-table "Deletes a table, go figure."
   [client-opts table]
-  (as-map (.deleteTable (db-client client-opts) ^DeleteTableRequest (delete-table-request table))))
+  (as-map (.deleteTable (db-client client-opts) (delete-table-request table))))
 
 ;;;; API - items
 
-(defn get-item-request
-  "Implementation detail"
+(defn get-item-request "Implementation detail."
   [table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
   (doto-cond [g (GetItemRequest.)]
     :always     (.setTableName       (name table))
@@ -723,8 +715,7 @@
    (.updateItem (db-client client-opts)
      (update-item-request table prim-kvs update-map opts))))
 
-(defn delete-item-request
-  "Implementation detail"
+(defn delete-item-request "Implementation detail."
   [table prim-kvs & [{:keys [return expected return-cc?]
                       :or   {return :none}}]]
   (doto-cond [g (DeleteItemRequest.)]
@@ -747,7 +738,6 @@
 
 (defn attr-multi-vs
   "Implementation detail.
-
   [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
   (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
@@ -770,7 +760,6 @@
 
 (defn batch-request-items
   "Implementation detail.
-
   {<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
   [requests]
   (utils/name-map
@@ -802,9 +791,8 @@
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
 
-(defn batch-get-item-request
-  "Implementation detail"
-  [return-cc? raw-req]
+(defn batch-get-item-request "Implementation detail."
+  ^BatchGetItemRequest [return-cc? raw-req]
   (doto-cond [g (BatchGetItemRequest.)]
     :always    (.setRequestItems raw-req)
     return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
@@ -828,7 +816,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchGetItem (db-client client-opts)
-               ^BatchGetItemRequest (batch-get-item-request return-cc? raw-req))))]
+               (batch-get-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
 
 (comment
@@ -838,15 +826,13 @@
   (batch-get-item   client-opts {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
   (scan client-opts :faraday.tests.main))
 
-(defn write-request [action item]
-  "Implementation detail"
+(defn write-request [action item] "Implementation detail."
   (case action
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
 
-(defn batch-write-item-request
-  "Implementation detail"
-  [return-cc? raw-req]
+(defn batch-write-item-request "Implementation detail."
+  ^BatchWriteItemRequest [return-cc? raw-req]
   (doto-cond [g (BatchWriteItemRequest.)]
     :always    (.setRequestItems raw-req)
     return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
@@ -868,7 +854,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchWriteItem (db-client client-opts)
-               ^BatchWriteItemRequest (batch-write-item-request return-cc? raw-req))))]
+               (batch-write-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs
       (run1
        (utils/name-map
@@ -899,8 +885,7 @@
            (.setAttributeValueList (mapv clj-val->db-val vals)))))
      conditions)))
 
-(defn query-request
-  "Implementation detail"
+(defn query-request "Implementation detail."
   [table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
               return-cc?] :as opts
