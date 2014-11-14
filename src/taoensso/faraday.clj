@@ -955,8 +955,10 @@
        :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.query (db-client client-opts)
-              (query-request table prim-key-conds opts))))]
+             (.query
+              (db-client client-opts)
+              (query-request table prim-key-conds
+                             (assoc opts :last-prim-kvs last-prim-kvs)))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-request
@@ -1010,8 +1012,9 @@
        :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.scan (db-client client-opts)
-               (scan-request table opts))))]
+             (.scan
+              (db-client client-opts)
+              (scan-request table (assoc opts :last-prim-kvs last-prim-kvs)))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
