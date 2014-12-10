@@ -20,6 +20,7 @@
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
 
+
 (def run-after-setup (atom #{}))
 
 (defn- after-setup! [thunk]
@@ -30,19 +31,19 @@
                (:secret-key *client-opts*)))
   (println "Setting up testing environment...")
   (far/ensure-table *client-opts* ttable [:id :n]
-    {:throughput  {:read 1 :write 1}
-     :block?      true})
+                    {:throughput  {:read 1 :write 1}
+                     :block?      true})
   (far/ensure-table *client-opts* range-table [:title :s]
-    {:range-keydef [:number :n]
-     :throughput   {:read 1 :write 1}
-     :block?       true})
+                    {:range-keydef [:number :n]
+                     :throughput   {:read 1 :write 1}
+                     :block?       true})
 
   (doseq [thunk @run-after-setup]
     (thunk))
 
   (println "Ready to roll..."))
 
-(defn- after-run {:expectations-options :after-run} [])
+(defn after-run {:expectations-options :after-run} [])
 
 (comment (far/delete-table *client-opts* ttable))
 
