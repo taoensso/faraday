@@ -125,6 +125,33 @@
    (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
                                    :return [:test]})))
 
+;;;; type check
+(let [t {:id 14
+         :boolT true
+         :boolF false
+         :string "string"
+         :num 1
+         :null nil
+         :numset #{4 12 6 13}
+         :strset #{"a" "b" "c"}
+         :map {:k1 "v1" :k2 "v2" :k3 "v3"}
+         :vec ["a" 1 false nil]}
+      take-care-of-map-keys {:id 15
+                             :map {:key "val" "key" 5}}]
+
+  (after-setup!
+   #(do
+      (far/put-item *client-opts* ttable t)
+      (far/put-item *client-opts* ttable take-care-of-map-keys)))
+
+  (expect
+   t
+   (far/get-item *client-opts* ttable {:id (:id t)}))
+  (expect
+   {:id 15
+    :map {:key 5}}
+   (far/get-item *client-opts* ttable {:id (:id take-care-of-map-keys)})))
+
 ;;;; range queries
 (let [j0 {:title "One" :number 0}
       j1 {:title "One" :number 1}

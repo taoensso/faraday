@@ -14,7 +14,7 @@
   [[org.clojure/clojure        "1.5.1"]
    [com.taoensso/encore        "1.15.1"]
    [com.taoensso/nippy         "2.7.0"]
-   [com.amazonaws/aws-java-sdk "1.9.6" :exclusions [joda-time]]
+   [com.amazonaws/aws-java-sdk "1.9.10" :exclusions [joda-time]]
    [joda-time                  "2.5"] ; For exclusion, see Github #27
    ]
 
