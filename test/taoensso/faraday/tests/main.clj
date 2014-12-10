@@ -20,7 +20,7 @@
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
 
-(defn- before-run {:expectations-options :before-run} []
+(defn before-run {:expectations-options :before-run} []
   (assert (and (:access-key *client-opts*)
                (:secret-key *client-opts*)))
   (println "Setting up testing environment...")
@@ -33,7 +33,7 @@
      :block?       true})
   (println "Ready to roll..."))
 
-(defn- after-run {:expectations-options :after-run} [])
+(defn after-run {:expectations-options :after-run} [])
 
 (comment (far/delete-table *client-opts* ttable))
 
@@ -42,7 +42,9 @@
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}]
 
-  (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}})
+  (expect
+   {:unprocessed {}, :cc-units nil}
+   (far/batch-write-item *client-opts* {ttable {:delete [{:id 0} {:id 1} {:id 2}]}}))
 
   (expect ; Batch put
    [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
@@ -75,8 +77,10 @@
       k0 {:title "Two" :number 0}
       k1 {:title "Two" :number 1}]
 
-  (far/batch-write-item *client-opts*
-    {range-table {:put [j0 j1 k0 k1]}})
+  (expect
+   {:unprocessed {}, :cc-units nil}
+   (far/batch-write-item *client-opts*
+                         {range-table {:put [j0 j1 k0 k1]}}))
 
   (expect ; Query, normal ordering
     [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
