@@ -125,6 +125,13 @@
    (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
                                    :return [:test]})))
 
+(defmacro update-t
+  [& cmds]
+  `(do
+     (far/put-item *client-opts* ttable ~'t)
+     (far/update-item *client-opts* ttable {:id 14} ~@cmds)
+     (far/get-item *client-opts* ttable {:id (:id ~'t)})))
+
 ;;;; type check
 (let [t {:id 14
          :boolT true
@@ -140,17 +147,62 @@
                              :map {:key "val" "key" 5}}]
 
   (after-setup!
-   #(do
-      (far/put-item *client-opts* ttable t)
-      (far/put-item *client-opts* ttable take-care-of-map-keys)))
+   #(far/put-item *client-opts* ttable take-care-of-map-keys))
 
   (expect
    t
-   (far/get-item *client-opts* ttable {:id (:id t)}))
+   (do
+     (far/put-item *client-opts* ttable t)
+     (far/get-item *client-opts* ttable {:id (:id t)})))
+
   (expect
    {:id 15
     :map {:key 5}}
-   (far/get-item *client-opts* ttable {:id (:id take-care-of-map-keys)})))
+   (far/get-item *client-opts* ttable {:id (:id take-care-of-map-keys)}))
+
+  (expect
+   (update-in t [:strset] #(conj % "d"))
+   (update-t
+    {:strset [:add #{"d"}]}))
+
+  (expect
+   (update-in t [:strset] #(disj % "c"))
+   (update-t
+    {:strset [:delete #{"c"}]}))
+
+  (expect
+   (assoc t :strset #{"d"})
+   (update-t
+    {:strset [:put #{"d"}]}))
+
+  (expect
+   (assoc t :num 2)
+   (update-t
+    {:num [:add 1]}))
+
+  (expect
+   (dissoc t :map)
+   (update-t
+    {:map [:delete]}))
+
+  (expect
+   (assoc t :boolT false)
+   (update-t
+    {:boolT [:put false]}))
+
+  (expect
+   (assoc t :boolT nil)
+   (update-t
+    {:boolT [:put nil]}))
+
+  (expect
+   (assoc-in t [:map :new] "x")
+   (update-t
+    {:map [:add {:new "x"}]}))
+
+  )
+
+
 
 ;;;; range queries
 (let [j0 {:title "One" :number 0}

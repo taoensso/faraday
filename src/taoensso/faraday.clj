@@ -688,7 +688,10 @@
   [update-map]
   (when (seq update-map)
     (utils/name-map
-     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
+     (fn [[action val]] (AttributeValueUpdate. (when
+                                                  (or (not= action :delete)
+                                                      (set? val))
+                                                (clj-val->db-val val))
                                               (utils/enum action)))
      update-map)))
 
