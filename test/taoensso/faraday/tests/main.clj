@@ -196,11 +196,9 @@
     {:boolT [:put nil]}))
 
   (expect
-   (assoc-in t [:map :new] "x")
+   (assoc-in t [:map-new :new] "x")
    (update-t
-    {:map [:add {:new "x"}]}))
-
-  )
+    {:map-new [:put {:new "x"}]})))
 
 
 
