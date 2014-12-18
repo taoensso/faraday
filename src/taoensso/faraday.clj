@@ -688,20 +688,24 @@
   [update-map]
   (when (seq update-map)
     (utils/name-map
-     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
-                                              (utils/enum action)))
+     (fn [[action val]]
+       (AttributeValueUpdate. (when
+                                  (or (not= action :delete)
+                                      (set? val))
+                                (clj-val->db-val val))
+                              (utils/enum action)))
      update-map)))
 
 (defn update-item-request
   [table prim-kvs update-map & [{:keys [return expected return-cc?]
                                  :or   {return :none}}]]
   (doto-cond [g (UpdateItemRequest.)]
-    :always  (.setTableName        (name table))
-    :always  (.setKey              (clj-item->db-item prim-kvs))
-    :always  (.setAttributeUpdates (attribute-updates update-map))
-    expected (.setExpected         (expected-values g))
-    return   (.setReturnValues     (utils/enum g))
-    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
+             :always  (.setTableName        (name table))
+             :always  (.setKey (clj-item->db-item prim-kvs))
+             :always  (.setAttributeUpdates (attribute-updates update-map))
+             expected (.setExpected         (expected-values g))
+             return   (.setReturnValues     (utils/enum g))
+             return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn update-item
   "Updates an item in a table by its primary key with options:
