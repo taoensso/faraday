@@ -9,6 +9,18 @@ elif [ "$1" != "local" ] && [ ! -f "$1" ]; then
 else
 
   if [ "$1" = "local" ]; then
+
+    if [ ! -f ./local-dynamo/DynamoDBLocal.jar ]; then
+      echo "Downloading local dynamo"
+      mkdir local-dynamo
+      cd local-dynamo
+      wget "http://dynamodb-local.s3-website-us-west-2.amazonaws.com/dynamodb_local_latest.tar.gz"
+      tar zxf dynamodb_local_latest.tar.gz
+      rm dynamodb_local_latest.tar.gz
+      cd -
+    fi
+
+
     echo "Starting local Dynamodb"
     java -Djava.library.path=./local-dynamo/DynamoDBLocal_lib -jar ./local-dynamo/DynamoDBLocal.jar -port 6798 -inMemory &
     trap "pkill -f DynamoDBLocal" EXIT

@@ -13,14 +13,8 @@
             [taoensso.encore        :as encore :refer (doto-cond)]
             [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
-            [taoensso.faraday.utils :as utils :refer (coll?* seperate-update-types)])
+            [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import  [clojure.lang BigInt]
-            [com.amazonaws.services.dynamodbv2.document.utils
-             ValueMap]
-            [com.amazonaws.services.dynamodbv2.document.spec
-             UpdateItemSpec]
-            [com.amazonaws.services.dynamodbv2.document
-             DynamoDB]
             [com.amazonaws.services.dynamodbv2.model
              AttributeDefinition
              AttributeValue
