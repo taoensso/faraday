@@ -25,6 +25,7 @@
              BatchWriteItemResult
              Condition
              ConsumedCapacity
+             ComparisonOperator
              CreateTableRequest
              CreateTableResult
              DeleteItemRequest
@@ -261,6 +262,10 @@
 (comment
   (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
                          #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
+
+(defn- enum-op ^String [operator]
+  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
+      utils/enum))
 
 ;;;; Coercion - objects
 
@@ -655,9 +660,15 @@
   [expected-map]
   (when (seq expected-map)
     (utils/name-map
-     #(if (= false %)
-        (ExpectedAttributeValue. false)
-        (ExpectedAttributeValue. (clj-val->db-val %)))
+     #(case %
+        :exists (doto (ExpectedAttributeValue.)
+                  (.withComparisonOperator ComparisonOperator/NOT_NULL))
+        :not-exists (ExpectedAttributeValue. false)
+        (if (vector? %)
+          (doto (ExpectedAttributeValue.)
+            (.withComparisonOperator (enum-op (first %)))
+            (.setValue (clj-val->db-val (second %))))
+          (ExpectedAttributeValue. (clj-val->db-val %))))
      expected-map)))
 
 (defn put-item-request
@@ -871,10 +882,6 @@
         requests)))))
 
 ;;;; API - queries & scans
-
-(defn- enum-op ^String [operator]
-  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
-      utils/enum))
 
 (defn- query|scan-conditions
   "{<attr> [operator <val-or-vals>] ...} -> {<attr> Condition ...}"

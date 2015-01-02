@@ -4,7 +4,8 @@
             [taoensso.faraday :as far]
             [taoensso.nippy   :as nippy])
   (:import  [com.amazonaws.auth BasicAWSCredentials]
-            [com.amazonaws.internal StaticCredentialsProvider]))
+            [com.amazonaws.internal StaticCredentialsProvider]
+            [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
@@ -129,7 +130,7 @@
   [& cmds]
   `(do
      (far/put-item *client-opts* ttable ~'t)
-     (far/update-item *client-opts* ttable {:id 14} ~@cmds)
+     (far/update-item *client-opts* ttable {:id (:id ~'t)} ~@cmds)
      (far/get-item *client-opts* ttable {:id (:id ~'t)})))
 
 ;;;; type check
@@ -200,7 +201,46 @@
    (update-t
     {:map-new [:put {:new "x"}]})))
 
+;;;; expectation tests
+(let [t {:id 16
+         :val 1}]
 
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val :exists}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:blah :not-exists}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:< 5]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:= 1]}}))
+
+  (expect
+   ConditionalCheckFailedException
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:> 5]}}))
+
+  (expect
+   ConditionalCheckFailedException
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:= 2]}}))
+  )
 
 ;;;; range queries
 (let [j0 {:title "One" :number 0}
@@ -250,9 +290,9 @@
 
   ;;; Proceed for good conds
   (expect nil? (far/put-item *client-opts* ttable i1 {:expected {:id 1}}))
-  (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id false}}))
+  (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id :not-exists}}))
   (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id 2
-                                                               :dummy false}})))
+                                                               :dummy :not-exists}})))
 
 ;; (expect (interaction (println anything&)) (println 5))
 ;; (expect (interaction (println Long))      (println 5))
