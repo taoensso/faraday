@@ -1,5 +1,11 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## SNAPSHOT / unreleased
+
+ * **BREAKING**: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords.
+ * **NEW**: `update-item` now accepts the comparison operators in `:expected`.
+ * **NEW**: Boolean, Null, Map and List types now supported.
+
 ## v1.5.0 / 2014 July 26
 
  * **NEW**: allow reading of binary values written with other (non-serializing) clients.
