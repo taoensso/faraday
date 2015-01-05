@@ -203,7 +203,8 @@
 
 ;;;; expectation tests
 (let [t {:id 16
-         :val 1}]
+         :val 1
+         :str "abc"}]
 
   (expect
    (update-in t [:val] inc)
@@ -227,7 +228,19 @@
    (update-in t [:val] inc)
    (update-t
     {:val [:add 1]}
-    {:expected {:val [:= 1]}}))
+    {:expected {:val [:eq 1]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:str [:begins-with "a"]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:between 0 2]}}))
 
   (expect
    ConditionalCheckFailedException

@@ -667,7 +667,7 @@
         (if (vector? %)
           (doto (ExpectedAttributeValue.)
             (.withComparisonOperator (enum-op (first %)))
-            (.setValue (clj-val->db-val (second %))))
+            (.setAttributeValueList (mapv clj-val->db-val (rest %))))
           (ExpectedAttributeValue. (clj-val->db-val %))))
      expected-map)))
 
@@ -723,7 +723,9 @@
     prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected  - {<attr> <#{<expected-value> false}> ...}."
+    :expected  - {<attr> <#{:exists :not-exists [comparison-operators <value>] <value>}> ...}.
+
+  Where comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}."
   [client-opts table prim-kvs update-map & [{:keys [return expected return-cc?]
                                              :as   opts}]]
   (as-map
