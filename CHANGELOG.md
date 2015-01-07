@@ -1,3 +1,6 @@
+## SNAPSHOT / unreleased
+ * **Fix** [#49]: Batch operations weren't returning consumed capacity
+
 ## v1.5.0 / 2014 July 26
 
  * **NEW**: allow reading of binary values written with other (non-serializing) clients.
