@@ -25,6 +25,7 @@
              BatchWriteItemResult
              Condition
              ConsumedCapacity
+             ComparisonOperator
              CreateTableRequest
              CreateTableResult
              DeleteItemRequest
@@ -95,14 +96,15 @@
         :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
        (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
-             _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
+             _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
              _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
+             ^AWSCredentialsProvider provider provider
              ^AWSCredentials aws-creds
              (when-not provider
                (cond
-                creds      creds ; Given explicit AWSCredentials
-                access-key (BasicAWSCredentials. access-key secret-key)
-                :else      (DefaultAWSCredentialsProviderChain.)))
+                 creds      creds ; Given explicit AWSCredentials
+                 access-key (BasicAWSCredentials. access-key secret-key)
+                 :else      (DefaultAWSCredentialsProviderChain.)))
              client-config
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
@@ -111,7 +113,9 @@
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
                socket-timeout  (.setSocketTimeout     g))]
-         (doto-cond [g (AmazonDynamoDBClient. (or provider aws-creds) client-config)]
+         (doto-cond [g (if provider
+                         (AmazonDynamoDBClient. provider  client-config)
+                         (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
@@ -193,13 +197,33 @@
 
 (defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
-  (or (.getS x)
-      (some->> (.getN  x) ddb-num-str->num)
-      (some->> (.getSS x) (into #{}))
-      (some->> (.getNS x) (mapv ddb-num-str->num) (into #{}))
-      (some->> (.getBS x) (mapv nt-thaw)          (into #{}))
-      (some->> (.getB  x) nt-thaw) ; Last, may be falsey
-      ))
+  (let [[x type]
+        (or
+          (some-> (.getS    x) (vector :s))
+          (some-> (.getN    x) (vector :n))
+          (some-> (.getNULL x) (vector :null))
+          (some-> (.getBOOL x) (vector :bool))
+          (some-> (.getSS   x) (vector :ss))
+          (some-> (.getNS   x) (vector :ns))
+          (some-> (.getBS   x) (vector :bs))
+          (some-> (.getB    x) (vector :b))
+          (some-> (.getM    x) (vector :m))
+          (some-> (.getL    x) (vector :l)))]
+
+    (case type
+      :s    x
+      :n    (ddb-num-str->num x)
+      :null nil
+      :bool (boolean  x)
+      :ss   (into #{} x)
+      :ns   (into #{} (mapv ddb-num-str->num x))
+      :bs   (into #{} (mapv nt-thaw          x))
+      :b    (nt-thaw  x)
+
+      ;;; TODO Completely untested
+      :l (mapv db-val->clj-val x)
+      :m (zipmap (mapv keyword         (.keySet ^java.util.HashMap x))
+                 (mapv db-val->clj-val (.values ^java.util.HashMap x))))))
 
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
@@ -210,9 +234,17 @@
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
 
-   (ddb-num? x) (doto (AttributeValue.) (.setN (str x)))
-   (freeze?  x) (doto (AttributeValue.) (.setB (nt-freeze x)))
+   (nil? x)              (doto (AttributeValue.) (.setNULL true))
+   (instance? Boolean x) (doto (AttributeValue.) (.setBOOL x))
+   (ddb-num? x)          (doto (AttributeValue.) (.setN (str x)))
+   (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
 
+   ;;; TODO Completely untested
+   (vector?  x) (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))
+   (map?     x) (doto (AttributeValue.) (.setM (encore/map-kvs
+                                                 (fn [k _] (name k))
+                                                 (fn [_ v] (clj-val->db-val v))
+                                                 x)))
    (set? x)
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
@@ -230,6 +262,10 @@
 (comment
   (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
                          #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
+
+(defn- enum-op ^String [operator]
+  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
+      utils/enum))
 
 ;;;; Coercion - objects
 
@@ -358,11 +394,15 @@
                  chunk))))]
     (step nil)))
 
+(defn describe-table-request "Implementation detail."
+  ^DescribeTableRequest [table]
+  (doto (DescribeTableRequest.) (.setTableName (name table))))
+
 (defn describe-table
   "Returns a map describing a table, or nil if the table doesn't exist."
   [client-opts table]
   (try (as-map (.describeTable (db-client client-opts)
-                (doto (DescribeTableRequest.) (.setTableName (name table)))))
+                 (describe-table-request table)))
        (catch ResourceNotFoundException _ nil)))
 
 (defn table-status-watch
@@ -427,8 +467,9 @@
          (.setAttributeType (utils/enum key-type))))
      defs)))
 
-(defn- local-2nd-indexes
-  "[{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
+(defn local-2nd-indexes
+  "Implementation detail.
+  [{:name _ :range-keydef _ :projection _} ...] indexes -> [LocalSecondaryIndex ...]"
   [hash-keydef indexes]
   (when indexes
     (mapv
@@ -450,8 +491,9 @@
               pr))))
       indexes)))
 
-(defn- global-2nd-indexes
-  "[{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
+(defn global-2nd-indexes
+  "Implementation detail.
+  [{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
   indexes -> [GlobalSecondaryIndex ...]"
   [indexes]
   (when indexes
@@ -475,6 +517,22 @@
           (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
+(defn create-table-request "Implementation detail."
+  [table-name hash-keydef
+   & [{:keys [range-keydef throughput lsindexes gsindexes block?]
+       :or   {throughput {:read 1 :write 1}} :as opts}]]
+  (let [lsindexes (or lsindexes (:indexes opts))]
+    (doto-cond [_ (CreateTableRequest.)]
+      :always (.setTableName (name table-name))
+      :always (.setKeySchema (key-schema hash-keydef range-keydef))
+      :always (.setProvisionedThroughput (provisioned-throughput throughput))
+      :always (.setAttributeDefinitions
+               (keydefs hash-keydef range-keydef lsindexes gsindexes))
+      lsindexes (.setLocalSecondaryIndexes
+                 (local-2nd-indexes hash-keydef lsindexes))
+      gsindexes (.setGlobalSecondaryIndexes
+                 (global-2nd-indexes gsindexes)))))
+
 (defn create-table
   "Creates a table with options:
     hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
@@ -488,21 +546,12 @@
     :block?       - Block for table to actually be active?"
   [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
-       :or   {throughput {:read 1 :write 1}} :as opts}]]
+       :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts)) ; DEPRECATED
         result
         (as-map
          (.createTable (db-client client-opts)
-           (doto-cond [_ (CreateTableRequest.)]
-             :always (.setTableName (name table-name))
-             :always (.setKeySchema (key-schema hash-keydef range-keydef))
-             :always (.setProvisionedThroughput (provisioned-throughput throughput))
-             :always (.setAttributeDefinitions
-                      (keydefs hash-keydef range-keydef lsindexes gsindexes))
-             lsindexes (.setLocalSecondaryIndexes
-                        (local-2nd-indexes hash-keydef lsindexes))
-             gsindexes (.setGlobalSecondaryIndexes
-                        (global-2nd-indexes gsindexes)))))]
+           (create-table-request table-name hash-keydef opts)))]
     (if-not block? result @(table-status-watch client-opts table-name :creating))))
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
@@ -512,8 +561,9 @@
   (when-not (describe-table client-opts table-name)
     (create-table client-opts table-name hash-keydef opts)))
 
-(defn- throughput-steps
-  "Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
+(defn throughput-steps
+  "Implementation detail.
+  Dec by any amount, inc by <= 2x current amount, Ref. http://goo.gl/Bj9TC.
   x - start, x' - current, x* - goal."
   [[r w] [r* w*]]
   (let [step (fn [x* x'] (if (< x* x') x* (min x* (* 2 x'))))]
@@ -528,6 +578,12 @@
          (throughput-steps [3 3] [27 27])
          (throughput-steps [17 8] [3 22])
          (throughput-steps [1 1] [300 300]))
+
+(defn update-table-request "Implementation detail."
+  [table throughput]
+  (doto (UpdateTableRequest.)
+    (.setTableName (name table))
+    (.setProvisionedThroughput (provisioned-throughput throughput))))
 
 (defn update-table
   "Updates a table. Allows automatic multi-step adjustments to conform to
@@ -557,10 +613,7 @@
           (letfn [(run1 [[r' w']]
                     (as-map
                      (.updateTable (db-client client-opts)
-                       (doto (UpdateTableRequest.)
-                         (.setTableName (name table))
-                         (.setProvisionedThroughput (provisioned-throughput
-                                                     {:read r' :write w'})))))
+                       (update-table-request table {:read r' :write w'})))
                     ;; Returns _new_ descr when ready:
                     @(table-status-watch client-opts table :updating))]
 
@@ -573,36 +626,60 @@
   (let [p (update-table client-opts :faraday.tests.main {:read 1 :write 1})]
     @p))
 
+(defn delete-table-request "Implementation detail."
+  ^DeleteTableRequest [table]
+  (DeleteTableRequest. (name table)))
+
 (defn delete-table "Deletes a table, go figure."
   [client-opts table]
-  (as-map (.deleteTable (db-client client-opts) (DeleteTableRequest. (name table)))))
+  (as-map (.deleteTable (db-client client-opts) (delete-table-request table))))
 
 ;;;; API - items
+
+(defn get-item-request "Implementation detail."
+  [table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
+  (doto-cond [g (GetItemRequest.)]
+    :always     (.setTableName       (name table))
+    :always     (.setKey             (clj-item->db-item prim-kvs))
+    consistent? (.setConsistentRead  g)
+    attrs       (.setAttributesToGet (mapv name g))
+    return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn get-item
   "Retrieves an item from a table by its primary key with options:
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     :attrs       - Attrs to return, [<attr> ...].
     :consistent? - Use strongly (rather than eventually) consistent reads?"
-  [client-opts table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
+  [client-opts table prim-kvs & [opts]]
   (as-map
    (.getItem (db-client client-opts)
-    (doto-cond [g (GetItemRequest.)]
-      :always     (.setTableName       (name table))
-      :always     (.setKey             (clj-item->db-item prim-kvs))
-      consistent? (.setConsistentRead  g)
-      attrs       (.setAttributesToGet (mapv name g))
-      return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))))
+    (get-item-request table prim-kvs opts))))
 
 (defn- expected-values
   "{<attr> <cond> ...} -> {<attr> ExpectedAttributeValue ...}"
   [expected-map]
   (when (seq expected-map)
     (utils/name-map
-     #(if (= false %)
-        (ExpectedAttributeValue. false)
-        (ExpectedAttributeValue. (clj-val->db-val %)))
+     #(case %
+        :exists (doto (ExpectedAttributeValue.)
+                  (.withComparisonOperator ComparisonOperator/NOT_NULL))
+        :not-exists (ExpectedAttributeValue. false)
+        (if (vector? %)
+          (doto (ExpectedAttributeValue.)
+            (.withComparisonOperator (enum-op (first %)))
+            (.setAttributeValueList (mapv clj-val->db-val (rest %))))
+          (ExpectedAttributeValue. (clj-val->db-val %))))
      expected-map)))
+
+(defn put-item-request
+  [table item & [{:keys [return expected return-cc?]
+                  :or   {return :none}}]]
+  (doto-cond [g (PutItemRequest.)]
+    :always  (.setTableName    (name table))
+    :always  (.setItem         (clj-item->db-item item))
+    expected (.setExpected     (expected-values g))
+    return   (.setReturnValues (utils/enum g))
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
@@ -612,61 +689,73 @@
                   {<attr> <expected-value> ...}
                   {<attr> false ...} ; Attribute must not exist"
   [client-opts table item & [{:keys [return expected return-cc?]
-                              :or   {return :none}}]]
+                              :as   opts}]]
   (as-map
    (.putItem (db-client client-opts)
-     (doto-cond [g (PutItemRequest.)]
-       :always  (.setTableName    (name table))
-       :always  (.setItem         (clj-item->db-item item))
-       expected (.setExpected     (expected-values g))
-       return   (.setReturnValues (utils/enum g))
-       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
+     (put-item-request table item opts))))
 
 (defn- attribute-updates
   "{<attr> [<action> <value>] ...} -> {<attr> AttributeValueUpdate ...}"
   [update-map]
   (when (seq update-map)
     (utils/name-map
-     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
-                                              (utils/enum action)))
+     (fn [[action val]]
+       (AttributeValueUpdate. (when
+                                  (or (not= action :delete)
+                                      (set? val))
+                                (clj-val->db-val val))
+                              (utils/enum action)))
      update-map)))
+
+(defn update-item-request
+  [table prim-kvs update-map & [{:keys [return expected return-cc?]
+                                 :or   {return :none}}]]
+  (doto-cond [g (UpdateItemRequest.)]
+             :always  (.setTableName        (name table))
+             :always  (.setKey (clj-item->db-item prim-kvs))
+             :always  (.setAttributeUpdates (attribute-updates update-map))
+             expected (.setExpected         (expected-values g))
+             return   (.setReturnValues     (utils/enum g))
+             return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn update-item
   "Updates an item in a table by its primary key with options:
     prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected  - {<attr> <#{<expected-value> false}> ...}."
+    :expected  - {<attr> <#{:exists :not-exists [comparison-operators <value>] <value>}> ...}.
+
+  Where comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}."
   [client-opts table prim-kvs update-map & [{:keys [return expected return-cc?]
-                                             :or   {return :none}}]]
+                                             :as   opts}]]
   (as-map
    (.updateItem (db-client client-opts)
-     (doto-cond [g (UpdateItemRequest.)]
-       :always  (.setTableName        (name table))
-       :always  (.setKey              (clj-item->db-item prim-kvs))
-       :always  (.setAttributeUpdates (attribute-updates update-map))
-       expected (.setExpected         (expected-values g))
-       return   (.setReturnValues     (utils/enum g))
-       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
+     (update-item-request table prim-kvs update-map opts))))
+
+(defn delete-item-request "Implementation detail."
+  [table prim-kvs & [{:keys [return expected return-cc?]
+                      :or   {return :none}}]]
+  (doto-cond [g (DeleteItemRequest.)]
+    :always  (.setTableName    (name table))
+    :always  (.setKey          (clj-item->db-item prim-kvs))
+    expected (.setExpected     (expected-values g))
+    return   (.setReturnValues (utils/enum g))
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn delete-item
   "Deletes an item from a table by its primary key.
   See `put-item` for option docs."
   [client-opts table prim-kvs & [{:keys [return expected return-cc?]
-                                  :or   {return :none}}]]
+                                  :as opts}]]
   (as-map
    (.deleteItem (db-client client-opts)
-     (doto-cond [g (DeleteItemRequest.)]
-       :always  (.setTableName    (name table))
-       :always  (.setKey          (clj-item->db-item prim-kvs))
-       expected (.setExpected     (expected-values g))
-       return   (.setReturnValues (utils/enum g))
-       return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))
+     (delete-item-request table prim-kvs opts))))
 
 ;;;; API - batch ops
 
-(defn- attr-multi-vs
-  "[{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
+(defn attr-multi-vs
+  "Implementation detail.
+  [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
   (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
         ensure-sequential (fn [x] (if (sequential? x) x [x]))]
@@ -686,8 +775,9 @@
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
   )
 
-(defn- batch-request-items
-  "{<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
+(defn batch-request-items
+  "Implementation detail.
+  {<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
   [requests]
   (utils/name-map
    (fn [{:keys [prim-kvs attrs consistent?]}]
@@ -718,6 +808,12 @@
           (recur (merge-with merge-results last-result (more-f more))
                  (inc idx)))))))
 
+(defn batch-get-item-request "Implementation detail."
+  ^BatchGetItemRequest [return-cc? raw-req]
+  (doto-cond [g (BatchGetItemRequest.)]
+    :always    (.setRequestItems raw-req)
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
+
 (defn batch-get-item
   "Retrieves a batch of items in a single request.
   Limits apply, Ref. http://goo.gl/Bj9TC.
@@ -737,9 +833,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchGetItem (db-client client-opts)
-               (doto-cond [g (BatchGetItemRequest.)] ; {table-str KeysAndAttributes}
-                 :always    (.setRequestItems raw-req)
-                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
+               (batch-get-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
 
 (comment
@@ -749,10 +843,16 @@
   (batch-get-item   client-opts {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
   (scan client-opts :faraday.tests.main))
 
-(defn- write-request [action item]
+(defn write-request [action item] "Implementation detail."
   (case action
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
+
+(defn batch-write-item-request "Implementation detail."
+  ^BatchWriteItemRequest [return-cc? raw-req]
+  (doto-cond [g (BatchWriteItemRequest.)]
+    :always    (.setRequestItems raw-req)
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn batch-write-item
   "Executes a batch of Puts and/or Deletes in a single request.
@@ -771,9 +871,7 @@
   (letfn [(run1 [raw-req]
             (as-map
              (.batchWriteItem (db-client client-opts)
-               (doto-cond [g (BatchWriteItemRequest.)]
-                 :always    (.setRequestItems raw-req)
-                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))))))]
+               (batch-write-item-request return-cc? raw-req))))]
     (merge-more run1 span-reqs
       (run1
        (utils/name-map
@@ -787,10 +885,6 @@
 
 ;;;; API - queries & scans
 
-(defn- enum-op ^String [operator]
-  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
-      utils/enum))
-
 (defn- query|scan-conditions
   "{<attr> [operator <val-or-vals>] ...} -> {<attr> Condition ...}"
   [conditions]
@@ -803,6 +897,26 @@
            (.setComparisonOperator (enum-op operator))
            (.setAttributeValueList (mapv clj-val->db-val vals)))))
      conditions)))
+
+(defn query-request "Implementation detail."
+  [table prim-key-conds
+   & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
+              return-cc?] :as opts
+       :or {order :asc}}]]
+  (doto-cond [g (QueryRequest.)]
+    :always (.setTableName        (name table))
+    :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
+    :always (.setScanIndexForward (case order :asc true :desc false))
+    last-prim-kvs   (.setExclusiveStartKey
+                     (clj-item->db-item last-prim-kvs))
+    query-filter    (.setQueryFilter (query|scan-conditions query-filter))
+    limit           (.setLimit     (int g))
+    index           (.setIndexName      g)
+    consistent?     (.setConsistentRead g)
+    (coll?* return) (.setAttributesToGet (mapv name return))
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))
+    (and return (not (coll?* return)))
+    (.setSelect (utils/enum return))))
 
 (defn query
   "Retrieves items from a table (indexed) with options:
@@ -836,26 +950,31 @@
   [client-opts table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
               return-cc?] :as opts
-       :or   {span-reqs {:max 5}
-              order     :asc}}]]
+       :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.query (db-client client-opts)
-               (doto-cond [g (QueryRequest.)]
-                 :always (.setTableName        (name table))
-                 :always (.setKeyConditions    (query|scan-conditions prim-key-conds))
-                 :always (.setScanIndexForward (case order :asc true :desc false))
-                 last-prim-kvs   (.setExclusiveStartKey
-                                  (clj-item->db-item last-prim-kvs))
-                 query-filter    (.setQueryFilter (query|scan-conditions query-filter))
-                 limit           (.setLimit     (int g))
-                 index           (.setIndexName      g)
-                 consistent?     (.setConsistentRead g)
-                 (coll?* return) (.setAttributesToGet (mapv name return))
-                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))
-                 (and return (not (coll?* return)))
-                 (.setSelect (utils/enum return))))))]
+             (.query
+              (db-client client-opts)
+              (query-request table prim-key-conds
+                             (assoc opts :last-prim-kvs last-prim-kvs)))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
+
+(defn scan-request
+  [table
+   & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
+              segment return-cc?] :as opts}]]
+  (doto-cond [g (ScanRequest.)]
+    :always (.setTableName (name table))
+    attr-conds      (.setScanFilter        (query|scan-conditions g))
+    last-prim-kvs   (.setExclusiveStartKey
+                     (clj-item->db-item last-prim-kvs))
+    limit           (.setLimit             (int g))
+    total-segments  (.setTotalSegments     (int g))
+    segment         (.setSegment           (int g))
+    (coll?* return) (.setAttributesToGet (mapv name return))
+    return-cc? (.setReturnConsumedCapacity (utils/enum :total))
+    (and return (not (coll?* return)))
+    (.setSelect (utils/enum return))))
 
 (defn scan
   "Retrieves items from a table (unindexed) with options:
@@ -891,19 +1010,9 @@
        :or   {span-reqs {:max 5}}}]]
   (letfn [(run1 [last-prim-kvs]
             (as-map
-             (.scan (db-client client-opts)
-               (doto-cond [g (ScanRequest.)]
-                 :always (.setTableName (name table))
-                 attr-conds      (.setScanFilter        (query|scan-conditions g))
-                 last-prim-kvs   (.setExclusiveStartKey
-                                  (clj-item->db-item last-prim-kvs))
-                 limit           (.setLimit             (int g))
-                 total-segments  (.setTotalSegments     (int g))
-                 segment         (.setSegment           (int g))
-                 (coll?* return) (.setAttributesToGet (mapv name return))
-                 return-cc? (.setReturnConsumedCapacity (utils/enum :total))
-                 (and return (not (coll?* return)))
-                 (.setSelect (utils/enum return))))))]
+             (.scan
+              (db-client client-opts)
+              (scan-request table (assoc opts :last-prim-kvs last-prim-kvs)))))]
     (merge-more run1 span-reqs (run1 last-prim-kvs))))
 
 (defn scan-parallel
@@ -912,6 +1021,13 @@
   `scan` results.
 
   Ref. http://goo.gl/KLwnn (official parallel scan documentation)."
+
+  ;; TODO GitHub #17:
+  ;; http://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Scan.html
+  ;; In a parallel scan, a Scan request that includes ExclusiveStartKey must
+  ;; specify the same segment whose previous Scan returned the corresponding
+  ;; value of LastEvaluatedKey.
+
   [client-opts table total-segments & [opts]]
   (let [opts (assoc opts :total-segments total-segments)]
     (->> (mapv (fn [seg] (future (scan client-opts table (assoc opts :segment seg))))

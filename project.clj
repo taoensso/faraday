@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.5.0"
+(defproject com.taoensso/faraday "1.6.0-SNAPSHOT"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
@@ -12,39 +12,33 @@
 
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.7.0"]
-   [com.taoensso/nippy         "2.6.3"]
-   [com.amazonaws/aws-java-sdk "1.8.6" :exclusions [joda-time]]
-   [joda-time                  "2.3"]]
+   [com.taoensso/encore        "1.15.1"]
+   [com.taoensso/nippy         "2.7.0"]
+   [com.amazonaws/aws-java-sdk "1.9.10" :exclusions [joda-time]]
+   [joda-time                  "2.5"] ; For exclusion, see Github #27
+   ]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
+   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-alpha3"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
-   :test {:dependencies [[expectations           "2.0.7"]
-                         [org.clojure/test.check "0.5.8"]]
+   :test {:dependencies [[expectations           "2.0.13"]
+                         [org.clojure/test.check "0.5.9"]]
           :plugins [[lein-expectations "0.0.8"]
-                    [lein-autoexpect   "1.2.2"]]}
+                    [lein-autoexpect   "1.4.0"]]}
 
    :dev
-   [:1.6 :test
+   [:1.7 :test
     {:plugins [[lein-ancient "0.5.4"]
                [codox        "0.6.7"]]}]}
 
   :test-paths ["test" "src"]
-
   :aliases
-  {"test-all"   ["with-profile" "default:+1.6" "expectations"]
+  {"test-all"   ["with-profile" "default:+1.6:+1.7" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
 
-  :repositories
-  {"sonatype"
-   {:url "http://oss.sonatype.org/content/repositories/releases"
-    :snapshots false
-    :releases {:checksum :fail}}
-   "sonatype-snapshots"
-   {:url "http://oss.sonatype.org/content/repositories/snapshots"
-    :snapshots true
-    :releases {:checksum :fail :update :always}}})
+  :repositories {"sonatype-oss-public"
+                 "https://oss.sonatype.org/content/groups/public/"})
