@@ -1,10 +1,9 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/faraday "1.5.0"] ; Stable
+[com.taoensso/faraday "1.5.0"]       ; Stable
+[com.taoensso/faraday "1.6.0-beta1"] ; Dev, see CHANGELOG for details
 ```
-
-v1.3.x is a **significant, backwards-compatible release**. Please see the [CHANGELOG][] for details.
 
 # Faraday, a Clojure DynamoDB client
 
@@ -157,8 +156,6 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [SemVer]: <http://semver.org/>
 [Break Version]: <https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md>
 [Leiningen]: <http://leiningen.org/>
-[CDS]: <http://clojure-doc.org/>
-[ClojureWerkz]: <http://clojurewerkz.org/>
 [issues page]: <https://github.com/ptaoussanis/faraday/issues>
 [Cider]: <https://github.com/clojure-emacs/cider>
 [commit history]: <https://github.com/ptaoussanis/faraday/commits/master>

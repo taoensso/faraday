@@ -1,13 +1,14 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
-## SNAPSHOT / unreleased
+## v1.6.0-beta1 / 2015 Jan 12
 
  * **BREAKING**: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords (@mantree).
  * **NEW**: `update-item` now accepts the comparison operators in `:expected` (@mantree).
  * **NEW**: Boolean, Null, Map and List types now supported (@mantree).
  * **FIX** [#49]: Batch operations weren't returning consumed capacity (@johnchapin).
 
-## v1.5.0 / 2014 July 26
+
+## v1.5.0 / 2014 Jul 26
 
  * **NEW**: allow reading of binary values written with other (non-serializing) clients.
  * **Fix** [#36]: Batch writes weren't allowing set values.
@@ -15,13 +16,13 @@
 
 ## v1.4.0 / 2014 May 15
 
- * [#29] **CHANGE**: `list-tables` now returns a lazy seq and supports >100 tables (@marcuswr, @paraseba).
- * [#34] **NEW**: Add `:query-filter` support to `query` fn (@bpot).
+ * **CHANGE** [#29]: `list-tables` now returns a lazy seq and supports >100 tables (@marcuswr, @paraseba).
+ * **NEW** [#34]: Add `:query-filter` support to `query` fn (@bpot).
 
 
 ## v1.3.2 / 2014 May 9
 
- * [#32] **FIX**: deserialization of falsey values (were returning as nil) (@pegotezzi).
+ * **FIX** [#32]: deserialization of falsey values (were returning as nil) (@pegotezzi).
 
 
 ## v1.3.0 / 2014 Mar 30
