@@ -220,7 +220,6 @@
       :bs   (into #{} (mapv nt-thaw          x))
       :b    (nt-thaw  x)
 
-      ;;; TODO Completely untested
       :l (mapv db-val->clj-val x)
       :m (zipmap (mapv keyword         (.keySet ^java.util.HashMap x))
                  (mapv db-val->clj-val (.values ^java.util.HashMap x))))))
@@ -239,7 +238,6 @@
    (ddb-num? x)          (doto (AttributeValue.) (.setN (str x)))
    (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
 
-   ;;; TODO Completely untested
    (vector?  x) (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))
    (map?     x) (doto (AttributeValue.) (.setM (encore/map-kvs
                                                  (fn [k _] (name k))
