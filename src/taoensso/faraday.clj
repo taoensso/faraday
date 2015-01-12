@@ -273,13 +273,12 @@
 (def clj-item->db-item (partial utils/name-map    clj-val->db-val))
 
 (defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
-
-(def ^:private batch-cc-units
-  (partial
-    reduce
-    (fn [m cc]
+(defn- batch-cc-units [ccs]
+  (reduce
+    (fn [m ^ConsumedCapacity cc]
       (assoc m (keyword (.getTableName cc)) (cc-units cc)))
-    {}))
+    {}
+    ccs))
 
 (defprotocol AsMap (as-map [x]))
 
