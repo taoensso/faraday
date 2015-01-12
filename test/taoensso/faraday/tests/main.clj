@@ -4,7 +4,8 @@
             [taoensso.faraday :as far]
             [taoensso.nippy   :as nippy])
   (:import  [com.amazonaws.auth BasicAWSCredentials]
-            [com.amazonaws.internal StaticCredentialsProvider]))
+            [com.amazonaws.internal StaticCredentialsProvider]
+            [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
@@ -20,6 +21,7 @@
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
 
+
 (def run-after-setup (atom #{}))
 
 (defn- after-setup! [thunk]
@@ -30,19 +32,19 @@
                (:secret-key *client-opts*)))
   (println "Setting up testing environment...")
   (far/ensure-table *client-opts* ttable [:id :n]
-    {:throughput  {:read 1 :write 1}
-     :block?      true})
+                    {:throughput  {:read 1 :write 1}
+                     :block?      true})
   (far/ensure-table *client-opts* range-table [:title :s]
-    {:range-keydef [:number :n]
-     :throughput   {:read 1 :write 1}
-     :block?       true})
+                    {:range-keydef [:number :n]
+                     :throughput   {:read 1 :write 1}
+                     :block?       true})
 
   (doseq [thunk @run-after-setup]
     (thunk))
 
   (println "Ready to roll..."))
 
-(defn- after-run {:expectations-options :after-run} [])
+(defn after-run {:expectations-options :after-run} [])
 
 (comment (far/delete-table *client-opts* ttable))
 
@@ -124,6 +126,135 @@
    (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
                                    :return [:test]})))
 
+(defmacro update-t
+  [& cmds]
+  `(do
+     (far/put-item *client-opts* ttable ~'t)
+     (far/update-item *client-opts* ttable {:id (:id ~'t)} ~@cmds)
+     (far/get-item *client-opts* ttable {:id (:id ~'t)})))
+
+;;;; type check
+(let [t {:id 14
+         :boolT true
+         :boolF false
+         :string "string"
+         :num 1
+         :null nil
+         :numset #{4 12 6 13}
+         :strset #{"a" "b" "c"}
+         :map {:k1 "v1" :k2 "v2" :k3 "v3"}
+         :vec ["a" 1 false nil]}
+      take-care-of-map-keys {:id 15
+                             :map {:key "val" "key" 5}}]
+
+  (after-setup!
+   #(far/put-item *client-opts* ttable take-care-of-map-keys))
+
+  (expect
+   t
+   (do
+     (far/put-item *client-opts* ttable t)
+     (far/get-item *client-opts* ttable {:id (:id t)})))
+
+  (expect
+   {:id 15
+    :map {:key 5}}
+   (far/get-item *client-opts* ttable {:id (:id take-care-of-map-keys)}))
+
+  (expect
+   (update-in t [:strset] #(conj % "d"))
+   (update-t
+    {:strset [:add #{"d"}]}))
+
+  (expect
+   (update-in t [:strset] #(disj % "c"))
+   (update-t
+    {:strset [:delete #{"c"}]}))
+
+  (expect
+   (assoc t :strset #{"d"})
+   (update-t
+    {:strset [:put #{"d"}]}))
+
+  (expect
+   (assoc t :num 2)
+   (update-t
+    {:num [:add 1]}))
+
+  (expect
+   (dissoc t :map)
+   (update-t
+    {:map [:delete]}))
+
+  (expect
+   (assoc t :boolT false)
+   (update-t
+    {:boolT [:put false]}))
+
+  (expect
+   (assoc t :boolT nil)
+   (update-t
+    {:boolT [:put nil]}))
+
+  (expect
+   (assoc-in t [:map-new :new] "x")
+   (update-t
+    {:map-new [:put {:new "x"}]})))
+
+;;;; expectation tests
+(let [t {:id 16
+         :val 1
+         :str "abc"}]
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val :exists}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:blah :not-exists}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:< 5]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:eq 1]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:str [:begins-with "a"]}}))
+
+  (expect
+   (update-in t [:val] inc)
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:between 0 2]}}))
+
+  (expect
+   ConditionalCheckFailedException
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:> 5]}}))
+
+  (expect
+   ConditionalCheckFailedException
+   (update-t
+    {:val [:add 1]}
+    {:expected {:val [:= 2]}}))
+  )
+
 ;;;; range queries
 (let [j0 {:title "One" :number 0}
       j1 {:title "One" :number 1}
@@ -172,9 +303,9 @@
 
   ;;; Proceed for good conds
   (expect nil? (far/put-item *client-opts* ttable i1 {:expected {:id 1}}))
-  (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id false}}))
+  (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id :not-exists}}))
   (expect nil? (far/put-item *client-opts* ttable i2 {:expected {:id 2
-                                                               :dummy false}})))
+                                                               :dummy :not-exists}})))
 
 ;; (expect (interaction (println anything&)) (println 5))
 ;; (expect (interaction (println Long))      (println 5))

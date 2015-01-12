@@ -5,9 +5,12 @@
 /logs/
 /docs/
 /doc/
+/local-dynamo/
 /*.jar
 /*.class
 /.lein*
 /pom.xml*
 /.env
 .DS_Store
+.nreplport
+.nrepl-port

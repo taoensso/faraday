@@ -25,6 +25,7 @@
              BatchWriteItemResult
              Condition
              ConsumedCapacity
+             ComparisonOperator
              CreateTableRequest
              CreateTableResult
              DeleteItemRequest
@@ -261,6 +262,10 @@
 (comment
   (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
                          #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
+
+(defn- enum-op ^String [operator]
+  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
+      utils/enum))
 
 ;;;; Coercion - objects
 
@@ -655,9 +660,15 @@
   [expected-map]
   (when (seq expected-map)
     (utils/name-map
-     #(if (= false %)
-        (ExpectedAttributeValue. false)
-        (ExpectedAttributeValue. (clj-val->db-val %)))
+     #(case %
+        :exists (doto (ExpectedAttributeValue.)
+                  (.withComparisonOperator ComparisonOperator/NOT_NULL))
+        :not-exists (ExpectedAttributeValue. false)
+        (if (vector? %)
+          (doto (ExpectedAttributeValue.)
+            (.withComparisonOperator (enum-op (first %)))
+            (.setAttributeValueList (mapv clj-val->db-val (rest %))))
+          (ExpectedAttributeValue. (clj-val->db-val %))))
      expected-map)))
 
 (defn put-item-request
@@ -688,27 +699,33 @@
   [update-map]
   (when (seq update-map)
     (utils/name-map
-     (fn [[action val]] (AttributeValueUpdate. (when val (clj-val->db-val val))
-                                              (utils/enum action)))
+     (fn [[action val]]
+       (AttributeValueUpdate. (when
+                                  (or (not= action :delete)
+                                      (set? val))
+                                (clj-val->db-val val))
+                              (utils/enum action)))
      update-map)))
 
 (defn update-item-request
   [table prim-kvs update-map & [{:keys [return expected return-cc?]
                                  :or   {return :none}}]]
   (doto-cond [g (UpdateItemRequest.)]
-    :always  (.setTableName        (name table))
-    :always  (.setKey              (clj-item->db-item prim-kvs))
-    :always  (.setAttributeUpdates (attribute-updates update-map))
-    expected (.setExpected         (expected-values g))
-    return   (.setReturnValues     (utils/enum g))
-    return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
+             :always  (.setTableName        (name table))
+             :always  (.setKey (clj-item->db-item prim-kvs))
+             :always  (.setAttributeUpdates (attribute-updates update-map))
+             expected (.setExpected         (expected-values g))
+             return   (.setReturnValues     (utils/enum g))
+             return-cc? (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn update-item
   "Updates an item in a table by its primary key with options:
     prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     update-map - {<attr> [<#{:put :add :delete}> <optional value>]}.
     :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected  - {<attr> <#{<expected-value> false}> ...}."
+    :expected  - {<attr> <#{:exists :not-exists [comparison-operators <value>] <value>}> ...}.
+
+  Where comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between}."
   [client-opts table prim-kvs update-map & [{:keys [return expected return-cc?]
                                              :as   opts}]]
   (as-map
@@ -867,10 +884,6 @@
         requests)))))
 
 ;;;; API - queries & scans
-
-(defn- enum-op ^String [operator]
-  (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
-      utils/enum))
 
 (defn- query|scan-conditions
   "{<attr> [operator <val-or-vals>] ...} -> {<attr> Condition ...}"

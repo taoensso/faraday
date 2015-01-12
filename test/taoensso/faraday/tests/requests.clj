@@ -152,7 +152,9 @@
           (.getItem req))
   (expect {"e1" (doto (ExpectedAttributeValue.)
                   (.setValue (AttributeValue. "expected value")))
-           "e2" (ExpectedAttributeValue. false)}
+           "e2" (doto (ExpectedAttributeValue.)
+                  (.setValue (doto (AttributeValue.)
+                               (.setBOOL false))))}
           (.getExpected req)))
 
 (let [req
@@ -164,7 +166,7 @@
                            :a [:delete]}
                           {:expected {:e1 "expected!"}
                            :return :updated-old})]
-  
+
   (expect "update-item" (.getTableName req))
   (expect {"x" (doto (AttributeValue.)
                  (.setN "1"))}
@@ -189,7 +191,7 @@
                           {:k1 "val" :r1 -3}
                           {:return :all-new
                            :expected {:e1 1}})]
-  
+
   (expect "delete-item" (.getTableName req))
   (expect {"k1" (AttributeValue. "val")
            "r1" (doto (AttributeValue.)
