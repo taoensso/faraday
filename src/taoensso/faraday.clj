@@ -274,6 +274,13 @@
 
 (defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
 
+(def ^:private batch-cc-units
+  (partial
+    reduce
+    (fn [m cc]
+      (assoc m (keyword (.getTableName cc)) (cc-units cc)))
+    {}))
+
 (defprotocol AsMap (as-map [x]))
 
 (defmacro ^:private am-item-result [result get-form]
@@ -319,12 +326,12 @@
   (as-map [r]
     {:items       (utils/keyword-map as-map (.getResponses r))
      :unprocessed (.getUnprocessedKeys r)
-     :cc-units    (cc-units (.getConsumedCapacity r))})
+     :cc-units    (batch-cc-units (.getConsumedCapacity r))})
 
   BatchWriteItemResult
   (as-map [r]
     {:unprocessed (.getUnprocessedItems r)
-     :cc-units    (cc-units (.getConsumedCapacity r))})
+     :cc-units    (batch-cc-units (.getConsumedCapacity r))})
 
   TableDescription
   (as-map [d]
