@@ -11,7 +11,7 @@
 
 Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](http://goo.gl/hCVxY) recently and are actually pretty decent as of May 2013.
 
-Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
+Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggressively without being particularly concerned about backwards compatibility.
 
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
