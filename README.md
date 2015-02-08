@@ -60,12 +60,12 @@ Ready?
 ```clojure
 (def client-opts
   {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; For production, put your IAM keys here
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>" ; For production, put your IAM keys here
 
    ;; This line below is the only line that is added for DynamoDB Local.
    ;; Remove it (and add your IAM keys above) to run your code in production.
    :endpoint "http://localhost:8000"
-  )
+  })
 
 ;; or
 
