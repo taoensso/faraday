@@ -104,7 +104,7 @@
                (cond
                  creds      creds ; Given explicit AWSCredentials
                  access-key (BasicAWSCredentials. access-key secret-key)
-                 :else      (DefaultAWSCredentialsProviderChain.)))
+                 :else      (.getCredentials (DefaultAWSCredentialsProviderChain.))))
              client-config
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
