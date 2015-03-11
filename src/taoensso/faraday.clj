@@ -70,6 +70,7 @@
              ProvisionedThroughputExceededException
              ResourceInUseException
              ResourceNotFoundException]
+            [com.amazonaws.regions Regions Region]
             com.amazonaws.ClientConfiguration
             com.amazonaws.auth.AWSCredentials
             com.amazonaws.auth.AWSCredentialsProvider
@@ -78,11 +79,18 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
             java.nio.ByteBuffer))
 
+
 ;; TODO Add support for splitting data > 64KB over > 1 keys? This may be tough
 ;; to do well relative to the payoff. And I'm guessing there may be an official
 ;; (Java) lib to offer this capability at some point?
 
 ;;;; Connections
+
+(defn get-region
+  "Returns a region object, <3 OOP"
+  ^Region [a-region]
+  (let [eval-expr (read-string (str "Regions/" (name a-region)))]
+    (Region/getRegion (eval eval-expr))))
 
 (def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied client opts:
@@ -92,31 +100,37 @@
     etc."
   (memoize
    (fn [{:keys [provider creds access-key secret-key endpoint proxy-host proxy-port
-               conn-timeout max-conns max-error-retry socket-timeout]
+               conn-timeout max-conns max-error-retry socket-timeout region]
         :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
-       (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
-             _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
+       (let [creds (or creds (:credentials client-opts))    ; Deprecated opt
+             _ (assert (or (nil? creds) (instance? AWSCredentials creds)))
              _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
              ^AWSCredentialsProvider provider provider
              ^AWSCredentials aws-creds
              (when-not provider
                (cond
-                 creds      creds ; Given explicit AWSCredentials
+                 creds creds                                ; Given explicit AWSCredentials
                  access-key (BasicAWSCredentials. access-key secret-key)
-                 :else      (DefaultAWSCredentialsProviderChain.)))
+                 :else (DefaultAWSCredentialsProviderChain.)))
              client-config
              (doto-cond [g (ClientConfiguration.)]
-               proxy-host      (.setProxyHost         g)
-               proxy-port      (.setProxyPort         g)
-               conn-timeout    (.setConnectionTimeout g)
-               max-conns       (.setMaxConnections    g)
-               max-error-retry (.setMaxErrorRetry     g)
-               socket-timeout  (.setSocketTimeout     g))]
-         (doto-cond [g (if provider
-                         (AmazonDynamoDBClient. provider  client-config)
-                         (AmazonDynamoDBClient. aws-creds client-config))]
-           endpoint (.setEndpoint g)))))))
+                        proxy-host      (.setProxyHost g)
+                        proxy-port      (.setProxyPort g)
+                        conn-timeout    (.setConnectionTimeout g)
+                        max-conns       (.setMaxConnections g)
+                        max-error-retry (.setMaxErrorRetry g)
+                        socket-timeout  (.setSocketTimeout g))
+             ^AmazonDynamoDBClient
+             client (doto-cond [g (if provider
+                                    (AmazonDynamoDBClient. provider client-config)
+                                    (AmazonDynamoDBClient. aws-creds client-config))]
+                               endpoint (.setEndpoint g))]
+         ;if region is specified, set it
+         (if region
+           (doto client
+             (.setRegion (get-region region)))
+           client))))))
 
 (defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
 
