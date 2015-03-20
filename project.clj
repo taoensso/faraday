@@ -12,26 +12,26 @@
 
   :dependencies
   [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.19.1"]
-   [com.taoensso/nippy         "2.7.1"]
-   [com.amazonaws/aws-java-sdk "1.9.14" :exclusions [joda-time]]
+   [com.taoensso/encore        "1.22.0"]
+   [com.taoensso/nippy         "2.8.0"]
+   [com.amazonaws/aws-java-sdk "1.9.25" :exclusions [joda-time]]
    [joda-time                  "2.7"] ; For exclusion, see Github #27
    ]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-alpha3"]]}
+   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-alpha4"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
-   :test {:dependencies [[expectations           "2.0.13"]
-                         [org.clojure/test.check "0.6.2"]]
+   :test {:dependencies [[expectations           "2.1.0"]
+                         [org.clojure/test.check "0.7.0"]]
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.4.2"]]}
 
    :dev
    [:1.7 :test
-    {:plugins [[lein-ancient "0.5.4"]
-               [codox        "0.6.7"]]}]}
+    {:plugins [[lein-ancient "0.6.4"]
+               [codox        "0.8.11"]]}]}
 
   :test-paths ["test" "src"]
   :aliases
