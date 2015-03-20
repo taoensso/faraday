@@ -131,7 +131,7 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 ## Contact & contributing
 
-`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (emacs) or your IDE.
+`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (Emacs) or your IDE.
 
 Please use the project's GitHub [issues page][] for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
 
@@ -142,16 +142,16 @@ Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Che
 Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
 
 
-[API docs]: <http://ptaoussanis.github.io/faraday/>
-[CHANGELOG_]: <https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md>
-[CHANGELOG]: <https://github.com/ptaoussanis/faraday/releases>
-[other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
-[Twitter]: <https://twitter.com/ptaoussanis>
-[SemVer]: <http://semver.org/>
-[Break Version]: <https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md>
-[Leiningen]: <http://leiningen.org/>
-[issues page]: <https://github.com/ptaoussanis/faraday/issues>
-[Cider]: <https://github.com/clojure-emacs/cider>
-[commit history]: <https://github.com/ptaoussanis/faraday/commits/master>
-[taoensso.com]: <https://www.taoensso.com>
-[Eclipse Public License]: <https://raw2.github.com/ptaoussanis/faraday/master/LICENSE>
+[API docs]: http://ptaoussanis.github.io/faraday/
+[CHANGELOG]: https://github.com/ptaoussanis/faraday/releases
+[other Clojure libs]: https://www.taoensso.com/clojure
+[taoensso.com]: https://www.taoensso.com
+[Twitter]: https://twitter.com/ptaoussanis
+[issues page]: https://github.com/ptaoussanis/faraday/issues
+[commit history]: https://github.com/ptaoussanis/faraday/commits/master
+[Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
+[Leiningen]: http://leiningen.org/
+[Cider]: https://github.com/clojure-emacs/cider
+[CDS]: http://clojure-doc.org/
+[ClojureWerkz]: http://clojurewerkz.org/
+[Eclipse Public License]: https://raw2.github.com/ptaoussanis/faraday/master/LICENSE
