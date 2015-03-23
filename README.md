@@ -70,6 +70,19 @@ Ready?
 ;; or
 
 (def client-opts
+  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>" ; For production, put your IAM keys here
+
+   ;; If you need to connect to DynamoDB tables in regions other than the default the endpoint 
+   ;; can also be used to specify the region by consulting the table located here: 
+   ;; http://docs.aws.amazon.com/general/latest/gr/rande.html#ddb_region
+   ;; For example, for EU West 1:
+   :endpoint "http://dynamodb.eu-west-1.amazonaws.com"
+  })
+
+;; or
+
+(def client-opts
      {:provider <AWS_CREDENTIALS_PROVIDER> ; Your Favorite AWSCredentialsProvider here
       :endpoint "http://localhost:8000"    ; For DynamoDB Local
      }
