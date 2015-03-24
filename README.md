@@ -59,35 +59,16 @@ Ready?
 
 ```clojure
 (def client-opts
-  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>" ; For production, put your IAM keys here
+  {;;; For DDB Local just use some random strings here, otherwise include your
+   ;;; production IAM keys:
+   :access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"
 
-   ;; This line below is the only line that is added for DynamoDB Local.
-   ;; Remove it (and add your IAM keys above) to run your code in production.
-   :endpoint "http://localhost:8000"
+   ;;; You may optionally override the default endpoint if you'd like to use DDB
+   ;;; Local or a different AWS Region (Ref. http://goo.gl/YmV80o), etc.:
+   ;; :endpoint "http://localhost:8000"                   ; For DDB Local
+   ;; :endpoint "http://dynamodb.eu-west-1.amazonaws.com" ; For EU West 1 AWS region
   })
-
-;; or
-
-(def client-opts
-  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>" ; For production, put your IAM keys here
-
-   ;; If you need to connect to DynamoDB tables in regions other than the default the endpoint 
-   ;; can also be used to specify the region by consulting the table located here: 
-   ;; http://docs.aws.amazon.com/general/latest/gr/rande.html#ddb_region
-   ;; For example, for EU West 1:
-   :endpoint "http://dynamodb.eu-west-1.amazonaws.com"
-  })
-
-;; or
-
-(def client-opts
-     {:provider <AWS_CREDENTIALS_PROVIDER> ; Your Favorite AWSCredentialsProvider here
-      :endpoint "http://localhost:8000"    ; For DynamoDB Local
-     }
-
-)
 
 (far/list-tables client-opts)
 => [] ; No tables yet :-(
