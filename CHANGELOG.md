@@ -1,5 +1,20 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.6.0 / 2015 Mar 24
+
+> **BREAKING** release unless upgrading from _v1.6.0-beta1_.
+
+* *BREAK*: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords [@mantree].
+* **New**: Boolean, Null, Map and List types now supported [@mantree]
+* **New**: `update-item` now accepts the comparison operators in `:expected` [@mantree]
+* **Fix**: batch operations weren't returning consumed capacity [@johnchapin #49]
+* **Fix**: default AWS creds typo preventing federated IAM roles from working, etc. [@shinep #53]
+* **Docs**: a number of typo fixes + clarifications [@philippkueng @rmfbarker @sheelc @madeye-matt #50 #52 #55 #58]
+
+```clojure
+[com.taoensso/faraday "1.6.0"]
+```
+
 ## v1.6.0-beta1 / 2015 Jan 12
 
  * **BREAKING**: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords (@mantree).
