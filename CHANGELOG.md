@@ -4,7 +4,7 @@
 
 > **BREAKING** release unless upgrading from _v1.6.0-beta1_.
 
-* *BREAK*: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords [@mantree].
+* **BREAK**: `update-item` no longer treats `false` as a special value to denote attribute exists in `:expected`. Attribute existances is now tested for with the `:exists` and `:not-exists` keywords [@mantree].
 * **New**: Boolean, Null, Map and List types now supported [@mantree]
 * **New**: `update-item` now accepts the comparison operators in `:expected` [@mantree]
 * **Fix**: batch operations weren't returning consumed capacity [@johnchapin #49]
