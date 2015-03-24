@@ -1,8 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/faraday "1.5.0"]       ; Stable
-[com.taoensso/faraday "1.6.0-beta1"] ; Dev, see CHANGELOG for details
+[com.taoensso/faraday "1.6.0"] ; See CHANGELOG for details
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -11,7 +10,7 @@
 
 Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](http://goo.gl/hCVxY) recently and are actually pretty decent as of May 2013.
 
-Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggresively without being particularly concerned about backwards compatibility.
+Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggressively without being particularly concerned about backwards compatibility.
 
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
@@ -27,7 +26,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Add the necessary dependency to your [Leiningen][] `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "1.5.0"] ; project.clj
+[com.taoensso/faraday "1.6.0"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 
@@ -59,22 +58,16 @@ Ready?
 
 ```clojure
 (def client-opts
-  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"  ; For DynamoDB Local, just put some random string
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; For production, put your IAM keys here
+  {;;; For DDB Local just use some random strings here, otherwise include your
+   ;;; production IAM keys:
+   :access-key "<AWS_DYNAMODB_ACCESS_KEY>"
+   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"
 
-   ;; This line below is the only line that is added for DynamoDB Local.
-   ;; Remove it (and add your IAM keys above) to run your code in production.
-   :endpoint "http://localhost:8000"
-  )
-
-;; or
-
-(def client-opts
-     {:provider <AWS_CREDENTIALS_PROVIDER> ; Your Favorite AWSCredentialsProvider here
-      :endpoint "http://localhost:8000"    ; For DynamoDB Local
-     }
-
-)
+   ;;; You may optionally override the default endpoint if you'd like to use DDB
+   ;;; Local or a different AWS Region (Ref. http://goo.gl/YmV80o), etc.:
+   ;; :endpoint "http://localhost:8000"                   ; For DDB Local
+   ;; :endpoint "http://dynamodb.eu-west-1.amazonaws.com" ; For EU West 1 AWS region
+  })
 
 (far/list-tables client-opts)
 => [] ; No tables yet :-(
@@ -127,7 +120,7 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 **Querying**: `query`, `scan`, `scan-parallel`.
 
-You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Farady. The most useful doc is probably on the [DynamoDB data model](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html).
+You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/) though there's a lot of irrelevant Java-land complexity you won't need to deal with with Faraday. The most useful doc is probably on the [DynamoDB data model](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html).
 
 ## Performance
 
@@ -137,7 +130,7 @@ Faraday adds negligable overhead to the [official Java AWS SDK](http://aws.amazo
 
 ## Contact & contributing
 
-`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (emacs) or your IDE.
+`lein start-dev` to get a (headless) development repl that you can connect to with [Cider][] (Emacs) or your IDE.
 
 Please use the project's GitHub [issues page][] for project questions/comments/suggestions/whatever **(pull requests welcome!)**. Am very open to ideas if you have any!
 
@@ -148,16 +141,16 @@ Otherwise reach me (Peter Taoussanis) at [taoensso.com][] or on [Twitter][]. Che
 Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Public License][], the same as Clojure.
 
 
-[API docs]: <http://ptaoussanis.github.io/faraday/>
-[CHANGELOG_]: <https://github.com/ptaoussanis/faraday/blob/master/CHANGELOG.md>
-[CHANGELOG]: <https://github.com/ptaoussanis/faraday/releases>
-[other Clojure libs]: <https://www.taoensso.com/clojure-libraries>
-[Twitter]: <https://twitter.com/ptaoussanis>
-[SemVer]: <http://semver.org/>
-[Break Version]: <https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md>
-[Leiningen]: <http://leiningen.org/>
-[issues page]: <https://github.com/ptaoussanis/faraday/issues>
-[Cider]: <https://github.com/clojure-emacs/cider>
-[commit history]: <https://github.com/ptaoussanis/faraday/commits/master>
-[taoensso.com]: <https://www.taoensso.com>
-[Eclipse Public License]: <https://raw2.github.com/ptaoussanis/faraday/master/LICENSE>
+[API docs]: http://ptaoussanis.github.io/faraday/
+[CHANGELOG]: https://github.com/ptaoussanis/faraday/releases
+[other Clojure libs]: https://www.taoensso.com/clojure
+[taoensso.com]: https://www.taoensso.com
+[Twitter]: https://twitter.com/ptaoussanis
+[issues page]: https://github.com/ptaoussanis/faraday/issues
+[commit history]: https://github.com/ptaoussanis/faraday/commits/master
+[Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
+[Leiningen]: http://leiningen.org/
+[Cider]: https://github.com/clojure-emacs/cider
+[CDS]: http://clojure-doc.org/
+[ClojureWerkz]: http://clojurewerkz.org/
+[Eclipse Public License]: https://raw2.github.com/ptaoussanis/faraday/master/LICENSE
