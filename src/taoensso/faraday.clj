@@ -98,13 +98,13 @@
        (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
              _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
              _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
-             ^AWSCredentialsProvider provider provider
              ^AWSCredentials aws-creds
              (when-not provider
                (cond
                  creds      creds ; Given explicit AWSCredentials
-                 access-key (BasicAWSCredentials. access-key secret-key)
-                 :else      (.getCredentials (DefaultAWSCredentialsProviderChain.))))
+                 access-key (BasicAWSCredentials. access-key secret-key)))
+             ^AWSCredentialsProvider provider
+             (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
              client-config
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
