@@ -1,7 +1,8 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/faraday "1.6.0"] ; See CHANGELOG for details
+[com.taoensso/faraday "1.6.0"]     ; Stable
+[com.taoensso/faraday "1.7.0-RC1"] ; Dev, see CHANGELOG for details
 ```
 
 # Faraday, a Clojure DynamoDB client

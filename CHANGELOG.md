@@ -1,5 +1,17 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.7.0-RC1 / 2015 Apr 17
+
+> This should be a non-breaking release, but I haven't tested it personally.
+
+* **Change**: stop unnecessarily pulling in entire AWS SDK [@jaley #61]
+* **Change**: use DefaultAWSCredentialsProviderChain as provider [@MichaelBlume #59]
+
+```clojure
+[com.taoensso/faraday "1.7.0-RC1"]
+```
+
+
 ## v1.6.0 / 2015 Mar 24
 
 > **BREAKING** release unless upgrading from _v1.6.0-beta1_.

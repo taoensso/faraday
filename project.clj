@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.6.0"
+(defproject com.taoensso/faraday "1.7.0-RC1"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
@@ -11,17 +11,17 @@
                 *assert* true}
 
   :dependencies
-  [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.22.0"]
-   [com.taoensso/nippy         "2.8.0"]
-   [com.amazonaws/aws-java-sdk "1.9.25" :exclusions [joda-time]]
-   [joda-time                  "2.7"] ; For exclusion, see Github #27
-   ]
+  [[org.clojure/clojure "1.5.1"]
+   [com.taoensso/encore "1.24.0"]
+   [com.taoensso/nippy  "2.8.0"]
+   [joda-time           "2.7"] ; For exclusion, see Github #27
+   [com.amazonaws/aws-java-sdk-dynamodb "1.9.31"
+    :exclusions [joda-time]]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-alpha4"]]}
+   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-beta1"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
    :test {:dependencies [[expectations           "2.1.0"]
                          [org.clojure/test.check "0.7.0"]]
