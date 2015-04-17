@@ -11,11 +11,11 @@
                 *assert* true}
 
   :dependencies
-  [[org.clojure/clojure        "1.5.1"]
-   [com.taoensso/encore        "1.22.0"]
-   [com.taoensso/nippy         "2.8.0"]
-   [com.amazonaws/aws-java-sdk "1.9.25" :exclusions [joda-time]]
-   [joda-time                  "2.7"] ; For exclusion, see Github #27
+  [[org.clojure/clojure                 "1.5.1"]
+   [com.taoensso/encore                 "1.22.0"]
+   [com.taoensso/nippy                  "2.8.0"]
+   [com.amazonaws/aws-java-sdk-dynamodb "1.9.31" :exclusions [joda-time]]
+   [joda-time                           "2.7"] ; For exclusion, see Github #27
    ]
 
   :profiles
