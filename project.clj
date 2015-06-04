@@ -12,22 +12,21 @@
 
   :dependencies
   [[org.clojure/clojure "1.5.1"]
-   [com.taoensso/encore "1.24.0"]
-   [com.taoensso/nippy  "2.8.0"]
-   [joda-time           "2.7"] ; For exclusion, see Github #27
-   [com.amazonaws/aws-java-sdk-dynamodb "1.9.31"
+   [com.taoensso/encore "1.34.0"]
+   [com.taoensso/nippy  "2.9.0"]
+   [joda-time           "2.8"] ; For exclusion, see Github #27
+   [com.amazonaws/aws-java-sdk-dynamodb "1.9.39"
     :exclusions [joda-time]]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-beta1"]]}
+   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0-RC1"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
    :test {:dependencies [[expectations           "2.1.0"]
                          [org.clojure/test.check "0.7.0"]]
           :plugins [[lein-expectations "0.0.8"]
-                    [lein-autoexpect   "1.4.2"]]}
-
+                    [lein-autoexpect   "1.5.0"]]}
    :dev
    [:1.7 :test
     {:plugins [[lein-ancient "0.6.4"]
