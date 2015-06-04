@@ -1,7 +1,6 @@
 (ns taoensso.faraday.utils
   {:author "Peter Taoussanis"}
-  (:require [clojure.string  :as str]
-            [taoensso.encore :as encore]))
+  (:require [clojure.string  :as str]))
 
 (defn map-kvs [kf vf m]
   (let [m (if (instance? java.util.HashMap m) (into {} m) m)]
