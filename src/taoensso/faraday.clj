@@ -76,6 +76,7 @@
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.auth.DefaultAWSCredentialsProviderChain
             com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
+            com.amazonaws.services.dynamodbv2.AmazonDynamoDB
             java.nio.ByteBuffer))
 
 ;; TODO Add support for splitting data > 64KB over > 1 keys? This may be tough
@@ -118,7 +119,7 @@
                          (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
-(defn- db-client ^AmazonDynamoDBClient [client-opts] (db-client* client-opts))
+(defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
 
 ;;;; Exceptions
 
