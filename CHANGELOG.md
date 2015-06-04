@@ -1,15 +1,16 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
-## v1.7.0 / 2015 June 4
+## v1.7.1 / 2015 June 4
 
 > This is a non-breaking maintenance elease
 
 * **Deps**: stop unnecessarily pulling in entire AWS SDK [@jaley #61]
 * **Fix**: use DefaultAWSCredentialsProviderChain as provider [@MichaelBlume #59]
 * **Performance**: upgrade to Nippy v2.9.0
+* **Fix**: relax `AmazonDynamoDBClient` type hint [@ghoseb #62]
 
 ```clojure
-[com.taoensso/faraday "1.7.0"]
+[com.taoensso/faraday "1.7.1"]
 ```
 
 
