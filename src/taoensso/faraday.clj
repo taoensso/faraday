@@ -758,21 +758,25 @@
 
 ;;;; API - batch ops
 
+(def ^:dynamic *attr-multi-vs?* "Temporary hack/workaround for [#63]" true)
+
 (defn attr-multi-vs
   "Implementation detail.
   [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
-  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
-        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
-    (reduce (fn [r attr-multi-vs]
-              (let [attrs (keys attr-multi-vs)
-                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
-                (when (> (count (filter next vs)) 1)
-                  (-> (Exception. "Can range over only a single attr's values")
-                      (throw)))
-                (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
-                              (apply utils/cartesian-product vs)))))
-            [] (ensure-sequential attr-multi-vs-map))))
+  (if-not *attr-multi-vs?*
+    (clj-item->db-item attr-multi-vs)
+    (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+          ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+      (reduce (fn [r attr-multi-vs]
+                (let [attrs (keys attr-multi-vs)
+                      vs    (mapv ensure-sequential (vals attr-multi-vs))]
+                  (when (> (count (filter next vs)) 1)
+                    (-> (Exception. "Can range over only a single attr's values")
+                        (throw)))
+                  (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                                (apply utils/cartesian-product vs)))))
+        [] (ensure-sequential attr-multi-vs-map)))))
 
 (comment
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
@@ -833,13 +837,15 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
-                            :or   {span-reqs {:max 5}}}]]
-  (letfn [(run1 [raw-req]
-            (as-map
-             (.batchGetItem (db-client client-opts)
-               (batch-get-item-request return-cc? raw-req))))]
-    (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
+  [client-opts requests & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
+                            :or   {span-reqs {:max 5}
+                                   attr-multi-vs? true}}]]
+  (binding [*attr-multi-vs?* attr-multi-vs?]
+    (letfn [(run1 [raw-req]
+              (as-map
+                (.batchGetItem (db-client client-opts)
+                  (batch-get-item-request return-cc? raw-req))))]
+      (merge-more run1 span-reqs (run1 (batch-request-items requests))))))
 
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
@@ -871,22 +877,24 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
-                            :or   {span-reqs {:max 5}}}]]
-  (letfn [(run1 [raw-req]
-            (as-map
-             (.batchWriteItem (db-client client-opts)
-               (batch-write-item-request return-cc? raw-req))))]
-    (merge-more run1 span-reqs
-      (run1
-       (utils/name-map
-        ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
-        (fn [table-request]
-          (reduce into []
-            (for [action (keys table-request)
-                  :let [items (attr-multi-vs (table-request action))]]
-              (mapv (partial write-request action) items))))
-        requests)))))
+  [client-opts requests & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
+                            :or   {span-reqs {:max 5}
+                                   attr-multi-vs? true}}]]
+  (binding [*attr-multi-vs?* attr-multi-vs?]
+    (letfn [(run1 [raw-req]
+              (as-map
+                (.batchWriteItem (db-client client-opts)
+                  (batch-write-item-request return-cc? raw-req))))]
+      (merge-more run1 span-reqs
+        (run1
+          (utils/name-map
+            ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+            (fn [table-request]
+              (reduce into []
+                (for [action (keys table-request)
+                      :let [items (attr-multi-vs (table-request action))]]
+                  (mapv (partial write-request action) items))))
+            requests))))))
 
 ;;;; API - queries & scans
 
