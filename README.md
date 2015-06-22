@@ -12,6 +12,12 @@ Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](
 
 Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggressively without being particularly concerned about backwards compatibility.
 
+## Library status
+
+I'm not currently using DDB or Faraday myself, but will make a best effort to continue maintaining the library as I can. PRs for fixes and/or new features **very welcome**!
+
+\- Peter Taoussanis
+
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
   * **Great performance** (zero overhead to the official Java SDK).
