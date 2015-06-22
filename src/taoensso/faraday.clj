@@ -688,7 +688,7 @@
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
-    :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}.
+    :return   - e/o #{:none :all-old}.
     :expected - A map of item attribute/condition pairs, all of which must be
                 met for the operation to succeed. e.g.:
                   {<attr> <expected-value> ...}
