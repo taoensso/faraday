@@ -689,10 +689,7 @@
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
     :return   - e/o #{:none :all-old}.
-    :expected - A map of item attribute/condition pairs, all of which must be
-                met for the operation to succeed. e.g.:
-                  {<attr> <expected-value> ...}
-                  {<attr> false ...} ; Attribute must not exist"
+    :expected  - {<attr> <#{:exists :not-exists [comparison-operators <value>] <value>}> ...}."
   [client-opts table item & [{:keys [return expected return-cc?]
                               :as   opts}]]
   (as-map
