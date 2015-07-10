@@ -1063,6 +1063,29 @@
       (let [items item-or-items]
         (into {} (mapv (partial item-by-attrs attr-or-attrs) items))))))
 
+(defn- empty-seq->nil [s]
+  (when (seq s) s))
+
+(defmulti sanitize class)
+
+(defmethod sanitize clojure.lang.Sequential [x]
+  (empty-seq->nil
+   (into [] (filter (comp not nil?) (map sanitize x)))))
+
+(defmethod sanitize clojure.lang.IPersistentMap [x]
+  (into {} (filter (comp (partial = 2) count) (map sanitize x))))
+
+(defmethod sanitize java.lang.String [x]
+  (when-not (clojure.string/blank? x)
+    x))
+
+(defmethod sanitize clojure.lang.IPersistentSet [x]
+  (empty-seq->nil
+   (into #{} (filter (comp not nil?) (map sanitize x)))))
+
+(defmethod sanitize :default [x]
+  x)
+
 (comment
   (items-by-attrs :a      {:a :A :b :B :c :C})
   (items-by-attrs [:a]    {:a :A :b :B :c :C})
