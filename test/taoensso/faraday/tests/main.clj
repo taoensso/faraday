@@ -366,4 +366,5 @@
            (select-keys #{:read :write}))))))
 
 (expect {:b [{:a "b"} {}]}
-        (far/sanitize {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""}}))
+  (far/remove-empty-attr-vals
+    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""}}))
