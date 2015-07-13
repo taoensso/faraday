@@ -1044,7 +1044,7 @@
                (range total-segments))
          (mapv deref))))
 
-;;;; Misc. helpers
+;;;; Misc utils, etc.
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
@@ -1063,29 +1063,6 @@
       (let [items item-or-items]
         (into {} (mapv (partial item-by-attrs attr-or-attrs) items))))))
 
-(defn- empty-seq->nil [s]
-  (when (seq s) s))
-
-(defmulti sanitize class)
-
-(defmethod sanitize clojure.lang.Sequential [x]
-  (empty-seq->nil
-   (into [] (filter (comp not nil?) (map sanitize x)))))
-
-(defmethod sanitize clojure.lang.IPersistentMap [x]
-  (into {} (filter (comp (partial = 2) count) (map sanitize x))))
-
-(defmethod sanitize java.lang.String [x]
-  (when-not (clojure.string/blank? x)
-    x))
-
-(defmethod sanitize clojure.lang.IPersistentSet [x]
-  (empty-seq->nil
-   (into #{} (filter (comp not nil?) (map sanitize x)))))
-
-(defmethod sanitize :default [x]
-  x)
-
 (comment
   (items-by-attrs :a      {:a :A :b :B :c :C})
   (items-by-attrs [:a]    {:a :A :b :B :c :C})
@@ -1096,6 +1073,31 @@
                            {:a :A2 :b :B2 :c :C2}])
   (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
                            {:a :A2 :b :B2 :c :C2}]))
+
+(def remove-empty-attr-vals
+  "Alpha, subject to change.
+  Util to help remove (or coerce to nil) empty val types prohibited by DDB,
+  Ref. http://goo.gl/Xg85pO. See also `freeze` as an alternative."
+  (let [->?seq (fn [c] (when (seq c) c))]
+    (fn f1 [x]
+      (cond
+        (map? x)
+        (->?seq
+          (reduce-kv (fn [acc k v] (if-let [v* (f1 v)] (assoc acc k v* ) acc))
+            {} x))
+
+        (coll? x)
+        (->?seq
+          (reduce (fn rf [acc in] (if-let [v* (f1 in)] (conj acc v*) acc))
+            (if (sequential? x) [] (empty x)) x))
+
+        (string?       x) (when-not (str/blank? x)             x)
+        (encore/bytes? x) (when-not (zero? (alength ^bytes x)) x)
+        :else x))))
+
+(comment
+  (remove-empty-attr-vals ; => {:b [{:a "b"}]}
+    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""}}))
 
 (comment ; README
 
