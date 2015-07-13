@@ -1083,12 +1083,14 @@
       (cond
         (map? x)
         (->?seq
-          (reduce-kv (fn [acc k v] (if-let [v* (f1 v)] (assoc acc k v* ) acc))
+          (reduce-kv
+            (fn [acc k v] (let [v* (f1 v)] (if (nil? v*) acc (assoc acc k v* ))))
             {} x))
 
         (coll? x)
         (->?seq
-          (reduce (fn rf [acc in] (if-let [v* (f1 in)] (conj acc v*) acc))
+          (reduce
+            (fn rf [acc in] (let [v* (f1 in)] (if (nil? v*) acc (conj acc v*))))
             (if (sequential? x) [] (empty x)) x))
 
         (string?       x) (when-not (str/blank? x)             x)
@@ -1096,8 +1098,8 @@
         :else x))))
 
 (comment
-  (remove-empty-attr-vals ; => {:b [{:a "b"}]}
-    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""}}))
+  (remove-empty-attr-vals ; => {:b [{:a "b"}], :f false}
+    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false}))
 
 (comment ; README
 
