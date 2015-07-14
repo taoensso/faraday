@@ -93,6 +93,7 @@
     etc."
   (memoize
    (fn [{:keys [provider creds access-key secret-key endpoint proxy-host proxy-port
+                proxy-username proxy-password
                conn-timeout max-conns max-error-retry socket-timeout]
         :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
@@ -110,6 +111,8 @@
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
                proxy-port      (.setProxyPort         g)
+               proxy-username  (.setProxyUsername     g)
+               proxy-password  (.setProxyPassword     g)
                conn-timeout    (.setConnectionTimeout g)
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
