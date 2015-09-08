@@ -116,7 +116,8 @@
                conn-timeout    (.setConnectionTimeout g)
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
-               socket-timeout  (.setSocketTimeout     g))]
+               socket-timeout  (.setSocketTimeout     g)
+               keep-alive      (.setUseTcpKeepAlive   g))]
          (doto-cond [g (if provider
                          (AmazonDynamoDBClient. provider  client-config)
                          (AmazonDynamoDBClient. aws-creds client-config))]
