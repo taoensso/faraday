@@ -79,9 +79,9 @@
             com.amazonaws.services.dynamodbv2.AmazonDynamoDB
             java.nio.ByteBuffer))
 
-;; TODO Add support for splitting data > 64KB over > 1 keys? This may be tough
-;; to do well relative to the payoff. And I'm guessing there may be an official
-;; (Java) lib to offer this capability at some point?
+(if (vector? taoensso.encore/encore-version)
+  (encore/assert-min-encore-version [2 11 0])
+  (encore/assert-min-encore-version  2.11))
 
 ;;;; Connections
 
@@ -93,7 +93,8 @@
     etc."
   (memoize
    (fn [{:keys [provider creds access-key secret-key endpoint proxy-host proxy-port
-               conn-timeout max-conns max-error-retry socket-timeout]
+               proxy-username proxy-password
+               conn-timeout max-conns max-error-retry socket-timeout keep-alive?]
         :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
        (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
@@ -110,10 +111,13 @@
              (doto-cond [g (ClientConfiguration.)]
                proxy-host      (.setProxyHost         g)
                proxy-port      (.setProxyPort         g)
+               proxy-username  (.setProxyUsername     g)
+               proxy-password  (.setProxyPassword     g)
                conn-timeout    (.setConnectionTimeout g)
                max-conns       (.setMaxConnections    g)
                max-error-retry (.setMaxErrorRetry     g)
-               socket-timeout  (.setSocketTimeout     g))]
+               socket-timeout  (.setSocketTimeout     g)
+               keep-alive?     (.setUseTcpKeepAlive   g))]
          (doto-cond [g (if provider
                          (AmazonDynamoDBClient. provider  client-config)
                          (AmazonDynamoDBClient. aws-creds client-config))]
@@ -688,11 +692,8 @@
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
-    :return   - e/o #{:none :all-old :updated-old :all-new :updated-new}.
-    :expected - A map of item attribute/condition pairs, all of which must be
-                met for the operation to succeed. e.g.:
-                  {<attr> <expected-value> ...}
-                  {<attr> false ...} ; Attribute must not exist"
+    :return   - e/o #{:none :all-old}.
+    :expected  - {<attr> <#{:exists :not-exists [comparison-operators <value>] <value>}> ...}."
   [client-opts table item & [{:keys [return expected return-cc?]
                               :as   opts}]]
   (as-map
@@ -758,21 +759,25 @@
 
 ;;;; API - batch ops
 
+(def ^:dynamic *attr-multi-vs?* "Temporary hack/workaround for [#63]" true)
+
 (defn attr-multi-vs
   "Implementation detail.
   [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
-  (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
-        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
-    (reduce (fn [r attr-multi-vs]
-              (let [attrs (keys attr-multi-vs)
-                    vs    (mapv ensure-sequential (vals attr-multi-vs))]
-                (when (> (count (filter next vs)) 1)
-                  (-> (Exception. "Can range over only a single attr's values")
-                      (throw)))
-                (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
-                              (apply utils/cartesian-product vs)))))
-            [] (ensure-sequential attr-multi-vs-map))))
+  (if-not *attr-multi-vs?*
+    (clj-item->db-item attr-multi-vs)
+    (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+          ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+      (reduce (fn [r attr-multi-vs]
+                (let [attrs (keys attr-multi-vs)
+                      vs    (mapv ensure-sequential (vals attr-multi-vs))]
+                  (when (> (count (filter next vs)) 1)
+                    (-> (Exception. "Can range over only a single attr's values")
+                        (throw)))
+                  (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                                (apply utils/cartesian-product vs)))))
+        [] (ensure-sequential attr-multi-vs-map)))))
 
 (comment
   (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
@@ -833,13 +838,15 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
-                            :or   {span-reqs {:max 5}}}]]
-  (letfn [(run1 [raw-req]
-            (as-map
-             (.batchGetItem (db-client client-opts)
-               (batch-get-item-request return-cc? raw-req))))]
-    (merge-more run1 span-reqs (run1 (batch-request-items requests)))))
+  [client-opts requests & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
+                            :or   {span-reqs {:max 5}
+                                   attr-multi-vs? true}}]]
+  (binding [*attr-multi-vs?* attr-multi-vs?]
+    (letfn [(run1 [raw-req]
+              (as-map
+                (.batchGetItem (db-client client-opts)
+                  (batch-get-item-request return-cc? raw-req))))]
+      (merge-more run1 span-reqs (run1 (batch-request-items requests))))))
 
 (comment
   (def bigval (.getBytes (apply str (range 14000))))
@@ -871,22 +878,24 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [client-opts requests & [{:keys [return-cc? span-reqs] :as opts
-                            :or   {span-reqs {:max 5}}}]]
-  (letfn [(run1 [raw-req]
-            (as-map
-             (.batchWriteItem (db-client client-opts)
-               (batch-write-item-request return-cc? raw-req))))]
-    (merge-more run1 span-reqs
-      (run1
-       (utils/name-map
-        ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
-        (fn [table-request]
-          (reduce into []
-            (for [action (keys table-request)
-                  :let [items (attr-multi-vs (table-request action))]]
-              (mapv (partial write-request action) items))))
-        requests)))))
+  [client-opts requests & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
+                            :or   {span-reqs {:max 5}
+                                   attr-multi-vs? true}}]]
+  (binding [*attr-multi-vs?* attr-multi-vs?]
+    (letfn [(run1 [raw-req]
+              (as-map
+                (.batchWriteItem (db-client client-opts)
+                  (batch-write-item-request return-cc? raw-req))))]
+      (merge-more run1 span-reqs
+        (run1
+          (utils/name-map
+            ;; {<table> <table-reqs> ...} -> {<table> [WriteRequest ...] ...}
+            (fn [table-request]
+              (reduce into []
+                (for [action (keys table-request)
+                      :let [items (attr-multi-vs (table-request action))]]
+                  (mapv (partial write-request action) items))))
+            requests))))))
 
 ;;;; API - queries & scans
 
@@ -1039,7 +1048,7 @@
                (range total-segments))
          (mapv deref))))
 
-;;;; Misc. helpers
+;;;; Misc utils, etc.
 
 (defn items-by-attrs
   "Groups one or more items by one or more attributes, returning a map of form
@@ -1068,6 +1077,33 @@
                            {:a :A2 :b :B2 :c :C2}])
   (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
                            {:a :A2 :b :B2 :c :C2}]))
+
+(def remove-empty-attr-vals
+  "Alpha, subject to change.
+  Util to help remove (or coerce to nil) empty val types prohibited by DDB,
+  Ref. http://goo.gl/Xg85pO. See also `freeze` as an alternative."
+  (let [->?seq (fn [c] (when (seq c) c))]
+    (fn f1 [x]
+      (cond
+        (map? x)
+        (->?seq
+          (reduce-kv
+            (fn [acc k v] (let [v* (f1 v)] (if (nil? v*) acc (assoc acc k v* ))))
+            {} x))
+
+        (coll? x)
+        (->?seq
+          (reduce
+            (fn rf [acc in] (let [v* (f1 in)] (if (nil? v*) acc (conj acc v*))))
+            (if (sequential? x) [] (empty x)) x))
+
+        (string?       x) (when-not (str/blank? x)             x)
+        (encore/bytes? x) (when-not (zero? (alength ^bytes x)) x)
+        :else x))))
+
+(comment
+  (remove-empty-attr-vals ; => {:b [{:a "b"}], :f false}
+    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false}))
 
 (comment ; README
 

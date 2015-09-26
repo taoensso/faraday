@@ -1,7 +1,7 @@
 **[API docs][]** | **[CHANGELOG][]** | [other Clojure libs][] | [Twitter][] | [contact/contrib](#contact--contributing) | current [Break Version][]:
 
 ```clojure
-[com.taoensso/faraday "1.7.1"] ; Dev, see CHANGELOG for details
+[com.taoensso/faraday "1.8.0"] ; Dev, see CHANGELOG for details
 ```
 
 # Faraday, a Clojure DynamoDB client
@@ -11,6 +11,12 @@
 Concerned about the costs? They've been [getting](http://goo.gl/qJP5d) [better](http://goo.gl/hCVxY) recently and are actually pretty decent as of May 2013.
 
 Faraday was adapted from James Reaves' [Rotary client](https://github.com/weavejester/rotary). Why adapt? Freedom to experiment rapidly+aggressively without being particularly concerned about backwards compatibility.
+
+## Library status
+
+I'm not currently using DDB or Faraday myself, but will make a best effort to continue maintaining the library as I can. PRs for fixes and/or new features **very welcome**!
+
+\- Peter Taoussanis
 
 ## What's in the box™?
   * Small, simple, API: **complete coverage of DynamoDBv2 features**.
@@ -26,7 +32,7 @@ DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexit
 Add the necessary dependency to your [Leiningen][] `project.clj` and `require` the library in your ns:
 
 ```clojure
-[com.taoensso/faraday "1.7.1"] ; project.clj
+[com.taoensso/faraday "1.8.0"] ; project.clj
 (ns my-app (:require [taoensso.faraday :as far])) ; ns
 ```
 

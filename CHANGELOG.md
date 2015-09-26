@@ -1,5 +1,21 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.8.0 / 2015 September 26
+
+> This is a non-breaking feature release
+
+* **New**: add sanitization multimethod to strip empty values [@jeffh #67]
+* **New**: temp hack/workaround to get opt-out `attr-multi-vs` behaviour [#63]
+* **New**: support proxy username & password [@tokomakoma123 #68]
+* **New**: db-client*: add :keep-alive? option [@kirankulkarni #70]
+* **Fix**: don't remove falsey attr vals [#67]
+* **Docs**: fix `put-item` docstring [#64, #65]
+
+```clojure
+[com.taoensso/faraday "1.8.0"]
+```
+
+
 ## v1.7.1 / 2015 June 4
 
 > This is a non-breaking maintenance elease
