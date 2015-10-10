@@ -365,6 +365,6 @@
            :throughput
            (select-keys #{:read :write}))))))
 
-(expect {:b [{:a "b"}], :f false}
+(expect {:b [{:a "b"}], :f false, :g "    "}
   (far/remove-empty-attr-vals
-    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false}))
+    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false :g "    "}))
