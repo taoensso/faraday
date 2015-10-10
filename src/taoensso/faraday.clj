@@ -1097,7 +1097,7 @@
             (fn rf [acc in] (let [v* (f1 in)] (if (nil? v*) acc (conj acc v*))))
             (if (sequential? x) [] (empty x)) x))
 
-        (string?       x) (when-not (str/blank? x)             x)
+        (string?       x) (when-not (empty? x)                 x)
         (encore/bytes? x) (when-not (zero? (alength ^bytes x)) x)
         :else x))))
 
