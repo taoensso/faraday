@@ -680,37 +680,40 @@
           (ExpectedAttributeValue. (clj-val->db-val %))))
      expected-map)))
 
-(defn clj->db-expr-values-map [m]
-  (into {} (for [[k v] m]
-             [k (clj-val->db-val v)])))
+(defn- clj->db-expr-vals-map [m] (encore/map-vals clj-val->db-val m))
 
 (defn put-item-request
-  [table item & [{:keys [return expected return-cc? condition-expression expression-attr-names expression-attr-values]
-                  :or   {return :none}}]]
+  [table item &
+   [{:keys [return expected return-cc? cond-expr expr-attr-names expr-attr-vals]
+     :or   {return :none}}]]
   (doto-cond [g (PutItemRequest.)]
-    :always                (.setTableName    (name table))
-    :always                (.setItem         (clj-item->db-item item))
-    expected               (.setExpected     (expected-values g))
-    condition-expression   (.setConditionExpression condition-expression)
-    expression-attr-names  (.withExpressionAttributeNames expression-attr-names)
-    expression-attr-values (.withExpressionAttributeValues
-                            (clj->db-expr-values-map expression-attr-values))
-    return                 (.setReturnValues (utils/enum g))
-    return-cc?             (.setReturnConsumedCapacity (utils/enum :total))))
+    :always         (.setTableName    (name table))
+    :always         (.setItem         (clj-item->db-item item))
+    expected        (.setExpected     (expected-values g))
+    cond-expr       (.setConditionExpression cond-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                      (clj->db-expr-vals-map expr-attr-vals))
+    return          (.setReturnValues (utils/enum g))
+    return-cc?      (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn put-item
   "Adds an item (Clojure map) to a table with options:
-    :return   - e/o #{:none :all-old}.
-    :condition-expression   - \"attribute_exists(attr_name) AND|OR ...\"
-    :expression-attr-names  - {\"#attr_name\" \"name\"}
-    :expression-attr-values - {\":attr_value\" \"value\"}"
-  [client-opts table item & [{:keys [return expected return-cc? condition-expression]
-                              :as   opts}]]
-  (assert (not (and expected
-                    condition-expression))
-          "Only one of :expected or :condition-expression should be provided.")
-  (when expected
-    (prn "WARNING - :expected is a legacy option and has been deprecated. Please use :condition-expression instead"))
+    :return          - e/o #{:none :all-old}
+    :cond-expr       - \"attribute_exists(attr_name) AND|OR ...\"
+    :expr-attr-names - {\"#attr_name\" \"name\"}
+    :expr-attr-vals  - {\":attr_value\" \"value\"}
+    :expected        - DEPRECATED in favor of `:cond-expr`,
+      {<attr> <#{:exists :not-exists [<comparison-operator> <value>] <value>}> ...}
+      With comparison-operator e/o #{:eq :le :lt :ge :gt :begins-with :between}."
+
+  [client-opts table item &
+   [{:keys [return expected return-cc? cond-expr]
+     :as opts}]]
+
+  (assert (not (and expected cond-expr))
+    "Only one of :expected or :cond-expr should be provided")
+
   (as-map
    (.putItem (db-client client-opts)
      (put-item-request table item opts))))
@@ -729,47 +732,51 @@
      update-map)))
 
 (defn update-item-request
-  [table prim-kvs update-map & [{:keys [return expected return-cc?
-                                        condition-expression
-                                        update-expression expression-attr-names expression-attr-values]
-                                 :or   {return :none}}]]
+  [table prim-kvs update-map &
+   [{:keys [return expected return-cc?
+            cond-expr update-expr expr-attr-names expr-attr-vals]
+     :or   {return :none}}]]
+
   (doto-cond [g (UpdateItemRequest.)]
-             :always               (.setTableName        (name table))
-             :always               (.setKey (clj-item->db-item prim-kvs))
-             update-map            (.setAttributeUpdates (attribute-updates update-map))
-             update-expression     (.setUpdateExpression update-expression)
-             expression-attr-names  (.withExpressionAttributeNames expression-attr-names)
-             expression-attr-values (.withExpressionAttributeValues
-                                       (clj->db-expr-values-map expression-attr-values))
-             expected              (.setExpected         (expected-values g))
-             condition-expression  (.setConditionExpression condition-expression)
-             return                (.setReturnValues     (utils/enum g))
-             return-cc?            (.setReturnConsumedCapacity (utils/enum :total))))
+    :always         (.setTableName        (name table))
+    :always         (.setKey (clj-item->db-item prim-kvs))
+    update-map      (.setAttributeUpdates (attribute-updates update-map))
+    update-expr     (.setUpdateExpression update-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                      (clj->db-expr-vals-map expr-attr-vals))
+    expected        (.setExpected         (expected-values g))
+    cond-expr       (.setConditionExpression cond-expr)
+    return          (.setReturnValues     (utils/enum g))
+    return-cc?      (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn update-item
   "Updates an item in a table by its primary key with options:
-    prim-kvs   - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
-    :condition-expression   - \"attribute_exists(attr_name) AND|OR ...\"
-    :update-expression      - \"SET #attr_name = :attr_value\"
-    :expression-attr-names  - {\"#attr_name\" \"name\"}
-    :expression-attr-values - {\":attr_value\" \"value\"}
-    :return    - e/o #{:none :all-old :updated-old :all-new :updated-new}."
-  ([client-opts table prim-kvs update-map & [{:keys [return expected return-cc?
-                                                     condition-expression update-expression]
-                                              :as   opts}]]
-   (assert (not (and expected
-                     condition-expression))
-           "Only one of :expected or :condition-expression should be provided.")
-   (assert (not (and (not (empty? update-map))
-                     update-expression))
-           "Only one of 'update-map' or :update-expression should be provided.")
-   (when expected
-     (prn "WARNING - :expected is a legacy option and has been deprecated. Please use :condition-expression instead"))
-   (when update-map
-     (prn "WARNING - update-map is a legacy option and has been deprecated. Please use :condition-expression instead"))
+    prim-kvs         - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}
+    update-map       - DEPRECATED in favor of `:update-expr`,
+                       {<attr> [<#{:put :add :delete}> <optional value>]}
+    :cond-expr       - \"attribute_exists(attr_name) AND|OR ...\"
+    :update-expr     - \"SET #attr_name = :attr_value\"
+    :expr-attr-names - {\"#attr_name\" \"name\"}
+    :expr-attr-vals  - {\":attr_value\" \"value\"}
+    :return          - e/o #{:none :all-old :updated-old :all-new :updated-new}
+    :expected        - DEPRECATED in favor of `:cond-expr`,
+      {<attr> <#{:exists :not-exists [<comparison-operator> <value>] <value>}> ...}
+      With comparison-operator e/o #{:eq :le :lt :ge :gt :begins-with :between}."
+
+  ([client-opts table prim-kvs update-map &
+    [{:keys [return expected return-cc? cond-expr update-expr]
+      :as opts}]]
+
+   (assert (not (and expected cond-expr))
+     "Only one of :expected or :cond-expr should be provided")
+
+   (assert (not (and update-expr (seq update-map)))
+     "Only one of 'update-map' or :update-expr should be provided")
+
    (as-map
-    (.updateItem (db-client client-opts)
-                 (update-item-request table prim-kvs update-map opts)))))
+     (.updateItem (db-client client-opts)
+       (update-item-request table prim-kvs update-map opts)))))
 
 (defn delete-item-request "Implementation detail."
   [table prim-kvs & [{:keys [return expected return-cc?]
