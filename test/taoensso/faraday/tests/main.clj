@@ -95,14 +95,13 @@
         *client-opts* ttable {:id 10} {:name [:put "baz"]} {:return :all-new})))
 
   (expect
-   #= (far/ex :conditional-check-failed)
+   #=(far/ex :conditional-check-failed)
    (far/update-item *client-opts* ttable
-                    {:id 10} {:name [:put "baz"]}
-                    {:expected {:name "garbage"}})))
+       {:id 10} {:name [:put "baz"]}
+       {:expected {:name "garbage"}})))
 
+;;;; Expressions support
 
-
-;; Expressions support
 (let [i {:id 10 :name "update me"}]
   (after-setup!
    #(far/delete-item *client-opts* ttable {:id 10}))
@@ -111,32 +110,32 @@
    {:id 10 :name "foo"}
    (do
      (far/update-item *client-opts* ttable
-                      {:id 10}
-                      {}
-                      {:update-expression      "SET #name = :name"
-                       :expression-attr-names  {"#name" "name"}
-                       :expression-attr-values {":name" "foo"}
-                       :return :all-new})))
+       {:id 10}
+       {}
+       {:update-expr     "SET #name = :name"
+        :expr-attr-names {"#name" "name"}
+        :expr-attr-vals  {":name" "foo"}
+        :return          :all-new})))
 
   (expect ; Condition expression support in update-item
-   #= (far/ex :conditional-check-failed)
+   #=(far/ex :conditional-check-failed)
    (do
      (far/update-item *client-opts* ttable
-                      {:id 10}
-                      {}
-                      {:update-expression      "SET #name = :name"
-                       :expression-attr-names  {"#name" "name"}
-                       :expression-attr-values {":name" "foo"}
-                       :condition-expression   "#name <> :name"
-                       :return :all-new})))
+       {:id 10}
+       {}
+       {:cond-expr       "#name <> :name"
+        :update-expr     "SET #name = :name"
+        :expr-attr-names {"#name" "name"}
+        :expr-attr-vals  {":name" "foo"}
+        :return          :all-new})))
 
   (expect ; Condition expression support in put-item
-   #= (far/ex :conditional-check-failed)
+   #=(far/ex :conditional-check-failed)
    (do
      (far/put-item *client-opts* ttable i
-                   {:condition-expression "attribute_not_exists(id) AND #name <> :name"
-                    :expression-attr-names  {"#name" "name"}
-                    :expression-attr-values {":name" "foo"}}))))
+       {:cond-expr "attribute_not_exists(id) AND #name <> :name"
+        :expr-attr-names {"#name" "name"}
+        :expr-attr-vals  {":name" "foo"}}))))
 
 (let [items [{:id 11 :name "eleven" :test "batch"}
              {:id 12 :name "twelve" :test "batch"}
