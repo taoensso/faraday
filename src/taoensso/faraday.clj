@@ -682,6 +682,14 @@
 
 (defn- clj->db-expr-vals-map [m] (encore/map-vals clj-val->db-val m))
 
+(def ^:private deprecation-warning-expected_
+  (delay
+    (println "Faraday WARNING: `:expected` option is deprecated in favor of `:cond-expr`")))
+
+(def ^:private deprecation-warning-update-map_
+  (delay
+    (println "Faraday WARNING: `update-map` is deprecated in favor of `:cond-expr`")))
+
 (defn put-item-request
   [table item &
    [{:keys [return expected return-cc? cond-expr expr-attr-names expr-attr-vals]
@@ -713,6 +721,8 @@
 
   (assert (not (and expected cond-expr))
     "Only one of :expected or :cond-expr should be provided")
+
+  (when expected @deprecation-warning-expected_)
 
   (as-map
    (.putItem (db-client client-opts)
@@ -773,6 +783,9 @@
 
    (assert (not (and update-expr (seq update-map)))
      "Only one of 'update-map' or :update-expr should be provided")
+
+   (when expected         @deprecation-warning-expected_)
+   (when (seq update-map) @deprecation-warning-update-map_)
 
    (as-map
      (.updateItem (db-client client-opts)
