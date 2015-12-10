@@ -204,6 +204,12 @@
     {:details {:characters ["HAL 9000"]}}
     (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "details.characters[2]"}))
 
+  (expect ; Getting multiple items with projections from the same list of 2001 characters
+    {:details {:characters ["David Bowman" "HAL 9000"]}}
+    (far/get-item *client-opts* ttable
+                  {:id 2001}
+                  {:proj-expr "details.characters[0], details.characters[2]"}))
+
   (expect ; Expression attribute names, necessary since 'name' is a reserved keyword
     {:author "Arthur C. Clarke" :name "2001: A Space Odyssey"}
     (far/get-item *client-opts* ttable
