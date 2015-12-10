@@ -197,10 +197,19 @@
     {:author "Arthur C. Clarke"} (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "author"}))
 
   (expect ; Getting the tags for 1984
-    {:details {:tags ["dystopia" "surveillance"]}} (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"}))
+    {:details {:tags ["dystopia" "surveillance"]}}
+    (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"}))
 
   (expect ; Getting a specific character for 2001
-    {:details {:characters ["HAL 9000"]}} (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "details.characters[2]"}))
+    {:details {:characters ["HAL 9000"]}}
+    (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "details.characters[2]"}))
+
+  (expect ; Expression attribute names, necessary since 'name' is a reserved keyword
+    {:author "Arthur C. Clarke" :name "2001: A Space Odyssey"}
+    (far/get-item *client-opts* ttable
+                  {:id 2001}
+                  {:proj-expr  "#n, author"
+                   :expr-names {"#n" "name"}}))
 
   (expect ; Batch delete
     [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [1984 2001]}}})

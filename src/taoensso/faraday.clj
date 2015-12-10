@@ -646,13 +646,14 @@
 ;;;; API - items
 
 (defn get-item-request "Implementation detail."
-  [table prim-kvs & [{:keys [attrs consistent? return-cc? proj-expr]}]]
+  [table prim-kvs & [{:keys [attrs consistent? return-cc? proj-expr expr-names]}]]
   (doto-cond [g (GetItemRequest.)]
     :always     (.setTableName       (name table))
     :always     (.setKey             (clj-item->db-item prim-kvs))
     consistent? (.setConsistentRead  g)
     attrs       (.setAttributesToGet (mapv name g))
     proj-expr   (.setProjectionExpression g)
+    expr-names  (.setExpressionAttributeNames expr-names)
     return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn get-item
@@ -660,6 +661,7 @@
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     :attrs       - Attrs to return, [<attr> ...].
     :proj-expr   - Projection expression as a string
+    :expr-names  - Map of strings for ExpressionAttributeNames
     :consistent? - Use strongly (rather than eventually) consistent reads?"
   [client-opts table prim-kvs & [opts]]
   (as-map
