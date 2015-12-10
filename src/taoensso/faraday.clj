@@ -646,18 +646,20 @@
 ;;;; API - items
 
 (defn get-item-request "Implementation detail."
-  [table prim-kvs & [{:keys [attrs consistent? return-cc?]}]]
+  [table prim-kvs & [{:keys [attrs consistent? return-cc? proj-expr]}]]
   (doto-cond [g (GetItemRequest.)]
     :always     (.setTableName       (name table))
     :always     (.setKey             (clj-item->db-item prim-kvs))
     consistent? (.setConsistentRead  g)
     attrs       (.setAttributesToGet (mapv name g))
+    proj-expr   (.setProjectionExpression g)
     return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn get-item
   "Retrieves an item from a table by its primary key with options:
     prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
     :attrs       - Attrs to return, [<attr> ...].
+    :proj-expr   - Projection expression as a string
     :consistent? - Use strongly (rather than eventually) consistent reads?"
   [client-opts table prim-kvs & [opts]]
   (as-map

@@ -163,6 +163,52 @@
    (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
                                    :return [:test]})))
 
+;; Test projection expressions
+(let [i0 {:id 1984 :name "Nineteen Eighty-Four"
+          :author "George Orwell"
+          :details {:tags ["dystopia" "surveillance"]
+                    :characters ["Winston Smith" "Julia" "O'Brien"]}}
+      i1 {:id 2001 :name "2001: A Space Odyssey"
+          :author "Arthur C. Clarke"
+          :details {:tags ["science fiction" "evolution" "artificial intelligence"]
+                    :characters ["David Bowman" "Francis Poole" "HAL 9000"]}}]
+
+
+  (after-setup!
+    #(far/batch-write-item *client-opts*
+                           {ttable {:delete [{:id 1984} {:id 2001}]}}))
+
+  (expect ; Batch put
+    [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
+                    [(far/get-item *client-opts* ttable {:id 1984})
+                     (far/get-item *client-opts* ttable {:id 2001})
+                     (far/get-item *client-opts* ttable {:id 0})]))
+
+  (expect ; Batch get
+    (set [i0 i1]) (->> (far/batch-get-item *client-opts*
+                                           {ttable {:prim-kvs    {:id [1984 2001]}
+                                                    :consistent? true}})
+                       ttable set))
+
+  (expect ; Get without projections
+    i0 (far/get-item *client-opts* ttable {:id 1984}))
+
+  (expect ; Simple projection expression, equivalent to getting the attributes
+    {:author "Arthur C. Clarke"} (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "author"}))
+
+  (expect ; Getting the tags for 1984
+    {:details {:tags ["dystopia" "surveillance"]}} (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"}))
+
+  (expect ; Getting a specific character for 2001
+    {:details {:characters ["HAL 9000"]}} (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "details.characters[2]"}))
+
+  (expect ; Batch delete
+    [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [1984 2001]}}})
+                  [(far/get-item *client-opts* ttable {:id 1984})
+                   (far/get-item *client-opts* ttable {:id 2001})])))
+
+
+
 (defmacro update-t
   [& cmds]
   `(do
