@@ -646,23 +646,23 @@
 ;;;; API - items
 
 (defn get-item-request "Implementation detail."
-  [table prim-kvs & [{:keys [attrs consistent? return-cc? proj-expr expr-names]}]]
+  [table prim-kvs & [{:keys [attrs consistent? return-cc? projection expr-attr-names]}]]
   (doto-cond [g (GetItemRequest.)]
-    :always     (.setTableName       (name table))
-    :always     (.setKey             (clj-item->db-item prim-kvs))
-    consistent? (.setConsistentRead  g)
-    attrs       (.setAttributesToGet (mapv name g))
-    proj-expr   (.setProjectionExpression g)
-    expr-names  (.setExpressionAttributeNames expr-names)
-    return-cc?  (.setReturnConsumedCapacity (utils/enum :total))))
+    :always         (.setTableName       (name table))
+    :always         (.setKey             (clj-item->db-item prim-kvs))
+    consistent?     (.setConsistentRead  g)
+    attrs           (.setAttributesToGet (mapv name g))
+    projection      (.setProjectionExpression g)
+    expr-attr-names (.setExpressionAttributeNames expr-attr-names)
+    return-cc?      (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn get-item
   "Retrieves an item from a table by its primary key with options:
-    prim-kvs     - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
-    :attrs       - Attrs to return, [<attr> ...].
-    :proj-expr   - Projection expression as a string
-    :expr-names  - Map of strings for ExpressionAttributeNames
-    :consistent? - Use strongly (rather than eventually) consistent reads?"
+    prim-kvs         - {<hash-key> <val>} or {<hash-key> <val> <range-key> <val>}.
+    :attrs           - Attrs to return, [<attr> ...].
+    :projection      - Projection expression as a string
+    :expr-attr-names - Map of strings for ExpressionAttributeNames
+    :consistent?     - Use strongly (rather than eventually) consistent reads?"
   [client-opts table prim-kvs & [opts]]
   (as-map
    (.getItem (db-client client-opts)

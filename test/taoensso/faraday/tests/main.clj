@@ -194,28 +194,28 @@
     i0 (far/get-item *client-opts* ttable {:id 1984}))
 
   (expect ; Simple projection expression, equivalent to getting the attributes
-    {:author "Arthur C. Clarke"} (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "author"}))
+    {:author "Arthur C. Clarke"} (far/get-item *client-opts* ttable {:id 2001} {:projection "author"}))
 
   (expect ; Getting the tags for 1984
     {:details {:tags ["dystopia" "surveillance"]}}
-    (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"}))
+    (far/get-item *client-opts* ttable {:id 1984} {:projection "details.tags"}))
 
   (expect ; Getting a specific character for 2001
     {:details {:characters ["HAL 9000"]}}
-    (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "details.characters[2]"}))
+    (far/get-item *client-opts* ttable {:id 2001} {:projection "details.characters[2]"}))
 
   (expect ; Getting multiple items with projections from the same list of 2001 characters
     {:details {:characters ["David Bowman" "HAL 9000"]}}
     (far/get-item *client-opts* ttable
                   {:id 2001}
-                  {:proj-expr "details.characters[0], details.characters[2]"}))
+                  {:projection "details.characters[0], details.characters[2]"}))
 
   (expect ; Expression attribute names, necessary since 'name' is a reserved keyword
     {:author "Arthur C. Clarke" :name "2001: A Space Odyssey"}
     (far/get-item *client-opts* ttable
                   {:id 2001}
-                  {:proj-expr  "#n, author"
-                   :expr-names {"#n" "name"}}))
+                  {:projection      "#n, author"
+                   :expr-attr-names {"#n" "name"}}))
 
   (expect ; Batch delete
     [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [1984 2001]}}})
