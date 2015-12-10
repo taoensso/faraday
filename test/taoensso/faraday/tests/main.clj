@@ -20,6 +20,7 @@
 
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
+(def book-table :faraday.tests.books)
 
 
 (def run-after-setup (atom #{}))
@@ -38,7 +39,11 @@
                     {:range-keydef [:number :n]
                      :throughput   {:read 1 :write 1}
                      :block?       true})
-
+  (far/ensure-table *client-opts* book-table
+                    [:author :s]
+                    {:range-keydef [:name :s]
+                     :throughput   {:read 1 :write 1}
+                     :block?       true})
   (doseq [thunk @run-after-setup]
     (thunk))
 
@@ -162,6 +167,67 @@
    (repeat 3 {:test "batch"})
    (far/scan *client-opts* ttable {:attr-conds {:test [:eq "batch"]}
                                    :return [:test]})))
+
+;; Test projection expressions
+(let [i0 {:id 1984 :name "Nineteen Eighty-Four"
+          :author "George Orwell"
+          :details {:tags ["dystopia" "surveillance"]
+                    :characters ["Winston Smith" "Julia" "O'Brien"]}}
+      i1 {:id 2001 :name "2001: A Space Odyssey"
+          :author "Arthur C. Clarke"
+          :details {:tags ["science fiction" "evolution" "artificial intelligence"]
+                    :characters ["David Bowman" "Francis Poole" "HAL 9000"]}}]
+
+
+  (after-setup!
+    #(far/batch-write-item *client-opts*
+                           {ttable {:delete [{:id 1984} {:id 2001}]}}))
+
+  (expect ; Batch put
+    [i0 i1 nil] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
+                    [(far/get-item *client-opts* ttable {:id 1984})
+                     (far/get-item *client-opts* ttable {:id 2001})
+                     (far/get-item *client-opts* ttable {:id 0})]))
+
+  (expect ; Batch get
+    (set [i0 i1]) (->> (far/batch-get-item *client-opts*
+                                           {ttable {:prim-kvs    {:id [1984 2001]}
+                                                    :consistent? true}})
+                       ttable set))
+
+  (expect ; Get without projections
+    i0 (far/get-item *client-opts* ttable {:id 1984}))
+
+  (expect ; Simple projection expression, equivalent to getting the attributes
+    {:author "Arthur C. Clarke"} (far/get-item *client-opts* ttable {:id 2001} {:projection "author"}))
+
+  (expect ; Getting the tags for 1984
+    {:details {:tags ["dystopia" "surveillance"]}}
+    (far/get-item *client-opts* ttable {:id 1984} {:projection "details.tags"}))
+
+  (expect ; Getting a specific character for 2001
+    {:details {:characters ["HAL 9000"]}}
+    (far/get-item *client-opts* ttable {:id 2001} {:projection "details.characters[2]"}))
+
+  (expect ; Getting multiple items with projections from the same list of 2001 characters
+    {:details {:characters ["David Bowman" "HAL 9000"]}}
+    (far/get-item *client-opts* ttable
+                  {:id 2001}
+                  {:projection "details.characters[0], details.characters[2]"}))
+
+  (expect ; Expression attribute names, necessary since 'name' is a reserved keyword
+    {:author "Arthur C. Clarke" :name "2001: A Space Odyssey"}
+    (far/get-item *client-opts* ttable
+                  {:id 2001}
+                  {:projection      "#n, author"
+                   :expr-attr-names {"#n" "name"}}))
+
+  (expect ; Batch delete
+    [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [1984 2001]}}})
+                  [(far/get-item *client-opts* ttable {:id 1984})
+                   (far/get-item *client-opts* ttable {:id 2001})])))
+
+
 
 (defmacro update-t
   [& cmds]
@@ -292,14 +358,130 @@
     {:expected {:val [:= 2]}}))
   )
 
+;;; Query tests
+(let [i0    {:name    "Nineteen Eighty-Four"
+             :author  "George Orwell"
+             :year    1949
+             :details {:tags       ["dystopia" "surveillance"]
+                       :characters ["Winston Smith" "Julia" "O'Brien"]}}
+      i1    {:name    "2001: A Space Odyssey"
+             :author  "Arthur C. Clarke"
+             :year    1968
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["David Bowman" "Francis Poole" "HAL 9000"]}}
+      i2    {:name    "2010: Odissey Two"
+             :author  "Arthur C. Clarke"
+             :year    1982
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["David Bowman" "Heywood Floyd" "HAL 9000" "Dr. Chandra"]}}
+      i3    {:name    "3001: The Final Odissey"
+             :author  "Arthur C. Clarke"
+             :year    1997
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["Francis Poole"]}}
+      i4    {:name   "Animal Farm"
+             :author "George Orwell"
+             :year   1945}
+      books [i0 i1 i2 i3 i4]
+      ]
+
+  (after-setup!
+    #(do
+      (far/batch-write-item *client-opts*
+                            {book-table {:delete (mapv (fn [m] (select-keys m [:author :name])) books)}})
+      (far/batch-write-item *client-opts* {book-table {:put books}})
+      ))
+
+  ;; Books are returned ordered by the sort key
+  (expect
+    [i4 i0] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}))
+  (expect
+    [i1 i2 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}))
+
+  ;; We can get only the books starting with a string
+  (expect
+    [i1 i2] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]
+                                                 :name   [:begins-with "20"]}))
+
+  ;; We can request only some attributes on the return list
+  (expect
+    (mapv #(select-keys % [:name :year]) [i1 i2])
+    (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]
+                                         :name   [:begins-with "20"]}
+               {:return [:name :year]}))
+
+  ;; Test query filters
+  (expect
+    [i2 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:query-filter {:year [:gt 1980]}}))
+
+  (expect
+    [i4] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}
+                    {:query-filter {:year [:le 1945]}}))
+
+  ;; Test query filter expressions
+  (expect
+    [i2] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter         "size(details.characters) >= :cnt"
+                     :expr-attr-vals {":cnt" 4}}))
+  (expect
+    [i1 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:filter         "size(details.characters) < :cnt"
+                        :expr-attr-vals {":cnt" 4}}))
+  (expect
+    [i1 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:filter         "size(details.characters) < :cnt"
+                        :expr-attr-vals {":cnt" 4}}))
+
+  ;; Test expression attribute names
+  ;; We cannot combine query-filter and filter expressions, it's either-or
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(details.characters) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+
+  ;; Test that we can use expression attribute names even when going for a nested expression
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(#d.characters) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"
+                                       "#d" "details"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(#d.#c) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"
+                                       "#d" "details"
+                                       "#c" "characters"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+
+  ;; Test projection expressions
+  (expect
+    [{:year    1968
+      :details {:characters ["David Bowman"]}}
+     {:year    1997
+      :details {:characters ["Francis Poole"]}}]
+    (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+               {:filter          "size(#d.characters) < :cnt"
+                :projection      "#y, details.characters[0]"
+                :expr-attr-names {"#y" "year"
+                                  "#d" "details"}
+                :expr-attr-vals  {":cnt" 4}}))
+  )
+
+
 ;;;; range queries
 (let [j0 {:title "One" :number 0}
       j1 {:title "One" :number 1}
       k0 {:title "Two" :number 0}
-      k1 {:title "Two" :number 1}]
+      k1 {:title "Two" :number 1}
+      k2 {:title "Two" :number 2}
+      k3 {:title "Two" :number 3}
+      ]
 
   (after-setup!
-    #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1]}}))
+    #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1 k2 k3]}}))
 
   (expect ; Query, normal ordering
     [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
@@ -310,7 +492,36 @@
 
   (expect ; Query with :limit
     [j0] (far/query *client-opts* range-table {:title [:eq "One"]}
-           {:limit 1 :span-reqs {:max 1}})))
+           {:limit 1 :span-reqs {:max 1}}))
+
+  (expect ; Query, with range
+    [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:between [1 2]]}))
+
+  ;; Verify the :le lt :ge :gt options
+  (expect
+    [k0 k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:lt 3]}))
+
+  (expect
+    [k0 k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:le 2]}))
+
+  (expect
+    [k2 k3] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:gt 1]}))
+
+  (expect
+    [k1 k2 k3] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:ge 1]}))
+
+  (expect
+    [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:ge 1]}
+                       {:limit 2 :span-reqs {:max 1}}))
+
+  )
+
 
 (expect-let ; Serialization
  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
