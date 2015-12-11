@@ -20,6 +20,7 @@
 
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
+(def book-table :faraday.tests.books)
 
 
 (def run-after-setup (atom #{}))
@@ -38,7 +39,11 @@
                     {:range-keydef [:number :n]
                      :throughput   {:read 1 :write 1}
                      :block?       true})
-
+  (far/ensure-table *client-opts* book-table
+                    [:author :s]
+                    {:range-keydef [:name :s]
+                     :throughput   {:read 1 :write 1}
+                     :block?       true})
   (doseq [thunk @run-after-setup]
     (thunk))
 
@@ -352,6 +357,70 @@
     {:val [:add 1]}
     {:expected {:val [:= 2]}}))
   )
+
+;;; Query tests
+(let [i0    {:name    "Nineteen Eighty-Four"
+             :author  "George Orwell"
+             :year    1949
+             :details {:tags       ["dystopia" "surveillance"]
+                       :characters ["Winston Smith" "Julia" "O'Brien"]}}
+      i1    {:name    "2001: A Space Odyssey"
+             :author  "Arthur C. Clarke"
+             :year    1968
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["David Bowman" "Francis Poole" "HAL 9000"]}}
+      i2    {:name    "2010: Odissey Two"
+             :author  "Arthur C. Clarke"
+             :year    1982
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["David Bowman" "Heywood Floyd" "HAL 9000" "Dr. Chandra"]}}
+      i3    {:name    "3001: The Final Odissey"
+             :author  "Arthur C. Clarke"
+             :year    1997
+             :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
+                       :characters ["Francis Poole"]}}
+      i4    {:name   "Animal Farm"
+             :author "George Orwell"
+             :year   1945}
+      books [i0 i1 i2 i3 i4]
+      ]
+
+  (after-setup!
+    #(do
+      (far/batch-write-item *client-opts*
+                            {book-table {:delete (mapv (fn [m] (select-keys m [:author :name])) books)}})
+      (far/batch-write-item *client-opts* {book-table {:put books}})
+      ))
+
+  ;; Books are returned ordered by the sort key
+  (expect
+    [i4 i0] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}))
+  (expect
+    [i1 i2 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}))
+
+  ;; We can get only the books starting with a string
+  (expect
+    [i1 i2] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]
+                                                 :name   [:begins-with "20"]}))
+
+  ;; We can request only some attributes on the return list
+  (expect
+    (mapv #(select-keys % [:name :year]) [i1 i2])
+    (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]
+                                         :name   [:begins-with "20"]}
+               {:return [:name :year]}))
+
+  ;; Test query filters
+  (expect
+    [i2 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:query-filter {:year [:gt 1980]}}))
+
+  (expect
+    [i4] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}
+                    {:query-filter {:year [:le 1945]}}))
+
+  )
+
 
 ;;;; range queries
 (let [j0 {:title "One" :number 0}
