@@ -565,7 +565,7 @@
 
 (comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
 
-(defn ensure-table "Creates a table iff it doesn't already exist."
+(defn ensure-table "Creates a table if it doesn't already exist."
   [client-opts table-name hash-keydef & [opts]]
   (when-not (describe-table client-opts table-name)
     (create-table client-opts table-name hash-keydef opts)))

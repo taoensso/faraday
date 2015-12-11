@@ -357,10 +357,13 @@
 (let [j0 {:title "One" :number 0}
       j1 {:title "One" :number 1}
       k0 {:title "Two" :number 0}
-      k1 {:title "Two" :number 1}]
+      k1 {:title "Two" :number 1}
+      k2 {:title "Two" :number 2}
+      k3 {:title "Two" :number 3}
+      ]
 
   (after-setup!
-    #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1]}}))
+    #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1 k2 k3]}}))
 
   (expect ; Query, normal ordering
     [j0 j1] (far/query *client-opts* range-table {:title [:eq "One"]}))
@@ -371,7 +374,36 @@
 
   (expect ; Query with :limit
     [j0] (far/query *client-opts* range-table {:title [:eq "One"]}
-           {:limit 1 :span-reqs {:max 1}})))
+           {:limit 1 :span-reqs {:max 1}}))
+
+  (expect ; Query, with range
+    [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:between [1 2]]}))
+
+  ;; Verify the :le lt :ge :gt options
+  (expect
+    [k0 k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:lt 3]}))
+
+  (expect
+    [k0 k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:le 2]}))
+
+  (expect
+    [k2 k3] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:gt 1]}))
+
+  (expect
+    [k1 k2 k3] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                     :number [:ge 1]}))
+
+  (expect
+    [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
+                                                  :number [:ge 1]}
+                       {:limit 2 :span-reqs {:max 1}}))
+
+  )
+
 
 (expect-let ; Serialization
  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
