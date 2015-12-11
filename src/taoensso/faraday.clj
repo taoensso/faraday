@@ -972,7 +972,7 @@
 (defn query-request "Implementation detail."
   [table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
-              return-cc?] :as opts
+              filter expr-attr-vals expr-attr-names return-cc?] :as opts
        :or {order :asc}}]]
   (doto-cond [g (QueryRequest.)]
     :always (.setTableName        (name table))
@@ -981,28 +981,34 @@
     last-prim-kvs   (.setExclusiveStartKey
                      (clj-item->db-item last-prim-kvs))
     query-filter    (.setQueryFilter (query|scan-conditions query-filter))
+    filter          (.setFilterExpression g)
+    expr-attr-names (.setExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.setExpressionAttributeValues (clj->db-expr-vals-map expr-attr-vals))
     limit           (.setLimit     (int g))
     index           (.setIndexName      g)
     consistent?     (.setConsistentRead g)
     (coll?* return) (.setAttributesToGet (mapv name return))
-    return-cc? (.setReturnConsumedCapacity (utils/enum :total))
+    return-cc?      (.setReturnConsumedCapacity (utils/enum :total))
     (and return (not (coll?* return)))
     (.setSelect (utils/enum return))))
 
 (defn query
   "Retrieves items from a table (indexed) with options:
-    prim-key-conds - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
-    :last-prim-kvs - Primary key-val from which to eval, useful for paging.
-    :query-filter  - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
-    :span-reqs     - {:max _ :throttle-ms _} controls automatic multi-request
-                     stitching.
-    :return        - e/o #{:all-attributes :all-projected-attributes :count
-                           [<attr> ...]}.
-    :index         - Name of a local or global secondary index to query.
-    :order         - Index scaning order e/o #{:asc :desc}.
-    :limit         - Max num >=1 of items to eval (≠ num of matching items).
-                     Useful to prevent harmful sudden bursts of read activity.
-    :consistent?   - Use strongly (rather than eventually) consistent reads?
+    prim-key-conds   - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
+    :last-prim-kvs   - Primary key-val from which to eval, useful for paging.
+    :query-filter    - {<key-attr> [<comparison-operator> <val-or-vals>] ...}.
+    :filter          - Filter expression string
+    :expr-attr-names - Expression attribute names, as a map of {\"#attr_name\" \"name\"}
+    :expr-attr-vals  - Expression attribute values, as a map {\":attr_value\" \"value\"}
+    :span-reqs       - {:max _ :throttle-ms _} controls automatic multi-request
+                       stitching.
+    :return          - e/o #{:all-attributes :all-projected-attributes :count
+                             [<attr> ...]}.
+    :index           - Name of a local or global secondary index to query.
+    :order           - Index scaning order e/o #{:asc :desc}.
+    :limit           - Max num >=1 of items to eval (≠ num of matching items).
+                       Useful to prevent harmful sudden bursts of read activity.
+    :consistent?     - Use strongly (rather than eventually) consistent reads?
 
   (create-table client-opts :my-table [:name :s]
     {:range-keydef [:age :n] :block? true})

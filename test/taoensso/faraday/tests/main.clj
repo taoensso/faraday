@@ -419,6 +419,43 @@
     [i4] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}
                     {:query-filter {:year [:le 1945]}}))
 
+  ;; Test query filter expressions
+  (expect
+    [i2] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter         "size(details.characters) >= :cnt"
+                     :expr-attr-vals {":cnt" 4}}))
+  (expect
+    [i1 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:filter         "size(details.characters) < :cnt"
+                        :expr-attr-vals {":cnt" 4}}))
+  (expect
+    [i1 i3] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                       {:filter         "size(details.characters) < :cnt"
+                        :expr-attr-vals {":cnt" 4}}))
+
+  ;; Test expression attribute names
+  ;; We cannot combine query-filter and filter expressions, it's either-or
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(details.characters) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+
+  ;; Test that we can use expression attribute names even when going for a nested expression
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(#d.characters) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"
+                                       "#d" "details"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+  (expect
+    [i1] (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+                    {:filter          "size(#d.#c) < :cnt and #y < :year"
+                     :expr-attr-names {"#y" "year"
+                                       "#d" "details"
+                                       "#c" "characters"}
+                     :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
+
   )
 
 
