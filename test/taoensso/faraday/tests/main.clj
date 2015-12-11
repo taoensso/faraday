@@ -456,6 +456,18 @@
                                        "#c" "characters"}
                      :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
 
+  ;; Test projection expressions
+  (expect
+    [{:year    1968
+      :details {:characters ["David Bowman"]}}
+     {:year    1997
+      :details {:characters ["Francis Poole"]}}]
+    (far/query *client-opts* book-table {:author [:eq "Arthur C. Clarke"]}
+               {:filter          "size(#d.characters) < :cnt"
+                :projection      "#y, details.characters[0]"
+                :expr-attr-names {"#y" "year"
+                                  "#d" "details"}
+                :expr-attr-vals  {":cnt" 4}}))
   )
 
 
