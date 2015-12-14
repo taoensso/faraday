@@ -3,9 +3,10 @@
             [taoensso.encore  :as encore]
             [taoensso.faraday :as far]
             [taoensso.nippy   :as nippy])
-  (:import  [com.amazonaws.auth BasicAWSCredentials]
-            [com.amazonaws.internal StaticCredentialsProvider]
-            [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]))
+  (:import [com.amazonaws.auth BasicAWSCredentials]
+           [com.amazonaws.internal StaticCredentialsProvider]
+           [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]
+           (com.amazonaws AmazonServiceException)))
 
 ;; TODO LOTS of tests still outstanding, PRs very, very welcome!!
 
@@ -93,17 +94,19 @@
     #(far/delete-item *client-opts* ttable {:id 10}))
 
   (expect
-   {:id 10 :name "baz"}
-   (do
-     (far/put-item *client-opts* ttable i)
-     (far/update-item
-        *client-opts* ttable {:id 10} {:name [:put "baz"]} {:return :all-new})))
+    {:id 10 :name "baz"}
+    (do
+      (far/put-item *client-opts* ttable i)
+      (far/update-item
+        *client-opts* ttable {:id 10} {:update-map {:name [:put "baz"]}
+                                       :return     :all-new})))
 
   (expect
-   #=(far/ex :conditional-check-failed)
-   (far/update-item *client-opts* ttable
-       {:id 10} {:name [:put "baz"]}
-       {:expected {:name "garbage"}})))
+    #=(far/ex :conditional-check-failed)
+    (far/update-item *client-opts* ttable
+                     {:id 10}
+                     {:update-map {:name [:put "baz"]}
+                      :expected   {:name "garbage"}})))
 
 ;;;; Expressions support
 
@@ -116,7 +119,6 @@
    (do
      (far/update-item *client-opts* ttable
        {:id 10}
-       {}
        {:update-expr     "SET #name = :name"
         :expr-attr-names {"#name" "name"}
         :expr-attr-vals  {":name" "foo"}
@@ -127,7 +129,6 @@
    (do
      (far/update-item *client-opts* ttable
        {:id 10}
-       {}
        {:cond-expr       "#name <> :name"
         :update-expr     "SET #name = :name"
         :expr-attr-names {"#name" "name"}
@@ -267,42 +268,42 @@
   (expect
    (update-in t [:strset] #(conj % "d"))
    (update-t
-    {:strset [:add #{"d"}]}))
+    {:update-map {:strset [:add #{"d"}]}}))
 
   (expect
    (update-in t [:strset] #(disj % "c"))
    (update-t
-    {:strset [:delete #{"c"}]}))
+    {:update-map {:strset [:delete #{"c"}]}}))
 
   (expect
    (assoc t :strset #{"d"})
    (update-t
-    {:strset [:put #{"d"}]}))
+    {:update-map {:strset [:put #{"d"}]}}))
 
   (expect
    (assoc t :num 2)
    (update-t
-    {:num [:add 1]}))
+    {:update-map {:num [:add 1]}}))
 
   (expect
    (dissoc t :map)
    (update-t
-    {:map [:delete]}))
+    {:update-map {:map [:delete]}}))
 
   (expect
    (assoc t :boolT false)
    (update-t
-    {:boolT [:put false]}))
+    {:update-map {:boolT [:put false]}}))
 
   (expect
    (assoc t :boolT nil)
    (update-t
-    {:boolT [:put nil]}))
+    {:update-map {:boolT [:put nil]}}))
 
   (expect
    (assoc-in t [:map-new :new] "x")
    (update-t
-    {:map-new [:put {:new "x"}]})))
+    {:update-map {:map-new [:put {:new "x"}]}})))
 
 ;;;; expectation tests
 (let [t {:id 16
@@ -310,55 +311,55 @@
          :str "abc"}]
 
   (expect
-   (update-in t [:val] inc)
-   (update-t
-    {:val [:add 1]}
-    {:expected {:val :exists}}))
+    (update-in t [:val] inc)
+    (update-t
+      {:update-map {:val [:add 1]}
+       :expected   {:val :exists}}))
 
   (expect
    (update-in t [:val] inc)
    (update-t
-    {:val [:add 1]}
-    {:expected {:blah :not-exists}}))
+    {:update-map {:val [:add 1]}
+     :expected {:blah :not-exists}}))
+
+  (expect
+    (update-in t [:val] inc)
+    (update-t
+      {:update-map {:val [:add 1]}
+       :expected   {:val [:< 5]}}))
 
   (expect
    (update-in t [:val] inc)
    (update-t
-    {:val [:add 1]}
-    {:expected {:val [:< 5]}}))
+     {:update-map {:val [:add 1]}
+      :expected   {:val [:eq 1]}}))
 
   (expect
    (update-in t [:val] inc)
    (update-t
-    {:val [:add 1]}
-    {:expected {:val [:eq 1]}}))
+     {:update-map {:val [:add 1]}
+      :expected   {:str [:begins-with "a"]}}))
 
   (expect
    (update-in t [:val] inc)
    (update-t
-    {:val [:add 1]}
-    {:expected {:str [:begins-with "a"]}}))
-
-  (expect
-   (update-in t [:val] inc)
-   (update-t
-    {:val [:add 1]}
-    {:expected {:val [:between 0 2]}}))
+     {:update-map {:val [:add 1]}
+      :expected   {:val [:between 0 2]}}))
 
   (expect
    ConditionalCheckFailedException
    (update-t
-    {:val [:add 1]}
-    {:expected {:val [:> 5]}}))
+     {:update-map {:val [:add 1]}
+      :expected   {:val [:> 5]}}))
 
   (expect
    ConditionalCheckFailedException
    (update-t
-    {:val [:add 1]}
-    {:expected {:val [:= 2]}}))
+     {:update-map {:val [:add 1]}
+      :expected   {:val [:= 2]}}))
   )
 
-;;; Query tests
+;;; Query and delete-item tests
 (let [i0    {:name    "Nineteen Eighty-Four"
              :author  "George Orwell"
              :year    1949
@@ -468,6 +469,42 @@
                 :expr-attr-names {"#y" "year"
                                   "#d" "details"}
                 :expr-attr-vals  {":cnt" 4}}))
+
+  ;;; Now that we already have items in there, let's try testing delete-item expressions
+
+  ;; If we specify a condition that isn't fulfilled, we get an exception
+  (expect AmazonServiceException
+          (far/delete-item *client-opts* book-table
+                           {:name   "Nineteen Eighty-Four"
+                            :author "George Orwell"}
+                           {:cond-expr       "#y > :y"
+                            :expr-attr-names {"#y" "year"}
+                            :expr-attr-vals  {":y" 1984}}))
+  (expect i0
+          (far/get-item *client-opts* book-table
+                        {:name   "Nineteen Eighty-Four"
+                         :author "George Orwell"}
+                        ))
+  ;; If a condition is fulfilled, then the item is deleted as expected
+  (expect nil
+          (far/delete-item *client-opts* book-table
+                           {:name   "Nineteen Eighty-Four"
+                            :author "George Orwell"}
+                           {:cond-expr       "#y = :y"
+                            :expr-attr-names {"#y" "year"}
+                            :expr-attr-vals  {":y" 1949}}))
+  (expect nil
+          (far/get-item *client-opts* book-table
+                        {:name   "Nineteen Eighty-Four"
+                         :author "George Orwell"}
+                        ))
+  ;; But we can't just embed the value in the condition expression
+  (expect AmazonServiceException
+          (far/delete-item *client-opts* book-table
+                           {:name   "Animal Farm"
+                            :author "George Orwell"}
+                           {:cond-expr       "#y = 1945"
+                            :expr-attr-names {"#y" "year"}}))
   )
 
 
@@ -523,22 +560,25 @@
   )
 
 
-(expect-let ; Serialization
- ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
- ;; is reference-based and not structural. `expect` falls back to Java equality,
- ;; and so will fail when presented with different Java objects that don't themselves
- ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
- [data ;; nippy/stress-data-comparable ; Awaiting Nippy v2.6
-  (dissoc nippy/stress-data :bytes :throwable :exception :ex-info)]
- {:id 10 :nippy-data data}
- (do (far/put-item *client-opts* ttable {:id 10 :nippy-data (far/freeze data)})
-     (far/get-item *client-opts* ttable {:id 10})))
+(let
+  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
+  ;; is reference-based and not structural. `expect` falls back to Java equality,
+  ;; and so will fail when presented with different Java objects that don't themselves
+  ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
+  [data ;; nippy/stress-data-comparable ; Awaiting Nippy v2.6
+      (dissoc nippy/stress-data :bytes :throwable :exception :ex-info)]
+  (expect ; Serialization
+    {:id 10 :nippy-data data}
+    (do (far/put-item *client-opts* ttable {:id 10 :nippy-data (far/freeze data)})
+        (far/get-item *client-opts* ttable {:id 10}))))
 
-(expect-let ; "Unserialized" bytes
- [data (byte-array (mapv byte [0 1 2]))]
- #(encore/ba= data %)
- (do (far/put-item *client-opts* ttable {:id 11 :ba-data data})
-     (:ba-data (far/get-item *client-opts* ttable {:id 11}))))
+(let
+  [data (byte-array (mapv byte [0 1 2]))]
+  (expect ; "Unserialized" bytes
+    #(encore/ba= data %)
+    (do (far/put-item *client-opts* ttable {:id 11 :ba-data data})
+        (:ba-data (far/get-item *client-opts* ttable {:id 11})))))
+
 
 (let [i0 {:id 0 :name "foo"}
       i1 {:id 1 :name "bar"}
@@ -581,6 +621,498 @@
            (far/get-item *client-opts* ttable {:id  1})
            (far/get-item *client-opts* ttable {:id -1})])))))
 
+
+
+
+;;; Test global secondary index creation
+(defn get-temp-table []
+  (keyword (str "temp_table_" (.getTime (java.util.Date.)))))
+
+(defmacro do-with-temp-table
+  [bindings & cmds]
+  (concat
+    (list 'let (into ['temp-table (get-temp-table)] bindings))
+    cmds
+    ['(far/delete-table *client-opts* temp-table)]))
+
+;; Basic table creation
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput   {:read 1 :write 1}
+                              :block?       true})]
+  (expect temp-table (:name created))
+  (expect nil (:lsindexes created))
+  (expect nil (:gsindexes created))
+  (expect {:artist     {:key-type :hash, :data-type :s}} (:prim-keys created)))
+
+;; Table creation with range key
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:range-keydef [:song-title :s]
+                              :throughput   {:read 1 :write 1}
+                              :block?       true})]
+  (expect temp-table (:name created))
+  (expect nil (:lsindexes created))
+  (expect nil (:gsindexes created))
+  (expect {:artist     {:key-type :hash, :data-type :s},
+           :song-title {:key-type :range, :data-type :s}} (:prim-keys created)))
+
+
+;; Test creating a global secondary index, without a sort key, :projection defaults to :all
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:gsindexes  [{:name        "genre-index"
+                                            :hash-keydef [:genre :s]
+                                            :throughput  {:read 1 :write 1}}]
+                              :throughput {:read 1 :write 1}
+                              :block?     true})]
+  (expect temp-table (:name created))
+  (expect nil (:lsindexes created))
+  (expect [{:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type    "ALL"
+                         :non-key-attributes nil}
+            :throughput {:read          1 :write 1 :last-decrease nil
+                         :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes created))
+  (expect {:artist {:key-type :hash :data-type :s}
+           :genre  {:data-type :s}} (:prim-keys created)))
+
+;; Test creating a global secondary index and sort key, projection defaults to :all
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:gsindexes  [{:name         "genre-index"
+                                            :hash-keydef  [:genre :s]
+                                            :range-keydef [:year :n]
+                                            :throughput   {:read 1 :write 1}}]
+                              :throughput {:read 1 :write 1}
+                              :block?     true})]
+  (expect temp-table (:name created))
+  (expect nil (:lsindexes created))
+  (expect [{:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}
+                         {:name :year :type :range}]
+            :projection {:projection-type    "ALL"
+                         :non-key-attributes nil}
+            :throughput {:read          1 :write 1 :last-decrease nil
+                         :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes created))
+  (expect {:artist {:key-type :hash :data-type :s}
+           :genre  {:data-type :s}
+           :year   {:data-type :n}} (:prim-keys created)))
+
+
+;; Test creating multiple global secondary indexes, verify :projection defaults to :all
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:gsindexes  [{:name        "genre-index"
+                                            :hash-keydef [:genre :s]
+                                            :throughput  {:read 1 :write 1}}
+                                           {:name        "label-index"
+                                            :hash-keydef [:label :s]
+                                            :throughput  {:read 2 :write 3}
+                                            :projection  :keys-only}
+                                           ]
+                              :throughput {:read 1 :write 1}
+                              :block?     true})]
+  (expect temp-table (:name created))
+  (expect nil (:lsindexes created))
+  (expect [{:name       :label-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :label :type :hash}]
+            :projection {:projection-type "KEYS_ONLY" :non-key-attributes nil}
+            :throughput
+                        {:read                2
+                         :write               3
+                         :last-decrease       nil
+                         :last-increase       nil
+                         :num-decreases-today nil}}
+           {:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput
+                        {:read                1
+                         :write               1
+                         :last-decrease       nil
+                         :last-increase       nil
+                         :num-decreases-today nil}}]
+          (:gsindexes created))
+  (expect {:artist {:key-type :hash :data-type :s}
+           :genre  {:data-type :s}
+           :label  {:data-type :s}} (:prim-keys created)))
+
+
+;;; Test creating local secondary indexes on a table
+
+;; Test creating a local secondary index and sort key, projection defaults to :all
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:range-keydef [:song-title :s]          ; Need a range key for it to accept a local secondary index
+                              :lsindexes    [{:name         "year-index"
+                                              :range-keydef [:year :n]}]
+                              :throughput   {:read 1 :write 1}
+                              :block?       true})]
+  (expect nil (:gsindexes created))
+  (expect [{:name       :year-index
+            :size       0
+            :item-count 0
+            :key-schema [{:type :hash :name :artist} {:name :year :type :range}]
+            :projection {:projection-type    "ALL"
+                         :non-key-attributes nil}}]
+          (:lsindexes created))
+  (expect {:artist     {:key-type :hash :data-type :s}
+           :song-title {:key-type :range, :data-type :s}
+           :year       {:data-type :n}}
+          (:prim-keys created)))
+
+;; hash-keydef and throughput are ignored on local secondary index
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:range-keydef [:song-title :s]          ; Need a range key for it to accept a local secondary index
+                              :lsindexes    [{:name         "year-index"
+                                              :hash-keydef  [:genre :s]
+                                              :range-keydef [:year :n]
+                                              :throughput   {:read 1 :write 1}}]
+                              :throughput   {:read 1 :write 1}
+                              :block?       true})]
+  (expect [{:name       :year-index
+            :size       0
+            :item-count 0
+            :key-schema [{:type :hash :name :artist} {:name :year :type :range}]
+            :projection {:projection-type    "ALL"
+                         :non-key-attributes nil}}]
+          (:lsindexes created))
+  )
+
+;; We can combine local secondary and global secondary indexes
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:range-keydef [:song-title :s]          ; Need a range key for it to accept a local secondary index
+                              :gsindexes    [{:name        "genre-index"
+                                              :hash-keydef [:genre :s]
+                                              :throughput  {:read 1 :write 2}}
+                                             {:name        "label-index"
+                                              :hash-keydef [:label :s]
+                                              :throughput  {:read 3 :write 4}
+                                              :projection  :keys-only}
+                                             ]
+                              :lsindexes    [{:name         "year-index"
+                                              :range-keydef [:year :n]}]
+                              :throughput   {:read 1 :write 1}
+                              :block?       true})]
+  (expect [{:name       :label-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :label :type :hash}]
+            :projection {:projection-type "KEYS_ONLY" :non-key-attributes nil}
+            :throughput
+                        {:read                3
+                         :write               4
+                         :last-decrease       nil
+                         :last-increase       nil
+                         :num-decreases-today nil}}
+           {:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput
+                        {:read                1
+                         :write               2
+                         :last-decrease       nil
+                         :last-increase       nil
+                         :num-decreases-today nil}}]
+          (:gsindexes created))
+  (expect [{:name       :year-index
+            :size       0
+            :item-count 0
+            :key-schema [{:type :hash :name :artist} {:name :year :type :range}]
+            :projection {:projection-type    "ALL"
+                         :non-key-attributes nil}}]
+          (:lsindexes created)))
+
+
+;;; Test `update-table`
+
+;; Test increasing throughput
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput {:read 1 :write 1}
+                              :block?     true})
+   updated @(far/update-table *client-opts* temp-table {:throughput {:read 16 :write 16}})
+   again   @(far/update-table *client-opts* temp-table {:throughput {:read 256 :write 256}})
+   ]
+  ; Both table descriptions are the same other than the throughput
+  (expect (dissoc created :throughput)
+          (dissoc updated :throughput))
+  (expect (dissoc updated :throughput)
+          (dissoc again :throughput))
+  ; Throughput was updated
+  (expect
+    {:read 16 :write 16}
+    (-> updated
+        :throughput
+        (select-keys #{:read :write})))
+  (expect
+    {:read 256 :write 256}
+    (-> again
+        :throughput
+        (select-keys #{:read :write})))
+  )
+
+;; Test decreasing throughput
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput {:read 256 :write 256}
+                              :block?     true})
+   updated @(far/update-table *client-opts* temp-table {:throughput {:read 16 :write 16}})
+   again   @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})
+   ]
+  ; Both table descriptions are the same other than the throughput
+  (expect (dissoc created :throughput)
+          (dissoc updated :throughput))
+  (expect (dissoc updated :throughput)
+          (dissoc again :throughput))
+  ; Throughput was updated
+  (expect
+    {:read 16 :write 16}
+    (-> updated
+        :throughput
+        (select-keys #{:read :write})))
+  (expect
+    {:read 1 :write 1}
+    (-> again
+        :throughput
+        (select-keys #{:read :write})))
+  )
+
+;; Sending the same throughput as what the table has should have no effect
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput {:read 1 :write 1}
+                              :block?     true})
+   updated @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})
+   ]
+  ; Both table descriptions are the same
+  (expect created updated)
+  )
+
+;; Sending an empty parameter set should have no effect
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput {:read 1 :write 1}
+                              :block?     true})
+   updated @(far/update-table *client-opts* temp-table {})
+   ]
+  ; Both table descriptions are the same
+  (expect created updated))
+
+
+;; Test global secondary index creation
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:throughput {:read 1 :write 1}
+                              :block?     true})
+   new-idx @(far/update-table *client-opts* temp-table
+                              {:gsindexes {:operation   :create
+                                           :name        "genre-index"
+                                           :hash-keydef [:genre :s]
+                                           :throughput  {:read 4 :write 2}
+                                           }})
+   ;; We need to wait until the index is created before updating it, or the call will fail
+   _       @(far/index-status-watch *client-opts* temp-table :gsindexes "genre-index")
+   inc-idx @(far/update-table *client-opts* temp-table
+                              {:gsindexes {:operation   :update
+                                           :name        "genre-index"
+                                           :throughput  {:read 6 :write 6}
+                                           }})
+   ;; We can create a second index right after
+   amt-idx @(far/update-table *client-opts* temp-table
+                              {:gsindexes {:operation   :create
+                                           :name        "amount-index"
+                                           :hash-keydef [:amount :n]
+                                           :throughput  {:read 1 :write 1}
+                                           }})
+   ;; Let's wait until amount-index is created before deleting genre-index,
+   ;; so that we can consistently evaluate the result (otherwise we might not
+   ;; know if size/item-count are 0 or nil.
+   _       @(far/index-status-watch *client-opts* temp-table :gsindexes "amount-index")
+   del-idx @(far/update-table *client-opts* temp-table
+                              {:gsindexes {:operation   :delete
+                                           :name        "genre-index"
+                                           }})
+   _       @(far/index-status-watch *client-opts* temp-table :gsindexes "genre-index")
+   ;; And get the final state
+   fin-idx (far/describe-table *client-opts* temp-table)
+   ]
+
+  ;; Tables are the same other than the global indexes
+  (expect (dissoc created :gsindexes :prim-keys)
+          (dissoc new-idx :gsindexes :prim-keys))
+  ;; We have a new index
+  (expect [{:name       :genre-index
+            :size       nil
+            :item-count nil
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 4 :write 2 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes new-idx))
+  ;; The updated index has the new throughput values, as well as a size and
+  ;; item-count since it was already created.
+  (expect [{:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes inc-idx))
+  ;; The second index created comes back without a size or item count
+  (expect [{:name       :amount-index
+            :size       nil
+            :item-count nil
+            :key-schema [{:name :amount :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
+           {:name       :genre-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes amt-idx))
+  ;; When we request that the genre index be deleted, it returns that it's being destroyed
+  (expect [{:name       :amount-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :amount :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
+           {:name       :genre-index
+            :size       nil
+            :item-count nil
+            :key-schema [{:name :genre :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}
+           ]
+          (:gsindexes del-idx))
+  ;; And finally, we were left only with the amount index
+  (expect [{:name       :amount-index
+            :size       0
+            :item-count 0
+            :key-schema [{:name :amount :type :hash}]
+            :projection {:projection-type "ALL" :non-key-attributes nil}
+            :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
+          (:gsindexes fin-idx))
+  )
+
+;; We can scan with an index, and do projections
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:artist :s]
+                             {:range-keydef [:song-title :s]          ; Need a range key for it to accept a local secondary index
+                              :gsindexes    [{:name        "genre-index"
+                                              :hash-keydef [:genre :s]
+                                              :throughput  {:read 1 :write 2}}
+                                             {:name        "label-index"
+                                              :hash-keydef [:label :s]
+                                              :throughput  {:read 3 :write 4}
+                                              :projection  :keys-only}
+                                             ]
+                              :lsindexes    [{:name         "year-index"
+                                              :range-keydef [:year :n]}]
+                              :throughput   {:read 1 :write 1}
+                              :block?       true})
+   items     [{:artist     "Carpenter Brut"
+               :song-title "Le Perv"
+               :genre      "Electro"
+               :label      "Unknown"
+               :year       2012}
+              {:artist     "The Mars Volta"
+               :song-title "Eriatarka"
+               :genre      "Progressive Rock"
+               :label      "Universal Records"
+               :year       2003}
+              {:artist     "The Darkest of the Hillside Thickets"
+               :song-title "The Shadow Out of Tim"
+               :genre      "Rock"
+               :label      "Divine Industries"
+               :year       2007}
+              {:artist     "The Mars Volta"
+               :song-title "Cassandra Gemini"
+               :genre      "Progressive Rock"
+               :label      "Universal Records"
+               :year       2005}]
+   _         (doall (map #(far/put-item *client-opts* temp-table %) items))
+   scanned   (far/scan *client-opts* temp-table {:attr-conds {:year [:ge 2005]}
+                                                 :index      "year-index"})
+   projected (far/scan *client-opts* temp-table {:projection "genre, artist"
+                                                 :index      "genre-index"})
+   with-name (far/scan *client-opts* temp-table {:projection      "genre, #y"
+                                                 :index           "year-index"
+                                                 :expr-attr-names {"#y" "year"}})
+   ]
+  ;; Querying for a range key returns items sorted
+  (expect
+    [{:artist     "The Mars Volta"
+      :song-title "Cassandra Gemini"
+      :genre      "Progressive Rock"
+      :label      "Universal Records"
+      :year       2005}
+     {:artist     "The Darkest of the Hillside Thickets"
+      :song-title "The Shadow Out of Tim"
+      :genre      "Rock"
+      :label      "Divine Industries"
+      :year       2007}
+     {:artist     "Carpenter Brut"
+      :song-title "Le Perv"
+      :genre      "Electro"
+      :label      "Unknown"
+      :year       2012}]
+    scanned)
+  ;; We can't rely on items being in a particular order unless we use the item with a sort key
+  (expect
+    #{{:artist "The Mars Volta"
+       :genre  "Progressive Rock"}
+      {:artist "The Darkest of the Hillside Thickets"
+       :genre  "Rock"}
+      {:artist "Carpenter Brut"
+       :genre  "Electro"}}
+    (set projected))
+  (expect 4 (count projected))
+  ;; We can request projections with expression attribute names
+  (expect
+    [{:genre      "Progressive Rock"
+      :year       2003}
+     {:genre      "Progressive Rock"
+      :year       2005}
+     {:genre      "Rock"
+      :year       2007}
+     {:genre      "Electro"
+      :year       2012}]
+    with-name)
+  )
+
+
 ;;; Test `list-tables` lazy sequence
 ;; Creates a _large_ number of tables so only run locally
 (when-let [endpoint (:endpoint *client-opts*)]
@@ -608,7 +1140,7 @@
 
       (expect
        {:read 2 :write 2}
-       (-> (far/update-table *client-opts* update-t {:read 2 :write 2})
+       (-> (far/update-table *client-opts* update-t {:throughput {:read 2 :write 2}})
            deref
            :throughput
            (select-keys #{:read :write}))))))

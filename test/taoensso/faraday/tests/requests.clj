@@ -9,6 +9,7 @@
             KeySchemaElement
             LocalSecondaryIndex
             GlobalSecondaryIndex
+            GlobalSecondaryIndexUpdate
             Projection
             ProjectionType
             UpdateTableRequest
@@ -94,13 +95,69 @@
  "update-table"
  (.getTableName
   ^UpdateTableRequest
-  (update-table-request :update-table {:read 1 :write 1})))
+  (update-table-request :update-table {:throughput {:read 1 :write 1}})))
 
 (expect
  (ProvisionedThroughput. 15 7)
  (.getProvisionedThroughput
   ^UpdateTableRequest
-  (update-table-request :update-table {:read 15 :write 7})))
+  (update-table-request :update-table {:throughput {:read 15 :write 7}})))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name         "global-secondary"
+                         :operation    :create
+                         :hash-keydef  [:gs-hash-keydef :n]
+                         :range-keydef [:gs-range-keydef :n]
+                         :projection   :keys-only
+                         :throughput   {:read 10 :write 2}}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        create-action (.getCreate gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName create-action))
+    (expect
+      (doto (Projection.)
+        (.setProjectionType ProjectionType/KEYS_ONLY))
+      (.getProjection create-action))
+    (expect
+      #{(KeySchemaElement. "gs-range-keydef" KeyType/RANGE)
+        (KeySchemaElement. "gs-hash-keydef" KeyType/HASH)}
+      (into #{} (.getKeySchema create-action)))
+    (expect
+      (ProvisionedThroughput. 10 2)
+      (.getProvisionedThroughput create-action))))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name         "global-secondary"
+                         :operation    :update
+                         :throughput   {:read 4 :write 2}}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        update-action (.getUpdate gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName update-action))
+    (expect
+      (ProvisionedThroughput. 4 2)
+      (.getProvisionedThroughput update-action))))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name      "global-secondary"
+                         :operation :delete}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        action (.getDelete gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName action))
+    ))
 
 (expect
  "get-item"
@@ -161,11 +218,11 @@
       ^UpdateItemRequest (update-item-request
                           :update-item
                           {:x 1}
-                          {:y [:put 2]
-                           :z [:add "xyz"]
-                           :a [:delete]}
-                          {:expected {:e1 "expected!"}
-                           :return :updated-old})]
+                          {:update-map {:y [:put 2]
+                                        :z [:add "xyz"]
+                                        :a [:delete]}
+                           :expected   {:e1 "expected!"}
+                           :return     :updated-old})]
 
   (expect "update-item" (.getTableName req))
   (expect {"x" (doto (AttributeValue.)
@@ -186,10 +243,36 @@
           (.getExpected req)))
 
 (let [req
+      ^UpdateItemRequest (update-item-request
+                           :update-item
+                           {:x 1}
+                           {:update-expr     "SET #p = :price REMOVE details.tags[2]"
+                            :expr-attr-vals  {":price" 0.89}
+                            :expr-attr-names {"#p" "price"}
+                            :expected        {:e1 "expected!"}
+                            :return          :updated-old})]
+
+  (expect "update-item" (.getTableName req))
+  (expect {"x" (doto (AttributeValue.)
+                 (.setN "1"))}
+          (.getKey req))
+  (expect "SET #p = :price REMOVE details.tags[2]" (.getUpdateExpression req))
+  (expect {":price" (doto (AttributeValue.)
+                      (.setN "0.89"))} (.getExpressionAttributeValues req))
+  (expect {"#p" "price"} (.getExpressionAttributeNames req))
+  (expect (str ReturnValue/UPDATED_OLD) (.getReturnValues req))
+  (expect {"e1" (doto (ExpectedAttributeValue.)
+                  (.setValue (AttributeValue. "expected!")))}
+          (.getExpected req)))
+
+(let [req
       ^DeleteItemRequest (delete-item-request
                           :delete-item
                           {:k1 "val" :r1 -3}
                           {:return :all-new
+                           :cond-expr "another = :a AND #n = :name"
+                           :expr-attr-vals {":a" 1 ":name" "joe"}
+                           :expr-attr-names {"#n" "name"}
                            :expected {:e1 1}})]
 
   (expect "delete-item" (.getTableName req))
@@ -201,6 +284,9 @@
                   (.setValue (doto (AttributeValue.)
                                (.setN "1"))))}
           (.getExpected req))
+  (expect "another = :a AND #n = :name" (.getConditionExpression req))
+  (expect 2 (count (.getExpressionAttributeValues req)))
+  (expect {"#n" "name"} (.getExpressionAttributeNames req))
   (expect (str ReturnValue/ALL_NEW) (.getReturnValues req)))
 
 (let [req
@@ -268,18 +354,25 @@
   (expect 2 (.getLimit req)))
 
 (let [req ^ScanRequest (scan-request
-                        :scan
-                        {:attr-conds {:age [:in [24 27]]}
-                         :return :count
-                         :limit 10})]
+                         :scan
+                         {:attr-conds {:age [:in [24 27]]}
+                          :index      "age-index"
+                          :projection "age, #t"
+                          :expr-attr-names {"#t" "year"}
+                          :return     :count
+                          :limit      10})]
   (expect "scan" (.getTableName req))
   (expect 10 (.getLimit req))
   (expect
-   {"age" (doto (Condition.)
-            (.setComparisonOperator ComparisonOperator/IN)
-            (.setAttributeValueList [(doto (AttributeValue.)
-                                       (.setN "24"))
-                                     (doto (AttributeValue.)
-                                       (.setN "27"))]))}
-   (.getScanFilter req))
-  (expect (str Select/COUNT) (.getSelect req)))
+    {"age" (doto (Condition.)
+             (.setComparisonOperator ComparisonOperator/IN)
+             (.setAttributeValueList [(doto (AttributeValue.)
+                                        (.setN "24"))
+                                      (doto (AttributeValue.)
+                                        (.setN "27"))]))}
+    (.getScanFilter req))
+  (expect (str Select/COUNT) (.getSelect req))
+  (expect "age-index" (.getIndexName req))
+  (expect "age, #t" (.getProjectionExpression req))
+  (expect {"#t" "year"} (.getExpressionAttributeNames req))
+  )
