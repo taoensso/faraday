@@ -28,7 +28,7 @@
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.6.0"]]}
    :dev
-   [:1.7 :test
+   [:1.8 :test
     {:plugins [[lein-ancient "0.6.4"]
                [codox        "0.8.11"]]}]}
 

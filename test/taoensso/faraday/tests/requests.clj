@@ -1,43 +1,103 @@
 (ns taoensso.faraday.tests.requests
-  (:require [expectations     :as test :refer :all]
-            [taoensso.faraday :refer :all])
-  (:import [com.amazonaws.services.dynamodbv2.model
-            DescribeTableRequest
-            ProvisionedThroughput
-            KeyType
-            CreateTableRequest
-            KeySchemaElement
-            LocalSecondaryIndex
-            GlobalSecondaryIndex
-            GlobalSecondaryIndexUpdate
-            Projection
-            ProjectionType
-            UpdateTableRequest
-            GetItemRequest
-            AttributeValue
-            PutItemRequest
-            ReturnValue
-            ExpectedAttributeValue
-            UpdateItemRequest
-            DeleteItemRequest
-            BatchGetItemRequest
-            BatchWriteItemRequest
-            AttributeValueUpdate
-            AttributeAction
-            KeysAndAttributes
-            WriteRequest
-            PutRequest
-            DeleteRequest
-            QueryRequest
-            ScanRequest
-            Condition
-            ComparisonOperator
-            Select]))
+  (:require
+   [expectations     :as test :refer :all]
+   [taoensso.encore  :as encore]
+   [taoensso.faraday :as far]
+   [taoensso.nippy   :as nippy])
 
-(expect
- "describe-table-name"
- (.getTableName ^DescribeTableRequest
-                (describe-table-request :describe-table-name)))
+  (:import
+   [com.amazonaws.services.dynamodbv2.model
+    AttributeAction
+    AttributeDefinition
+    AttributeValue
+    AttributeValueUpdate
+    BatchGetItemRequest
+    BatchGetItemResult
+    BatchWriteItemRequest
+    BatchWriteItemResult
+    Condition
+    ConsumedCapacity
+    ComparisonOperator
+    CreateGlobalSecondaryIndexAction
+    CreateTableRequest
+    CreateTableResult
+    DeleteItemRequest
+    DeleteItemResult
+    DeleteRequest
+    DeleteTableRequest
+    DeleteTableResult
+    DescribeTableRequest
+    DescribeTableResult
+    ExpectedAttributeValue
+    GetItemRequest
+    GetItemResult
+    ItemCollectionMetrics
+    KeysAndAttributes
+    KeySchemaElement
+    KeyType
+    ListTablesRequest
+    ListTablesResult
+    LocalSecondaryIndex
+    LocalSecondaryIndexDescription
+    GlobalSecondaryIndex
+    GlobalSecondaryIndexDescription
+    GlobalSecondaryIndexUpdate
+    Projection
+    ProjectionType
+    ProvisionedThroughput
+    ProvisionedThroughputDescription
+    PutItemRequest
+    PutItemResult
+    PutRequest
+    QueryRequest
+    QueryResult
+    ReturnValue
+    ScanRequest
+    ScanResult
+    Select
+    TableDescription
+    UpdateItemRequest
+    UpdateItemResult
+    UpdateTableRequest
+    UpdateTableResult
+    WriteRequest
+
+    ConditionalCheckFailedException
+    DeleteGlobalSecondaryIndexAction
+    InternalServerErrorException
+    ItemCollectionSizeLimitExceededException
+    LimitExceededException
+    ProvisionedThroughputExceededException
+    ResourceInUseException
+    ResourceNotFoundException
+    UpdateGlobalSecondaryIndexAction]))
+
+(comment
+  (remove-ns       'taoensso.faraday.tests.requests)
+  (test/run-tests '[taoensso.faraday.tests.requests]))
+
+;;;; Private var aliases
+
+(def describe-table-request   #'taoensso.faraday/describe-table-request)
+(def create-table-request     #'taoensso.faraday/create-table-request)
+(def update-table-request     #'taoensso.faraday/update-table-request)
+(def get-item-request         #'taoensso.faraday/get-item-request)
+(def put-item-request         #'taoensso.faraday/put-item-request)
+(def update-item-request      #'taoensso.faraday/update-item-request)
+(def delete-item-request      #'taoensso.faraday/delete-item-request)
+(def batch-get-item-request   #'taoensso.faraday/batch-get-item-request)
+(def batch-request-items      #'taoensso.faraday/batch-request-items)
+(def batch-write-item-request #'taoensso.faraday/batch-write-item-request)
+(def attr-multi-vs            #'taoensso.faraday/attr-multi-vs)
+(def query-request            #'taoensso.faraday/query-request)
+(def write-request            #'taoensso.faraday/write-request)
+(def scan-request             #'taoensso.faraday/scan-request)
+
+;;;;
+
+(expect "describe-table-name"
+  (.getTableName ^DescribeTableRequest
+    (describe-table-request :describe-table-name)))
 
 (let [req ^CreateTableRequest
       (create-table-request
@@ -355,12 +415,12 @@
 
 (let [req ^ScanRequest (scan-request
                          :scan
-                         {:attr-conds {:age [:in [24 27]]}
-                          :index      "age-index"
-                          :projection "age, #t"
+                         {:attr-conds      {:age [:in [24 27]]}
+                          :index           "age-index"
+                          :proj-expr       "age, #t"
                           :expr-attr-names {"#t" "year"}
-                          :return     :count
-                          :limit      10})]
+                          :return          :count
+                          :limit           10})]
   (expect "scan" (.getTableName req))
   (expect 10 (.getLimit req))
   (expect
