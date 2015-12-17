@@ -352,21 +352,22 @@
 (let [req
       ^BatchGetItemRequest
       (batch-get-item-request
-       false
-       (batch-request-items
-        {:t1 {:prim-kvs {:t1-k1 -10}
-              :attrs [:some-other-guy]}
-         :t2 {:prim-kvs {:t2-k1 ["x" "y" "z"]}}}))]
+        false
+        (batch-request-items
+          {:t1 {:prim-kvs {:t1-k1 -10}
+                :attrs [:some-other-guy]}
+           :t2 {:prim-kvs {:t2-k1 ["x" "y" "z"]}}}))]
+
   (expect
-   {"t1" (doto (KeysAndAttributes.)
-           (.setKeys [{"t1-k1" (doto (AttributeValue.)
-                                 (.setN "-10"))}])
-           (.setAttributesToGet ["some-other-guy"]))
-    "t2" (doto (KeysAndAttributes.)
-           (.setKeys [{"t2-k1" (AttributeValue. "x")}
-                      {"t2-k1" (AttributeValue. "y")}
-                      {"t2-k1" (AttributeValue. "z")}]))}
-   (.getRequestItems req)))
+    {"t1" (doto (KeysAndAttributes.)
+            (.setKeys [{"t1-k1" (doto (AttributeValue.)
+                                  (.setN "-10"))}])
+            (.setAttributesToGet ["some-other-guy"]))
+     "t2" (doto (KeysAndAttributes.)
+            (.setKeys [{"t2-k1" (AttributeValue. "x")}
+                       {"t2-k1" (AttributeValue. "y")}
+                       {"t2-k1" (AttributeValue. "z")}]))}
+    (.getRequestItems req)))
 
 (let [req
       ^BatchWriteItemRequest

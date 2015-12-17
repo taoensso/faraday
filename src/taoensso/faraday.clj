@@ -902,32 +902,50 @@
 
 ;;;; Batch ops
 
-(def ^:dynamic *attr-multi-vs?* "Temporary hack/workaround for [#63]" true)
+;; TODO Do we want to change this to `false` in a future breaking release?
+;; Would require updating `batch-get-item`, `batch-write-item` docstrings and
+;; updating consumers of these fns in tests
+(def ^:private  attr-multi-vs?-default true)
+(def ^:dynamic *attr-multi-vs?*
+  "Treat attribute vals as expansions rather than literals?
+  nil => use `attr-multi-vs?-default` (currently `true` though this may be
+  changed in future to better support DDB's new collection types,
+  Ref. https://github.com/ptaoussanis/faraday/issues/63)." nil)
+
+(defmacro with-attr-multi-vs    [& body] `(binding [*attr-multi-vs?*  true] ~@body))
+(defmacro without-attr-multi-vs [& body] ~(binding [*attr-multi-vs?* false] ~@body))
 
 (defn- attr-multi-vs
   "Implementation detail.
   [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
-  (if-not *attr-multi-vs?*
-    (clj-item->db-item attr-multi-vs-map)
-    (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
-          ensure-sequential (fn [x] (if (sequential? x) x [x]))]
-      (reduce
-        (fn [r attr-multi-vs]
-          (let [attrs (keys attr-multi-vs)
-                vs    (mapv ensure-sequential (vals attr-multi-vs))]
-            (when (> (count (filter next vs)) 1)
-              (-> (Exception. "Can range over only a single attr's values")
-                (throw)))
-            (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
-                      (apply utils/cartesian-product vs)))))
-        [] (ensure-sequential attr-multi-vs-map)))))
+  (let [expand? *attr-multi-vs?*
+        expand? (if (nil? expand?) attr-multi-vs?-default expand?)]
+
+    (if-not expand?
+      (clj-item->db-item attr-multi-vs-map)
+      (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
+            ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+        (reduce
+          (fn [r attr-multi-vs]
+            (let [attrs (keys attr-multi-vs)
+                  vs    (mapv ensure-sequential (vals attr-multi-vs))]
+              (when (> (count (filter next vs)) 1)
+                (-> (Exception. "Can range over only a single attr's values")
+                  (throw)))
+              (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                        (apply utils/cartesian-product vs)))))
+          [] (ensure-sequential attr-multi-vs-map))))))
 
 (comment
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}) ; ex
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]})       ; Range over b's
-  (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}}) ; ''
-  )
+  (with-attr-multi-vs ; ex:
+    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}))
+
+  (with-attr-multi-vs ; Range over b's:
+    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
+
+  (with-attr-multi-vs ; '':
+    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}})))
 
 (defn- batch-request-items
   "Implementation detail.
@@ -985,8 +1003,7 @@
   automatically be stitched together (to exceed throughput limits, for example)."
   [client-opts requests
    & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
-       :or   {span-reqs {:max 5}
-              attr-multi-vs? true}}]]
+       :or   {span-reqs {:max 5}}}]]
   (binding [*attr-multi-vs?* attr-multi-vs?]
     (let [run1
           (fn [raw-req]
@@ -1025,9 +1042,10 @@
 
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
-  [client-opts requests & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
-                            :or   {span-reqs {:max 5}
-                                   attr-multi-vs? true}}]]
+  [client-opts requests &
+   [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
+     :or   {span-reqs {:max 5}}}]]
+
   (binding [*attr-multi-vs?* attr-multi-vs?]
     (let [run1
           (fn [raw-req]
