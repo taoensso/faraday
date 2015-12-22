@@ -23,6 +23,13 @@ I'm not currently using DDB or Faraday myself, but will make a best effort to co
   * **Great performance** (zero overhead to the official Java SDK).
   * Uses [Nippy](https://github.com/ptaoussanis/nippy) to **support Clojure's rich data types** and **high-strength encryption**.
 
+## 3rd-party tools, etc.
+
+Link                     | Description
+------------------------ | -----------------------------------------------------
+[@mixradio/faraday-atom] | Atom implementation
+Your link here?          | **PR's welcome!**
+
 ## Getting started
 
 DynamoDB's done a fantastic job of hiding (in a good way) a lot of the complexity (in the Rich Hickey sense) that comes with managing large amounts of data. Despite the power at your disposal, the actual API you'll be using is pretty darn simple (especially via Clojure, as usual).
@@ -160,3 +167,5 @@ Copyright &copy; 2012-2014 Peter Taoussanis. Distributed under the [Eclipse Publ
 [CDS]: http://clojure-doc.org/
 [ClojureWerkz]: http://clojurewerkz.org/
 [Eclipse Public License]: https://raw2.github.com/ptaoussanis/faraday/master/LICENSE
+
+[@mixradio/faraday-atom]: https://github.com/mixradio/faraday-atom
