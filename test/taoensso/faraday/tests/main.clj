@@ -378,6 +378,7 @@
       i1    {:name    "2001: A Space Odyssey"
              :author  "Arthur C. Clarke"
              :year    1968
+             :read?   true
              :details {:tags       ["science fiction" "evolution" "artificial intelligence"]
                        :characters ["David Bowman" "Francis Poole" "HAL 9000"]}}
       i2    {:name    "2010: Odissey Two"
@@ -392,7 +393,8 @@
                        :characters ["Francis Poole"]}}
       i4    {:name   "Animal Farm"
              :author "George Orwell"
-             :year   1945}
+             :year   1945
+             :read?  true}
       books [i0 i1 i2 i3 i4]
       ]
 
@@ -467,6 +469,27 @@
                                        "#c" "characters"}
                      :expr-attr-vals  {":cnt" 4 ":year" 1990}}))
 
+  ;; Confirm we can query and filter by booleans with question marks on the name
+  (expect
+    [i4] (far/query *client-opts* book-table {:author [:eq "George Orwell"]}
+                    {:filter-expr     "#r = :r"
+                     :expr-attr-names {"#r" "read?"}
+                     :expr-attr-vals  {":r" true}}))
+  (expect
+    [i4 i1] (far/scan *client-opts* book-table {:attr-conds {:read? [:eq true]}}))
+  (expect
+    [i4 i1] (far/scan *client-opts* book-table {:filter-expr     "#r = :r"
+                                                :expr-attr-names {"#r" "read?"}
+                                                :expr-attr-vals  {":r" true}}))
+  ;; :attr-conds and :filter-expr are mutually exclusive
+  (expect
+    AssertionError
+    (far/scan *client-opts* book-table {:attr-conds      {:author [:eq "George Orwell"]}
+                                        :filter-expr     "#r = :r"
+                                        :expr-attr-names {"#r" "read?"}
+                                        :expr-attr-vals  {":r" true}}))
+
+
   ;; Test projection expressions
   (expect
     [{:year    1968
@@ -515,6 +538,7 @@
                             :author "George Orwell"}
                            {:cond-expr       "#y = 1945"
                             :expr-attr-names {"#y" "year"}}))
+
   )
 
 

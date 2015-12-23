@@ -1151,12 +1151,14 @@
 (defn- scan-request
   [table
    & [{:keys [attr-conds last-prim-kvs return limit total-segments
-              proj-expr expr-attr-names
+              proj-expr expr-attr-names filter-expr expr-attr-vals
               index segment return-cc?] :as opts}]]
   (doto-cond [g (ScanRequest.)]
     :always (.setTableName (name table))
     attr-conds      (.setScanFilter        (query|scan-conditions g))
     expr-attr-names (.setExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.setExpressionAttributeValues (clj->db-expr-vals-map expr-attr-vals))
+    filter-expr     (.setFilterExpression filter-expr)
     index           (.setIndexName index)
     last-prim-kvs   (.setExclusiveStartKey
                      (clj-item->db-item last-prim-kvs))
@@ -1173,6 +1175,8 @@
   "Retrieves items from a table (unindexed) with options:
     :attr-conds      - {<attr> [<comparison-operator> <val-or-vals>] ...}.
     :expr-attr-names - Expression attribute names, as a map of {\"#attr_name\" \"name\"}
+    :expr-attr-vals  - Expression attribute names, as a map of {\":attr\" \"value\"}
+    :filter-expr     - Filter expression string
     :index           - Index name to use.
     :proj-expr       - Projection expression as a string
     :limit           - Max num >=1 of items to eval (≠ num of matching items).
@@ -1202,8 +1206,13 @@
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table
    & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
+              filter-expr
               segment return-cc?] :as opts
        :or   {span-reqs {:max 5}}}]]
+
+  (assert (not (and filter-expr (seq attr-conds)))
+          "Only one of ':filter-expr' or :attr-conds should be provided")
+
   (let [run1
         (fn [last-prim-kvs]
           (as-map
