@@ -85,6 +85,18 @@
                                  :consistent? true}})
                       ttable set))
 
+  (expect ; We only get existing items
+    [i1] (->> (far/batch-get-item *client-opts*
+                                  {ttable {:prim-kvs    {:id [1 2 3 4]}
+                                           :consistent? true}})
+              ttable))
+
+  (expect ; The call does not fail if there are no items at all
+    [] (->> (far/batch-get-item *client-opts*
+                                {ttable {:prim-kvs    {:id [2 3 4]}
+                                         :consistent? true}})
+            ttable))
+
   (expect ; Batch get, with :attrs
    (set [(dissoc i0 :name) (dissoc i1 :name)])
    (->> (far/batch-get-item *client-opts*
@@ -133,6 +145,43 @@
         :expr-attr-names {"#name" "name"}
         :expr-attr-vals  {":name" "foo"}
         :return          :all-new})))
+
+  (expect ; We can add a set item
+    {:id 10 :name "foo" :someset #{"a" "b" "c"}}
+    (do
+      (far/update-item *client-opts* ttable
+                       {:id 10}
+                       {:update-expr     "SET someset = :toset"
+                        :expr-attr-vals  {":toset" #{"a" "b" "c"}}
+                        :return          :all-new})))
+
+  (expect ; We can add update a set
+    {:id 10 :name "foo" :someset #{"a" "b" "c" "d" "e"}}
+    (do
+      (far/update-item *client-opts* ttable
+                       {:id 10}
+                       {:update-expr     "ADD someset :toset"
+                        :expr-attr-vals  {":toset" #{"d" "e"}}
+                        :return          :all-new})))
+
+  (expect ; Updating an existing element to a set does not duplicate it
+    {:id 10 :name "foo" :someset #{"a" "b" "c" "d" "e" "f"}}
+    (do
+      (far/update-item *client-opts* ttable
+                       {:id 10}
+                       {:update-expr     "ADD someset :toset"
+                        :expr-attr-vals  {":toset" #{"e" "f"}}
+                        :return          :all-new})))
+
+  (expect ; We can remove elements from a set
+    {:id 10 :name "foo" :someset #{"a" "c" "e" "f"}}
+    (do
+      (far/update-item *client-opts* ttable
+                       {:id 10}
+                       {:update-expr     "DELETE someset :todel"
+                        :expr-attr-vals  {":todel" #{"b" "d"}}
+                        :return          :all-new})))
+
 
   (expect ; Condition expression support in update-item
    #=(far/ex :conditional-check-failed)
@@ -481,6 +530,24 @@
     [i4 i1] (far/scan *client-opts* book-table {:filter-expr     "#r = :r"
                                                 :expr-attr-names {"#r" "read?"}
                                                 :expr-attr-vals  {":r" true}}))
+  ;; Limits are respected, but we need to send in :span-reqs
+  (expect
+    3 (count (far/scan *client-opts* book-table {:limit     3
+                                                 :span-reqs {:max 1}})))
+  (expect
+    [i4] (far/scan *client-opts* book-table {:filter-expr     "#r = :r"
+                                             :expr-attr-names {"#r" "read?"}
+                                             :limit           1
+                                             :span-reqs       {:max 1}
+                                             :expr-attr-vals  {":r" true}}))
+  ;; Confirm we combine projection and filter expressions on scan
+  (expect
+    ["George Orwell" "Arthur C. Clarke"]
+    (map :author
+         (far/scan *client-opts* book-table {:proj-expr       "author"
+                                             :filter-expr     "#r = :r"
+                                             :expr-attr-names {"#r" "read?"}
+                                             :expr-attr-vals  {":r" true}})))
   ;; :attr-conds and :filter-expr are mutually exclusive
   (expect
     AssertionError
