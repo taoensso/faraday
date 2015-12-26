@@ -437,3 +437,16 @@
   (expect "age, #t" (.getProjectionExpression req))
   (expect {"#t" "year"} (.getExpressionAttributeNames req))
   )
+
+(let [req ^ScanRequest (scan-request
+                         :scan
+                         {:filter-expr "age < 25"
+                          :index       "age-index"
+                          :limit       5
+                          :consistent? true})]
+  (expect "scan" (.getTableName req))
+  (expect 5 (.getLimit req))
+  (expect "age < 25" (.getFilterExpression req))
+  (expect "age-index" (.getIndexName req))
+  (expect (.getConsistentRead req))
+  )

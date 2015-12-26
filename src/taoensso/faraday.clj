@@ -1152,7 +1152,7 @@
   [table
    & [{:keys [attr-conds last-prim-kvs return limit total-segments
               proj-expr expr-attr-names filter-expr expr-attr-vals
-              index segment return-cc?] :as opts}]]
+              consistent? index segment return-cc?] :as opts}]]
   (doto-cond [g (ScanRequest.)]
     :always (.setTableName (name table))
     attr-conds      (.setScanFilter        (query|scan-conditions g))
@@ -1166,6 +1166,7 @@
     proj-expr       (.setProjectionExpression g)
     total-segments  (.setTotalSegments     (int g))
     segment         (.setSegment           (int g))
+    consistent?     (.setConsistentRead consistent?)
     (coll?* return) (.setAttributesToGet (mapv name return))
     return-cc? (.setReturnConsumedCapacity (utils/enum :total))
     (and return (not (coll?* return)))
@@ -1188,6 +1189,7 @@
                              [<attr> ...]}.
     :total-segments  - Total number of parallel scan segments.
     :segment         - Calling worker's segment number (>=0, <=total-segments).
+    :consistent?     - If the scan should use consistent reads
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
                              :not-null :null :contains :not-contains :in}.
