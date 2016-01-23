@@ -12,10 +12,10 @@
 
   :dependencies
   [[org.clojure/clojure "1.5.1"]
-   [com.taoensso/encore "2.29.1"]
+   [com.taoensso/encore "2.32.0"]
    [com.taoensso/nippy  "2.10.0"]
    [joda-time           "2.9.1"] ; For exclusion, see Github #27
-   [com.amazonaws/aws-java-sdk-dynamodb "1.10.42"
+   [com.amazonaws/aws-java-sdk-dynamodb "1.10.49"
     :exclusions [joda-time]]]
 
   :profiles
@@ -24,7 +24,7 @@
    :1.5  {:dependencies [[org.clojure/clojure    "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure    "1.7.0"]]}
-   :1.8  {:dependencies [[org.clojure/clojure    "1.8.0-RC4"]]}
+   :1.8  {:dependencies [[org.clojure/clojure    "1.8.0"]]}
    :test {:dependencies [[expectations           "2.1.4"]
                          [org.clojure/test.check "0.9.0"]]
           :plugins [[lein-expectations "0.0.8"]
@@ -32,7 +32,7 @@
    :dev
    [:1.8 :test
     {:plugins [[lein-ancient "0.6.4"]
-               [lein-codox   "0.9.0"]]}]}
+               [lein-codox   "0.9.1"]]}]}
 
   :test-paths ["test" "src"]
 
