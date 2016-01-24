@@ -1189,7 +1189,7 @@
                              [<attr> ...]}.
     :total-segments  - Total number of parallel scan segments.
     :segment         - Calling worker's segment number (>=0, <=total-segments).
-    :consistent?     - If the scan should use consistent reads
+    :consistent?     - Use strongly (rather than eventually) consistent reads?
 
   comparison-operators e/o #{:eq :le :lt :ge :gt :begins-with :between :ne
                              :not-null :null :contains :not-contains :in}.
