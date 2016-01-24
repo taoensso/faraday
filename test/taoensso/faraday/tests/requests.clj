@@ -1,42 +1,103 @@
 (ns taoensso.faraday.tests.requests
-  (:require [expectations     :as test :refer :all]
-            [taoensso.faraday :refer :all])
-  (:import [com.amazonaws.services.dynamodbv2.model
-            DescribeTableRequest
-            ProvisionedThroughput
-            KeyType
-            CreateTableRequest
-            KeySchemaElement
-            LocalSecondaryIndex
-            GlobalSecondaryIndex
-            Projection
-            ProjectionType
-            UpdateTableRequest
-            GetItemRequest
-            AttributeValue
-            PutItemRequest
-            ReturnValue
-            ExpectedAttributeValue
-            UpdateItemRequest
-            DeleteItemRequest
-            BatchGetItemRequest
-            BatchWriteItemRequest
-            AttributeValueUpdate
-            AttributeAction
-            KeysAndAttributes
-            WriteRequest
-            PutRequest
-            DeleteRequest
-            QueryRequest
-            ScanRequest
-            Condition
-            ComparisonOperator
-            Select]))
+  (:require
+   [expectations     :as test :refer :all]
+   [taoensso.encore  :as encore]
+   [taoensso.faraday :as far]
+   [taoensso.nippy   :as nippy])
 
-(expect
- "describe-table-name"
- (.getTableName ^DescribeTableRequest
-                (describe-table-request :describe-table-name)))
+  (:import
+   [com.amazonaws.services.dynamodbv2.model
+    AttributeAction
+    AttributeDefinition
+    AttributeValue
+    AttributeValueUpdate
+    BatchGetItemRequest
+    BatchGetItemResult
+    BatchWriteItemRequest
+    BatchWriteItemResult
+    Condition
+    ConsumedCapacity
+    ComparisonOperator
+    CreateGlobalSecondaryIndexAction
+    CreateTableRequest
+    CreateTableResult
+    DeleteItemRequest
+    DeleteItemResult
+    DeleteRequest
+    DeleteTableRequest
+    DeleteTableResult
+    DescribeTableRequest
+    DescribeTableResult
+    ExpectedAttributeValue
+    GetItemRequest
+    GetItemResult
+    ItemCollectionMetrics
+    KeysAndAttributes
+    KeySchemaElement
+    KeyType
+    ListTablesRequest
+    ListTablesResult
+    LocalSecondaryIndex
+    LocalSecondaryIndexDescription
+    GlobalSecondaryIndex
+    GlobalSecondaryIndexDescription
+    GlobalSecondaryIndexUpdate
+    Projection
+    ProjectionType
+    ProvisionedThroughput
+    ProvisionedThroughputDescription
+    PutItemRequest
+    PutItemResult
+    PutRequest
+    QueryRequest
+    QueryResult
+    ReturnValue
+    ScanRequest
+    ScanResult
+    Select
+    TableDescription
+    UpdateItemRequest
+    UpdateItemResult
+    UpdateTableRequest
+    UpdateTableResult
+    WriteRequest
+
+    ConditionalCheckFailedException
+    DeleteGlobalSecondaryIndexAction
+    InternalServerErrorException
+    ItemCollectionSizeLimitExceededException
+    LimitExceededException
+    ProvisionedThroughputExceededException
+    ResourceInUseException
+    ResourceNotFoundException
+    UpdateGlobalSecondaryIndexAction]))
+
+(comment
+  (remove-ns       'taoensso.faraday.tests.requests)
+  (test/run-tests '[taoensso.faraday.tests.requests]))
+
+;;;; Private var aliases
+
+(def describe-table-request   #'taoensso.faraday/describe-table-request)
+(def create-table-request     #'taoensso.faraday/create-table-request)
+(def update-table-request     #'taoensso.faraday/update-table-request)
+(def get-item-request         #'taoensso.faraday/get-item-request)
+(def put-item-request         #'taoensso.faraday/put-item-request)
+(def update-item-request      #'taoensso.faraday/update-item-request)
+(def delete-item-request      #'taoensso.faraday/delete-item-request)
+(def batch-get-item-request   #'taoensso.faraday/batch-get-item-request)
+(def batch-request-items      #'taoensso.faraday/batch-request-items)
+(def batch-write-item-request #'taoensso.faraday/batch-write-item-request)
+(def attr-multi-vs            #'taoensso.faraday/attr-multi-vs)
+(def query-request            #'taoensso.faraday/query-request)
+(def write-request            #'taoensso.faraday/write-request)
+(def scan-request             #'taoensso.faraday/scan-request)
+
+;;;;
+
+(expect "describe-table-name"
+  (.getTableName ^DescribeTableRequest
+    (describe-table-request :describe-table-name)))
 
 (let [req ^CreateTableRequest
       (create-table-request
@@ -94,13 +155,69 @@
  "update-table"
  (.getTableName
   ^UpdateTableRequest
-  (update-table-request :update-table {:read 1 :write 1})))
+  (update-table-request :update-table {:throughput {:read 1 :write 1}})))
 
 (expect
  (ProvisionedThroughput. 15 7)
  (.getProvisionedThroughput
   ^UpdateTableRequest
-  (update-table-request :update-table {:read 15 :write 7})))
+  (update-table-request :update-table {:throughput {:read 15 :write 7}})))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name         "global-secondary"
+                         :operation    :create
+                         :hash-keydef  [:gs-hash-keydef :n]
+                         :range-keydef [:gs-range-keydef :n]
+                         :projection   :keys-only
+                         :throughput   {:read 10 :write 2}}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        create-action (.getCreate gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName create-action))
+    (expect
+      (doto (Projection.)
+        (.setProjectionType ProjectionType/KEYS_ONLY))
+      (.getProjection create-action))
+    (expect
+      #{(KeySchemaElement. "gs-range-keydef" KeyType/RANGE)
+        (KeySchemaElement. "gs-hash-keydef" KeyType/HASH)}
+      (into #{} (.getKeySchema create-action)))
+    (expect
+      (ProvisionedThroughput. 10 2)
+      (.getProvisionedThroughput create-action))))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name         "global-secondary"
+                         :operation    :update
+                         :throughput   {:read 4 :write 2}}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        update-action (.getUpdate gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName update-action))
+    (expect
+      (ProvisionedThroughput. 4 2)
+      (.getProvisionedThroughput update-action))))
+
+(let [req ^UpdateTableRequest
+          (update-table-request
+            :update-table
+            {:gsindexes {:name      "global-secondary"
+                         :operation :delete}})]
+  (expect "update-table" (.getTableName req))
+
+  (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
+        action (.getDelete gsindex)]
+    (expect nil? rest)
+    (expect "global-secondary" (.getIndexName action))
+    ))
 
 (expect
  "get-item"
@@ -161,11 +278,11 @@
       ^UpdateItemRequest (update-item-request
                           :update-item
                           {:x 1}
-                          {:y [:put 2]
-                           :z [:add "xyz"]
-                           :a [:delete]}
-                          {:expected {:e1 "expected!"}
-                           :return :updated-old})]
+                          {:update-map {:y [:put 2]
+                                        :z [:add "xyz"]
+                                        :a [:delete]}
+                           :expected   {:e1 "expected!"}
+                           :return     :updated-old})]
 
   (expect "update-item" (.getTableName req))
   (expect {"x" (doto (AttributeValue.)
@@ -186,10 +303,36 @@
           (.getExpected req)))
 
 (let [req
+      ^UpdateItemRequest (update-item-request
+                           :update-item
+                           {:x 1}
+                           {:update-expr     "SET #p = :price REMOVE details.tags[2]"
+                            :expr-attr-vals  {":price" 0.89}
+                            :expr-attr-names {"#p" "price"}
+                            :expected        {:e1 "expected!"}
+                            :return          :updated-old})]
+
+  (expect "update-item" (.getTableName req))
+  (expect {"x" (doto (AttributeValue.)
+                 (.setN "1"))}
+          (.getKey req))
+  (expect "SET #p = :price REMOVE details.tags[2]" (.getUpdateExpression req))
+  (expect {":price" (doto (AttributeValue.)
+                      (.setN "0.89"))} (.getExpressionAttributeValues req))
+  (expect {"#p" "price"} (.getExpressionAttributeNames req))
+  (expect (str ReturnValue/UPDATED_OLD) (.getReturnValues req))
+  (expect {"e1" (doto (ExpectedAttributeValue.)
+                  (.setValue (AttributeValue. "expected!")))}
+          (.getExpected req)))
+
+(let [req
       ^DeleteItemRequest (delete-item-request
                           :delete-item
                           {:k1 "val" :r1 -3}
                           {:return :all-new
+                           :cond-expr "another = :a AND #n = :name"
+                           :expr-attr-vals {":a" 1 ":name" "joe"}
+                           :expr-attr-names {"#n" "name"}
                            :expected {:e1 1}})]
 
   (expect "delete-item" (.getTableName req))
@@ -201,26 +344,30 @@
                   (.setValue (doto (AttributeValue.)
                                (.setN "1"))))}
           (.getExpected req))
+  (expect "another = :a AND #n = :name" (.getConditionExpression req))
+  (expect 2 (count (.getExpressionAttributeValues req)))
+  (expect {"#n" "name"} (.getExpressionAttributeNames req))
   (expect (str ReturnValue/ALL_NEW) (.getReturnValues req)))
 
 (let [req
       ^BatchGetItemRequest
       (batch-get-item-request
-       false
-       (batch-request-items
-        {:t1 {:prim-kvs {:t1-k1 -10}
-              :attrs [:some-other-guy]}
-         :t2 {:prim-kvs {:t2-k1 ["x" "y" "z"]}}}))]
+        false
+        (batch-request-items
+          {:t1 {:prim-kvs {:t1-k1 -10}
+                :attrs [:some-other-guy]}
+           :t2 {:prim-kvs {:t2-k1 ["x" "y" "z"]}}}))]
+
   (expect
-   {"t1" (doto (KeysAndAttributes.)
-           (.setKeys [{"t1-k1" (doto (AttributeValue.)
-                                 (.setN "-10"))}])
-           (.setAttributesToGet ["some-other-guy"]))
-    "t2" (doto (KeysAndAttributes.)
-           (.setKeys [{"t2-k1" (AttributeValue. "x")}
-                      {"t2-k1" (AttributeValue. "y")}
-                      {"t2-k1" (AttributeValue. "z")}]))}
-   (.getRequestItems req)))
+    {"t1" (doto (KeysAndAttributes.)
+            (.setKeys [{"t1-k1" (doto (AttributeValue.)
+                                  (.setN "-10"))}])
+            (.setAttributesToGet ["some-other-guy"]))
+     "t2" (doto (KeysAndAttributes.)
+            (.setKeys [{"t2-k1" (AttributeValue. "x")}
+                       {"t2-k1" (AttributeValue. "y")}
+                       {"t2-k1" (AttributeValue. "z")}]))}
+    (.getRequestItems req)))
 
 (let [req
       ^BatchWriteItemRequest
@@ -268,18 +415,38 @@
   (expect 2 (.getLimit req)))
 
 (let [req ^ScanRequest (scan-request
-                        :scan
-                        {:attr-conds {:age [:in [24 27]]}
-                         :return :count
-                         :limit 10})]
+                         :scan
+                         {:attr-conds      {:age [:in [24 27]]}
+                          :index           "age-index"
+                          :proj-expr       "age, #t"
+                          :expr-attr-names {"#t" "year"}
+                          :return          :count
+                          :limit           10})]
   (expect "scan" (.getTableName req))
   (expect 10 (.getLimit req))
   (expect
-   {"age" (doto (Condition.)
-            (.setComparisonOperator ComparisonOperator/IN)
-            (.setAttributeValueList [(doto (AttributeValue.)
-                                       (.setN "24"))
-                                     (doto (AttributeValue.)
-                                       (.setN "27"))]))}
-   (.getScanFilter req))
-  (expect (str Select/COUNT) (.getSelect req)))
+    {"age" (doto (Condition.)
+             (.setComparisonOperator ComparisonOperator/IN)
+             (.setAttributeValueList [(doto (AttributeValue.)
+                                        (.setN "24"))
+                                      (doto (AttributeValue.)
+                                        (.setN "27"))]))}
+    (.getScanFilter req))
+  (expect (str Select/COUNT) (.getSelect req))
+  (expect "age-index" (.getIndexName req))
+  (expect "age, #t" (.getProjectionExpression req))
+  (expect {"#t" "year"} (.getExpressionAttributeNames req))
+  )
+
+(let [req ^ScanRequest (scan-request
+                         :scan
+                         {:filter-expr "age < 25"
+                          :index       "age-index"
+                          :limit       5
+                          :consistent? true})]
+  (expect "scan" (.getTableName req))
+  (expect 5 (.getLimit req))
+  (expect "age < 25" (.getFilterExpression req))
+  (expect "age-index" (.getIndexName req))
+  (expect (.getConsistentRead req))
+  )

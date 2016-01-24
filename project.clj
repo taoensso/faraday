@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.8.0"
+(defproject com.taoensso/faraday "1.9.0-beta1"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
@@ -12,29 +12,36 @@
 
   :dependencies
   [[org.clojure/clojure "1.5.1"]
-   [com.taoensso/encore "2.18.0"]
-   [com.taoensso/nippy  "2.9.1"]
-   [joda-time           "2.8.2"] ; For exclusion, see Github #27
-   [com.amazonaws/aws-java-sdk-dynamodb "1.9.39"
+   [com.taoensso/encore "2.32.0"]
+   [com.taoensso/nippy  "2.10.0"]
+   [joda-time           "2.9.1"] ; For exclusion, see Github #27
+   [com.amazonaws/aws-java-sdk-dynamodb "1.10.49"
     :exclusions [joda-time]]]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :server-jvm {:jvm-opts ^:replace ["-server"]}
-   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0"]]}
+   :1.5  {:dependencies [[org.clojure/clojure    "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure    "1.6.0"]]}
-   :test {:dependencies [[expectations           "2.1.0"]
-                         [org.clojure/test.check "0.8.2"]]
+   :1.7  {:dependencies [[org.clojure/clojure    "1.7.0"]]}
+   :1.8  {:dependencies [[org.clojure/clojure    "1.8.0"]]}
+   :test {:dependencies [[expectations           "2.1.4"]
+                         [org.clojure/test.check "0.9.0"]]
           :plugins [[lein-expectations "0.0.8"]
-                    [lein-autoexpect   "1.6.0"]]}
+                    [lein-autoexpect   "1.7.0"]]}
    :dev
-   [:1.7 :test
+   [:1.8 :test
     {:plugins [[lein-ancient "0.6.4"]
-               [codox        "0.8.11"]]}]}
+               [lein-codox   "0.9.1"]]}]}
 
   :test-paths ["test" "src"]
+
+  :codox
+  {:language :clojure
+   :source-uri "https://github.com/ptaoussanis/faraday/blob/master/{filepath}#L{line}"}
+
   :aliases
-  {"test-all"   ["with-profile" "default:+1.6:+1.7" "expectations"]
+  {"test-all"   ["with-profile" "+1.5:+1.6:+1.7:+1.8" "expectations"]
    "test-auto"  ["with-profile" "+test" "autoexpect"]
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+server-jvm" "repl" ":headless"]}
