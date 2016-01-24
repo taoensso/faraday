@@ -1,6 +1,6 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
-## v1.9.0-alpha3 / 2015 December 19
+## v1.9.0-beta1 / 2016 Jan 24
 
 > This is a major feature release with **BREAKING CHANGES** (see **Migration** section for details).
 > Big thanks to @ricardojmendez for most of the work for this release!
@@ -13,12 +13,14 @@
 * **New**: `update-table` support for index modification [@ricardojmendez]
 * **New**: `scan` support for indexes, `:expr-attr-names`, `:proj-expr` [@ricardojmendez]
 * **New**: `delete-item` support for expressions [@ricardojmendez]
+* **New**: `scan` support for `support filter-expr`, `expr-attr-vals` [@ricardojmendez #90]
+* **New**: `scan` support for consistent reads [@ricardojmendez #92]
 * **Change**: `update-table` now returns a future instead of a promise (allows exceptions to rethrow)
 * **Change**: implementation details now marked as private
 * **Fix**: `remove-empty-attr-vals` vs blank strings [@crough #72]
 
 ```clojure
-[com.taoensso/faraday "1.9.0-alpha3"]
+[com.taoensso/faraday "1.9.0-RC1"]
 ```
 
 #### MIGRATION INSTRUCTIONS
@@ -26,6 +28,7 @@
 **[1]**: `(update-item <client-opts> <table> <prim-kvs> <update-map> <opts>)` -> `(update-item <client-opts> <table> <prim-kvs> {:update-map <update-map> <other-opts>})`
 
 **[2]**: `(update-table <client-opts> <table> <throughput> <opts>)` -> `(update-table <client-opts> <table> {:through-put <throughput> <other-opts>})`
+
 
 ## v1.8.0 / 2015 September 26
 

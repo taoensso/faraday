@@ -4,7 +4,8 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/faraday "1.8.0"] ; Stable
+[com.taoensso/faraday "1.8.0"]       ; Stable
+[com.taoensso/faraday "1.9.0-beta1"] ; Dev, see CHANGELOG
 ```
 
 # Faraday
