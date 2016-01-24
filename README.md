@@ -14,13 +14,13 @@
 
 [DynamoDB] is *awesome* and makes a great companion for Clojure web apps that need a **simple, reliable way to scale with predictable performance and without the usual headaches**.
 
-Faraday was originally adapted from [Rotary client] by James Reeves.
+Faraday was originally adapted from the [Rotary client] by James Reeves.
 
 ## Library status
 
 I'm not currently using DDB or Faraday myself but will make a best effort to continue maintaining the library as I can.
 
-The bulk of recent development work has been thanks to the generosity of Faraday's [contributors]!
+The bulk of recent development work has been thanks to the generosity of Faraday's [contributors]! 
 
 PRs for fixes and/or new features **very welcome**!
 
@@ -29,7 +29,7 @@ PRs for fixes and/or new features **very welcome**!
 ## Features
  * Small, simple, API: **complete coverage of DynamoDBv2 features**
  * **Great performance** (zero overhead to the official Java SDK)
- * Uses [Nippy] to **support Clojure's rich data types** and **high-strength encryption**
+ * Uses [Nippy] for full support of **Clojure's rich data types**
 
 ## 3rd-party stuff
 
@@ -41,7 +41,7 @@ Your link here?          | **PR's welcome!**
 
 ## Getting started
 
-> See also [@ricardojmendez/ddb-tutorial] for a full tutorial
+> See also [@ricardojmendez/ddb-tutorial] for a full tutorial!
 
 Add the necessary dependency to your project:
 
