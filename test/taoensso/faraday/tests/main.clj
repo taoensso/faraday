@@ -359,10 +359,20 @@
    (update-t
     {:update-map {:boolT [:put nil]}}))
 
+  (extend-protocol far/CljVal->DbVal java.util.Date
+    (serialise [x]
+      (far/serialise (pr-str x))))
+
+  (expect
+    (assoc t :date "#inst \"1970-01-01T00:00:00.000-00:00\"")
+    (update-t
+      {:update-map {:date [:put (java.util.Date. (long 0))]}}))
+
   (expect
    (assoc-in t [:map-new :new] "x")
    (update-t
     {:update-map {:map-new [:put {:new "x"}]}})))
+
 
 ;;;; expectation tests
 (let [t {:id 16

@@ -239,42 +239,100 @@
       :m (zipmap (mapv keyword         (.keySet ^java.util.HashMap x))
                  (mapv db-val->clj-val (.values ^java.util.HashMap x))))))
 
+
+(defprotocol CljVal->DbVal
+  (serialise [this]))
+
+
 (defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
   ^AttributeValue [x]
-  (cond
-   (enc/stringy? x)
-   (let [^String s (enc/as-qname x)]
-     (if (.isEmpty s)
-       (throw (Exception. "Invalid DynamoDB value: \"\""))
-       (doto (AttributeValue.) (.setS s))))
+  (serialise x)
+  ;;:else (throw (Exception. (str "Unknown DynamoDB value type: " (type x) "."
+  ;;" See `freeze` for serialization.")))
+  )
 
-   (nil? x)              (doto (AttributeValue.) (.setNULL true))
-   (instance? Boolean x) (doto (AttributeValue.) (.setBOOL x))
-   (ddb-num? x)          (doto (AttributeValue.) (.setN (str x)))
-   (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
+(extend-protocol CljVal->DbVal String
+  (serialise [s]
+    (if (.isEmpty s)
+      (throw (Exception. "Invalid DynamoDB value: \"\""))
+      (doto (AttributeValue.) (.setS s)))))
 
-   (vector?  x) (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))
-   (map?     x)
-   (doto (AttributeValue.)
-     (.setM
-       (reduce-kv
-         (fn [acc k v] (assoc acc (name k) (clj-val->db-val v)))
-         {}
-         x)))
+(extend-protocol CljVal->DbVal clojure.lang.Keyword
+  (serialise [k]
+    (let [^String s (enc/as-qname k)]
+      (if (.isEmpty s)
+        (throw (Exception. "Invalid DynamoDB value: \"\""))
+        (doto (AttributeValue.) (.setS s))))))
 
-   (set? x)
-   (if (empty? x)
-     (throw (Exception. "Invalid DynamoDB value: empty set"))
-     (cond
-       (enc/revery? enc/stringy? x) (doto (AttributeValue.) (.setSS (mapv enc/as-qname x)))
-       (enc/revery? ddb-num?     x) (doto (AttributeValue.) (.setNS (mapv str  x)))
-       (enc/revery? freeze?      x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
-       :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
-                                     " or more than one type")))))
+(extend-protocol CljVal->DbVal nil
+  (serialise [_]
+    (doto (AttributeValue.) (.setNULL true))))
 
-   (instance? AttributeValue x) x
-   :else (throw (Exception. (str "Unknown DynamoDB value type: " (type x) "."
-                                 " See `freeze` for serialization.")))))
+(extend-protocol CljVal->DbVal Boolean
+  (serialise [x]
+    (doto (AttributeValue.) (.setBOOL x))))
+
+(extend-protocol CljVal->DbVal Long
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str x)))))
+
+(extend-protocol CljVal->DbVal Double
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str x)))))
+
+(extend-protocol CljVal->DbVal Integer
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str x)))))
+
+(extend-protocol CljVal->DbVal Float
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str x)))))
+
+(extend-protocol CljVal->DbVal BigInt
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
+
+(extend-protocol CljVal->DbVal BigDecimal
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
+
+(extend-protocol CljVal->DbVal BigInteger
+  (serialise [x]
+    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
+
+(extend-protocol CljVal->DbVal taoensso.nippy.tools.WrappedForFreezing
+  (serialise [x]
+    (doto (AttributeValue.) (.setB (nt-freeze x)))))
+
+(extend-protocol CljVal->DbVal (class (byte-array 0))
+  (serialise [x]
+    (doto (AttributeValue.) (.setB (nt-freeze x)))))
+
+(extend-protocol CljVal->DbVal clojure.lang.IPersistentVector
+  (serialise [x]
+    (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))))
+
+(extend-protocol CljVal->DbVal java.util.Map
+  (serialise [x]
+    (doto (AttributeValue.) (.setM (reduce-kv
+                                      (fn [acc k v] (assoc acc (name k) (clj-val->db-val v)))
+                                      {}
+                                      x)))))
+
+(extend-protocol CljVal->DbVal java.util.Set
+  (serialise [x]
+    (if (empty? x)
+      (throw (Exception. "Invalid DynamoDB value: empty set"))
+      (cond
+        (enc/revery? enc/stringy? x) (doto (AttributeValue.) (.setSS (mapv enc/as-qname x)))
+        (enc/revery? ddb-num?     x) (doto (AttributeValue.) (.setNS (mapv str x)))
+        (enc/revery? freeze?      x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
+        :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
+                                   " or more than one type")))))))
+
+(extend-protocol CljVal->DbVal AttributeValue
+  (serialise [x]
+    x))
 
 (comment
   (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
