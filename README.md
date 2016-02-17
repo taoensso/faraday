@@ -59,7 +59,7 @@ And setup your namespace imports:
 
 #### Option 1 - Run a local DDB instance
 
-First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [instruction from AWS] (don't worry, you basically just download a JAR file and run it) or use `brew install dynamodb-local` if you're on OSX and is using Homebrew.
+First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [install instructions] from AWS (don't worry, you basically just download a JAR file and run it) or use `brew install dynamodb-local` if you're on OSX and is using Homebrew.
 
 Once DynamoDB Local is up and running in your terminal, you should see something like:
 
@@ -179,7 +179,7 @@ Copyright &copy; 2013-2016 [Peter Taoussanis].
 [Nippy]: https://github.com/ptaoussanis/nippy
 [@mixradio/faraday-atom]: https://github.com/mixradio/faraday-atom
 [@ricardojmendez/ddb-tutorial]: http://numergent.com/2016-01/Clojure-and-DynamoDB-with-Faraday-part-1.html
-[instruction from AWS]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tools.DynamoDBLocal.html
+[install instructions]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tools.DynamoDBLocal.html
 [AWS DynamoDB account]: http://aws.amazon.com/dynamodb/
 [provisions capacity]: http://aws.amazon.com/dynamodb/pricing/
 [primary keys]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey
