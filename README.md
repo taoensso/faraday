@@ -4,8 +4,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/faraday "1.8.0"]       ; Stable
-[com.taoensso/faraday "1.9.0-beta1"] ; Dev, see CHANGELOG
+[com.taoensso/faraday "1.9.0"] ; BREAKING, see CHANGELOG for details
 ```
 
 > Please consider helping to [support my continued open-source Clojure/Script work]? 
@@ -52,7 +51,7 @@ Your link here?          | **PR's welcome!**
 Add the necessary dependency to your project:
 
 ```clojure
-[com.taoensso/faraday "1.8.0"]
+[com.taoensso/faraday "1.9.0"]
 ```
 
 And setup your namespace imports:
