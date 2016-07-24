@@ -661,13 +661,7 @@
   )
 
 
-(let
-  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
-  ;; is reference-based and not structural. `expect` falls back to Java equality,
-  ;; and so will fail when presented with different Java objects that don't themselves
-  ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
-  [data ;; nippy/stress-data-comparable ; Awaiting Nippy v2.6
-      (dissoc nippy/stress-data :bytes :throwable :exception :ex-info)]
+(let [data nippy/stress-data-comparable]
   (expect ; Serialization
     {:id 10 :nippy-data data}
     (do (far/put-item *client-opts* ttable {:id 10 :nippy-data (far/freeze data)})

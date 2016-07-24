@@ -92,8 +92,8 @@
             java.nio.ByteBuffer))
 
 (if (vector? taoensso.encore/encore-version)
-  (enc/assert-min-encore-version [2 29 1])
-  (enc/assert-min-encore-version  2.29))
+  (enc/assert-min-encore-version [2 67 2])
+  (enc/assert-min-encore-version  2.67))
 
 ;;;; Connections
 
@@ -243,7 +243,7 @@
   ^AttributeValue [x]
   (cond
    (enc/stringy? x)
-   (let [^String s (enc/fq-name x)]
+   (let [^String s (enc/as-qname x)]
      (if (.isEmpty s)
        (throw (Exception. "Invalid DynamoDB value: \"\""))
        (doto (AttributeValue.) (.setS s))))
@@ -254,15 +254,19 @@
    (freeze?  x)          (doto (AttributeValue.) (.setB (nt-freeze x)))
 
    (vector?  x) (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))
-   (map?     x) (doto (AttributeValue.) (.setM (enc/map-kvs
-                                                 (fn [k _] (name k))
-                                                 (fn [_ v] (clj-val->db-val v))
-                                                 x)))
+   (map?     x)
+   (doto (AttributeValue.)
+     (.setM
+       (reduce-kv
+         (fn [acc k v] (assoc acc (name k) (clj-val->db-val v)))
+         {}
+         x)))
+
    (set? x)
    (if (empty? x)
      (throw (Exception. "Invalid DynamoDB value: empty set"))
      (cond
-       (enc/revery? enc/stringy? x) (doto (AttributeValue.) (.setSS (mapv enc/fq-name x)))
+       (enc/revery? enc/stringy? x) (doto (AttributeValue.) (.setSS (mapv enc/as-qname x)))
        (enc/revery? ddb-num?     x) (doto (AttributeValue.) (.setNS (mapv str  x)))
        (enc/revery? freeze?      x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
        :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
