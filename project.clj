@@ -26,7 +26,7 @@
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
    :1.8  {:dependencies [[org.clojure/clojure "1.8.0"]]}
    :1.9  {:dependencies [[org.clojure/clojure "1.9.0-alpha10"]]}
-   :test {:dependencies [[expectations           "2.1.9"]
+   :test {:dependencies [[expectations           "2.1.3"]
                          [org.clojure/test.check "0.9.0"]]
           :plugins [[lein-expectations "0.0.8"]
                     [lein-autoexpect   "1.9.0"]]}
