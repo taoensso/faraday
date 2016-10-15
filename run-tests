@@ -1,7 +1,11 @@
 #!/bin/bash
 
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 [<env-file>|local] [--auto]"
+  echo "Usage: $0 [<env-file>|local] [--auto|--no-kill]"
+  echo ""
+  echo "Use --no-kill if the tests will be run in a CI environment like travis,"
+  echo "since it seems it's trapping the exit signal from the first round of"
+  echo "tests and killing the local DynamoDB instance."
   exit 1
 elif [ "$1" != "local" ] && [ ! -f "$1" ]; then
   echo "ABORTING: specified env-file not found: $1"
@@ -23,7 +27,13 @@ else
 
     echo "Starting local Dynamodb"
     java -Djava.library.path=./local-dynamo/DynamoDBLocal_lib -jar ./local-dynamo/DynamoDBLocal.jar -port 6798 -inMemory &
-    trap "pkill -f DynamoDBLocal" EXIT
+
+    if [ "$2" != "--no-kill" ]; then
+      echo "Will kill DynamoDBLocal on exit"
+      trap "pkill -f DynamoDBLocal" EXIT
+    else
+      echo "Will NOT kill DynamoDBLocal on exit"
+    fi
 
     export AWS_DYNAMODB_ACCESS_KEY="test"
     export AWS_DYNAMODB_SECRET_KEY="test"

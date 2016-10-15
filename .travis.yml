@@ -3,4 +3,4 @@ language: clojure
 before_install:
 - chmod a+x run-tests
 
-script: ./run-tests local
+script: ./run-tests local --no-kill
