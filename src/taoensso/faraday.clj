@@ -210,7 +210,8 @@
     (BigDecimal. s)
     (bigint (BigInteger. s))))
 
-(defn- db-val->clj-val "Returns the Clojure value of given AttributeValue object."
+(defn- deserialize
+  "Returns the Clojure value of given AttributeValue object."
   [^AttributeValue x]
   (let [[x type]
         (or
@@ -235,108 +236,67 @@
       :bs   (into #{} (mapv nt-thaw          x))
       :b    (nt-thaw  x)
 
-      :l (mapv db-val->clj-val x)
-      :m (zipmap (mapv keyword         (.keySet ^java.util.HashMap x))
-                 (mapv db-val->clj-val (.values ^java.util.HashMap x))))))
+      :l (mapv deserialize x)
+      :m (zipmap (mapv keyword     (.keySet ^java.util.HashMap x))
+                 (mapv deserialize (.values ^java.util.HashMap x))))))
 
+(defprotocol ISerializable
+  "Extensible protocol for mapping Clojure vals to AttributeValue objects."
+  (serialize ^AttributeValue [this]))
 
-(defprotocol CljVal->DbVal
-  (serialise [this]))
+(extend-protocol ISerializable
+  AttributeValue (serialize [x] x)
+  nil        (serialize [_] (doto (AttributeValue.) (.setNULL true)))
+  Boolean    (serialize [x] (doto (AttributeValue.) (.setBOOL x)))
+  Long       (serialize [x] (doto (AttributeValue.) (.setN (str x))))
+  Double     (serialize [x] (doto (AttributeValue.) (.setN (str x))))
+  Integer    (serialize [x] (doto (AttributeValue.) (.setN (str x))))
+  Float      (serialize [x] (doto (AttributeValue.) (.setN (str x))))
+  BigInt     (serialize [x] (doto (AttributeValue.) (.setN (str (assert-precision x)))))
+  BigDecimal (serialize [x] (doto (AttributeValue.) (.setN (str (assert-precision x)))))
+  BigInteger (serialize [x] (doto (AttributeValue.) (.setN (str (assert-precision x)))))
 
+  taoensso.nippy.tools.WrappedForFreezing
+  (serialize [x] (doto (AttributeValue.) (.setB (nt-freeze x))))
 
-(defn- clj-val->db-val "Returns an AttributeValue object for given Clojure value."
-  ^AttributeValue [x]
-  (serialise x)
-  ;;:else (throw (Exception. (str "Unknown DynamoDB value type: " (type x) "."
-  ;;" See `freeze` for serialization.")))
-  )
-
-(extend-protocol CljVal->DbVal String
-  (serialise [s]
+  clojure.lang.Keyword (serialize [kw] (serialize (enc/as-qname kw)))
+  String
+  (serialize [s]
     (if (.isEmpty s)
-      (throw (Exception. "Invalid DynamoDB value: \"\""))
-      (doto (AttributeValue.) (.setS s)))))
+      (throw (Exception. "Invalid DynamoDB value: \"\" (empty string)"))
+      (doto (AttributeValue.) (.setS s))))
 
-(extend-protocol CljVal->DbVal clojure.lang.Keyword
-  (serialise [k]
-    (let [^String s (enc/as-qname k)]
-      (if (.isEmpty s)
-        (throw (Exception. "Invalid DynamoDB value: \"\""))
-        (doto (AttributeValue.) (.setS s))))))
+  clojure.lang.IPersistentVector
+  (serialize [v] (doto (AttributeValue.) (.setL (mapv serialize v))))
 
-(extend-protocol CljVal->DbVal nil
-  (serialise [_]
-    (doto (AttributeValue.) (.setNULL true))))
+  java.util.Map
+  (serialize [m]
+    (doto (AttributeValue.)
+      (.setM
+        (persistent!
+          (reduce-kv
+            (fn [acc k v] (assoc! acc (enc/as-qname k) (serialize v)))
+            (transient {})
+            m)))))
 
-(extend-protocol CljVal->DbVal Boolean
-  (serialise [x]
-    (doto (AttributeValue.) (.setBOOL x))))
-
-(extend-protocol CljVal->DbVal Long
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str x)))))
-
-(extend-protocol CljVal->DbVal Double
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str x)))))
-
-(extend-protocol CljVal->DbVal Integer
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str x)))))
-
-(extend-protocol CljVal->DbVal Float
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str x)))))
-
-(extend-protocol CljVal->DbVal BigInt
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
-
-(extend-protocol CljVal->DbVal BigDecimal
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
-
-(extend-protocol CljVal->DbVal BigInteger
-  (serialise [x]
-    (doto (AttributeValue.) (.setN (str (assert-precision x))))))
-
-(extend-protocol CljVal->DbVal taoensso.nippy.tools.WrappedForFreezing
-  (serialise [x]
-    (doto (AttributeValue.) (.setB (nt-freeze x)))))
-
-(extend-protocol CljVal->DbVal (class (byte-array 0))
-  (serialise [x]
-    (doto (AttributeValue.) (.setB (nt-freeze x)))))
-
-(extend-protocol CljVal->DbVal clojure.lang.IPersistentVector
-  (serialise [x]
-    (doto (AttributeValue.) (.setL (mapv clj-val->db-val x)))))
-
-(extend-protocol CljVal->DbVal java.util.Map
-  (serialise [x]
-    (doto (AttributeValue.) (.setM (reduce-kv
-                                      (fn [acc k v] (assoc acc (name k) (clj-val->db-val v)))
-                                      {}
-                                      x)))))
-
-(extend-protocol CljVal->DbVal java.util.Set
-  (serialise [x]
-    (if (empty? x)
+  java.util.Set
+  (serialize [s]
+    (if (empty? s)
       (throw (Exception. "Invalid DynamoDB value: empty set"))
       (cond
-        (enc/revery? enc/stringy? x) (doto (AttributeValue.) (.setSS (mapv enc/as-qname x)))
-        (enc/revery? ddb-num?     x) (doto (AttributeValue.) (.setNS (mapv str x)))
-        (enc/revery? freeze?      x) (doto (AttributeValue.) (.setBS (mapv nt-freeze x)))
-        :else (throw (Exception. (str "Invalid DynamoDB value: set of invalid type"
-                                   " or more than one type")))))))
+        (enc/revery? enc/stringy? s) (doto (AttributeValue.) (.setSS (mapv enc/as-qname s)))
+        (enc/revery? ddb-num?     s) (doto (AttributeValue.) (.setNS (mapv str s)))
+        (enc/revery? freeze?      s) (doto (AttributeValue.) (.setBS (mapv nt-freeze s)))
+        :else (throw (Exception. "Invalid DynamoDB value: set of invalid type or more than one type"))))))
 
-(extend-protocol CljVal->DbVal AttributeValue
-  (serialise [x]
-    x))
+(extend-type (Class/forName "[B")
+  ISerializable
+  (serialize [ba] (doto (AttributeValue.) (.setB (nt-freeze ba)))))
 
 (comment
-  (mapv clj-val->db-val [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
-                         #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
+  (mapv serialize
+    [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
+     #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
 (defn- enum-op ^String [operator]
   (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
@@ -344,8 +304,8 @@
 
 ;;;; Object coercions
 
-(def db-item->clj-item (partial utils/keyword-map db-val->clj-val))
-(def clj-item->db-item (partial utils/name-map    clj-val->db-val))
+(def db-item->clj-item (partial utils/keyword-map deserialize))
+(def clj-item->db-item (partial utils/name-map      serialize))
 
 (defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
 (defn- batch-cc-units [ccs]
@@ -375,7 +335,7 @@
   java.util.ArrayList (as-map [a] (mapv as-map a))
   java.util.HashMap   (as-map [m] (utils/keyword-map as-map m))
 
-  AttributeValue      (as-map [v] (db-val->clj-val v))
+  AttributeValue      (as-map [v] (deserialize v))
   AttributeDefinition (as-map [d] {:name (keyword       (.getAttributeName d))
                                    :type (utils/un-enum (.getAttributeType d))})
   KeySchemaElement    (as-map [e] {:name (keyword (.getAttributeName e))
@@ -826,11 +786,11 @@
         (if (vector? %)
           (doto (ExpectedAttributeValue.)
             (.withComparisonOperator (enum-op (first %)))
-            (.setAttributeValueList (mapv clj-val->db-val (rest %))))
-          (ExpectedAttributeValue. (clj-val->db-val %))))
+            (.setAttributeValueList (mapv serialize (rest %))))
+          (ExpectedAttributeValue. (serialize %))))
      expected-map)))
 
-(defn- clj->db-expr-vals-map [m] (enc/map-vals clj-val->db-val m))
+(defn- clj->db-expr-vals-map [m] (enc/map-vals serialize m))
 
 (def ^:private deprecation-warning-expected_
   (delay
@@ -886,7 +846,7 @@
      (fn [[action val]]
        (AttributeValueUpdate.
          (when (or (not= action :delete) (set? val))
-           (clj-val->db-val val))
+           (serialize val))
          (utils/enum action)))
       update-map)))
 
@@ -1137,7 +1097,7 @@
        (let [vals (if (coll?* val-or-vals) val-or-vals [val-or-vals])]
          (doto (Condition.)
            (.setComparisonOperator (enum-op operator))
-           (.setAttributeValueList (mapv clj-val->db-val vals)))))
+           (.setAttributeValueList (mapv serialize vals)))))
      conditions)))
 
 (defn- query-request "Implementation detail."
