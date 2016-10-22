@@ -359,9 +359,9 @@
    (update-t
     {:update-map {:boolT [:put nil]}}))
 
-  (extend-protocol far/CljVal->DbVal java.util.Date
-    (serialise [x]
-      (far/serialise (pr-str x))))
+  (extend-protocol far/ISerializable java.util.Date
+    (serialize [x]
+      (far/serialize (pr-str x))))
 
   (expect
     (assoc t :date "#inst \"1970-01-01T00:00:00.000-00:00\"")
