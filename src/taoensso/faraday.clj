@@ -34,6 +34,8 @@
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
+             DescribeStreamRequest
+             DescribeStreamResult
              DeleteTableRequest
              DeleteTableResult
              DescribeTableRequest
@@ -41,10 +43,15 @@
              ExpectedAttributeValue
              GetItemRequest
              GetItemResult
+             GetRecordsRequest
+             GetRecordsResult
+             GetShardIteratorRequest
              ItemCollectionMetrics
              KeysAndAttributes
              KeySchemaElement
              KeyType
+             ListStreamsRequest
+             ListStreamsResult
              ListTablesRequest
              ListTablesResult
              LocalSecondaryIndex
@@ -61,10 +68,18 @@
              PutRequest
              QueryRequest
              QueryResult
+             Record
              ReturnValue
              ScanRequest
              ScanResult
              Select
+             SequenceNumberRange
+             Shard
+             Stream
+             StreamDescription
+             StreamRecord
+             StreamSpecification
+             StreamViewType
              TableDescription
              UpdateItemRequest
              UpdateItemResult
@@ -87,8 +102,11 @@
             com.amazonaws.auth.AWSCredentialsProvider
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-            com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
-            com.amazonaws.services.dynamodbv2.AmazonDynamoDB
+            [com.amazonaws.services.dynamodbv2
+             AmazonDynamoDB
+             AmazonDynamoDBClient
+             AmazonDynamoDBStreams
+             AmazonDynamoDBStreamsClient]
             java.nio.ByteBuffer))
 
 (if (vector? taoensso.encore/encore-version)
@@ -97,6 +115,40 @@
 
 ;;;; Connections
 
+(defn- client-params
+  [{:as   client-opts
+    :keys [provider creds access-key secret-key proxy-host proxy-port
+           proxy-username proxy-password
+           conn-timeout max-conns max-error-retry socket-timeout keep-alive?]}]
+
+  (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
+
+        _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
+        _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
+
+        ^AWSCredentials aws-creds
+        (when-not provider
+          (cond
+            creds      creds ; Given explicit AWSCredentials
+            access-key (BasicAWSCredentials. access-key secret-key)))
+
+        ^AWSCredentialsProvider provider
+        (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
+
+        client-config
+        (doto-cond [g (ClientConfiguration.)]
+          proxy-host      (.setProxyHost         g)
+          proxy-port      (.setProxyPort         g)
+          proxy-username  (.setProxyUsername     g)
+          proxy-password  (.setProxyPassword     g)
+          conn-timeout    (.setConnectionTimeout g)
+          max-conns       (.setMaxConnections    g)
+          max-error-retry (.setMaxErrorRetry     g)
+          socket-timeout  (.setSocketTimeout     g)
+          keep-alive?     (.setUseTcpKeepAlive   g))]
+
+    [aws-creds provider client-config]))
+
 (def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied client opts:
     (db-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
@@ -104,38 +156,36 @@
     (db-client* {:creds my-AWSCredentials-instance}),
     etc."
   (memoize
-   (fn [{:keys [provider creds access-key secret-key endpoint proxy-host proxy-port
-               proxy-username proxy-password
-               conn-timeout max-conns max-error-retry socket-timeout keep-alive?]
-        :as client-opts}]
-     (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
-       (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
-             _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
-             _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
-             ^AWSCredentials aws-creds
-             (when-not provider
-               (cond
-                 creds      creds ; Given explicit AWSCredentials
-                 access-key (BasicAWSCredentials. access-key secret-key)))
-             ^AWSCredentialsProvider provider
-             (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
-             client-config
-             (doto-cond [g (ClientConfiguration.)]
-               proxy-host      (.setProxyHost         g)
-               proxy-port      (.setProxyPort         g)
-               proxy-username  (.setProxyUsername     g)
-               proxy-password  (.setProxyPassword     g)
-               conn-timeout    (.setConnectionTimeout g)
-               max-conns       (.setMaxConnections    g)
-               max-error-retry (.setMaxErrorRetry     g)
-               socket-timeout  (.setSocketTimeout     g)
-               keep-alive?     (.setUseTcpKeepAlive   g))]
+   (fn [{:keys [endpoint] :as client-opts}]
+     (if (empty? client-opts)
+       (AmazonDynamoDBClient.) ; Default client
+       (let [[^AWSCredentials aws-creds
+              ^AWSCredentialsProvider provider
+              ^ClientConfiguration client-config] (client-params client-opts)]
          (doto-cond [g (if provider
-                         (AmazonDynamoDBClient. provider  client-config)
+                         (AmazonDynamoDBClient. provider client-config)
                          (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
+(def ^:private db-streams-client*
+  "Returns a new AmazonDynamoDBStreamsClient instance for the given client opts:
+    (db-streams-client* {:creds my-AWSCredentials-instance}),
+    (db-streams-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
+                         :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}), etc."
+  (memoize
+    (fn [{:keys [endpoint] :as client-opts}]
+      (if (empty? client-opts)
+        (AmazonDynamoDBStreamsClient.) ; Default client
+        (let [[^AWSCredentials aws-creds
+               ^AWSCredentialsProvider provider
+               ^ClientConfiguration client-config] (client-params client-opts)]
+          (doto-cond [g (if provider
+                          (AmazonDynamoDBStreamsClient. provider client-config)
+                          (AmazonDynamoDBStreamsClient. aws-creds client-config))]
+            endpoint (.setEndpoint g)))))))
+
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
+(defn- db-streams-client ^AmazonDynamoDBStreams [client-opts] (db-streams-client* client-opts))
 
 ;;;; Exceptions
 
@@ -369,15 +419,18 @@
 
   TableDescription
   (as-map [d]
-    {:name          (keyword (.getTableName d))
-     :creation-date (.getCreationDateTime d)
-     :item-count    (.getItemCount d)
-     :size          (.getTableSizeBytes d)
-     :throughput    (as-map (.getProvisionedThroughput  d))
-     :indexes       (as-map (.getLocalSecondaryIndexes  d)) ; DEPRECATED
-     :lsindexes     (as-map (.getLocalSecondaryIndexes  d))
-     :gsindexes     (as-map (.getGlobalSecondaryIndexes d))
-     :status        (utils/un-enum (.getTableStatus d))
+    {:name                (keyword (.getTableName d))
+     :creation-date       (.getCreationDateTime d)
+     :item-count          (.getItemCount d)
+     :size                (.getTableSizeBytes d)
+     :throughput          (as-map (.getProvisionedThroughput d))
+     :indexes             (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
+     :lsindexes           (as-map (.getLocalSecondaryIndexes d))
+     :gsindexes           (as-map (.getGlobalSecondaryIndexes d))
+     :stream-spec         (as-map (.getStreamSpecification d))
+     :latest-stream-label (.getLatestStreamLabel d)
+     :latest-stream-arn   (.getLatestStreamArn d)
+     :status              (utils/un-enum (.getTableStatus d))
      :prim-keys
      (let [schema (as-map (.getKeySchema d))
            defs   (as-map (.getAttributeDefinitions d))]
@@ -393,30 +446,98 @@
   DeleteTableResult   (as-map [r] (as-map (.getTableDescription r)))
 
   Projection
-  (as-map [p] {:projection-type    (.getProjectionType p)
-               :non-key-attributes (.getNonKeyAttributes p)})
+  (as-map [p]
+    {:projection-type    (.getProjectionType p)
+     :non-key-attributes (.getNonKeyAttributes p)})
 
   LocalSecondaryIndexDescription
-  (as-map [d] {:name       (keyword (.getIndexName d))
-               :size       (.getIndexSizeBytes d)
-               :item-count (.getItemCount d)
-               :key-schema (as-map (.getKeySchema d))
-               :projection (as-map (.getProjection d))})
+  (as-map [d]
+    {:name       (keyword (.getIndexName d))
+     :size       (.getIndexSizeBytes d)
+     :item-count (.getItemCount d)
+     :key-schema (as-map (.getKeySchema d))
+     :projection (as-map (.getProjection d))})
 
   GlobalSecondaryIndexDescription
-  (as-map [d] {:name       (keyword (.getIndexName d))
-               :size       (.getIndexSizeBytes d)
-               :item-count (.getItemCount d)
-               :key-schema (as-map (.getKeySchema d))
-               :projection (as-map (.getProjection d))
-               :throughput (as-map (.getProvisionedThroughput d))})
+  (as-map [d]
+    {:name       (keyword (.getIndexName d))
+     :size       (.getIndexSizeBytes d)
+     :item-count (.getItemCount d)
+     :key-schema (as-map (.getKeySchema d))
+     :projection (as-map (.getProjection d))
+     :throughput (as-map (.getProvisionedThroughput d))})
 
   ProvisionedThroughputDescription
-  (as-map [d] {:read                (.getReadCapacityUnits d)
-               :write               (.getWriteCapacityUnits d)
-               :last-decrease       (.getLastDecreaseDateTime d)
-               :last-increase       (.getLastIncreaseDateTime d)
-               :num-decreases-today (.getNumberOfDecreasesToday d)}))
+  (as-map [d]
+    {:read                (.getReadCapacityUnits d)
+     :write               (.getWriteCapacityUnits d)
+     :last-decrease       (.getLastDecreaseDateTime d)
+     :last-increase       (.getLastIncreaseDateTime d)
+     :num-decreases-today (.getNumberOfDecreasesToday d)})
+
+  StreamSpecification
+  (as-map [s]
+    {:enabled?  (.getStreamEnabled s)
+     :view-type (utils/un-enum (.getStreamViewType s))})
+
+  DescribeStreamResult
+  (as-map [r] (as-map (.getStreamDescription r)))
+
+  StreamDescription
+  (as-map [d]
+    {:stream-arn (.getStreamArn d)
+     :stream-label (.getStreamLabel d)
+     :stream-status (utils/un-enum (.getStreamStatus d))
+     :stream-view-type (utils/un-enum (.getStreamViewType d))
+     :creation-request-date-time (.getCreationRequestDateTime d)
+     :table-name (.getTableName d)
+     :key-schema (as-map (.getKeySchema d))
+     :shards (as-map (.getShards d))
+     :last-evaluated-shard-id (.getLastEvaluatedShardId d)})
+
+  Shard
+  (as-map [d]
+    {:shard-id              (.getShardId d)
+     :parent-shard-id       (.getParentShardId d)
+     :sequence-number-range (as-map (.getSequenceNumberRange d))})
+
+  SequenceNumberRange
+  (as-map [d]
+    {:starting-sequence-number (.getStartingSequenceNumber d)
+     :ending-sequence-number   (.getEndingSequenceNumber d)})
+
+  GetRecordsResult
+  (as-map [r]
+    {:next-shard-iterator (.getNextShardIterator r)
+     :records             (as-map (.getRecords r))})
+
+  Record
+  (as-map [r]
+    {:event-id      (.getEventID r)
+     :event-name    (utils/un-enum (.getEventName r))
+     :event-version (.getEventVersion r)
+     :event-source  (.getEventSource r)
+     :aws-region    (.getAwsRegion r)
+     :stream-record (as-map (.getDynamodb r))})
+
+  StreamRecord
+  (as-map [r]
+    {:keys      (db-item->clj-item (.getKeys r))
+     :old-image (db-item->clj-item (.getOldImage r))
+     :new-image (db-item->clj-item (.getNewImage r))
+     :sequence-number (.getSequenceNumber r)
+     :size            (.getSizeBytes r)
+     :view-type (utils/un-enum (.getStreamViewType r))})
+
+  ListStreamsResult
+  (as-map [r]
+    {:last-stream-arn (.getLastEvaluatedStreamArn r)
+     :streams (as-map (.getStreams r))})
+
+  Stream
+  (as-map [s]
+    {:stream-arn (.getStreamArn s)
+     :table-name (.getTableName s)}))
 
 ;;;; Tables
 
@@ -577,9 +698,15 @@
           (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
+(defn- stream-specification "Implementation detail."
+  [{:keys [enabled? view-type]}]
+  (enc/doto-cond [_ (StreamSpecification.)]
+    (not (nil? enabled?)) (.setStreamEnabled enabled?)
+    view-type (.setStreamViewType (StreamViewType/fromValue (utils/enum view-type)))))
+
 (defn- create-table-request "Implementation detail."
   [table-name hash-keydef
-   & [{:keys [range-keydef throughput lsindexes gsindexes]
+   & [{:keys [range-keydef throughput lsindexes gsindexes stream-spec]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts))]
     (doto-cond [_ (CreateTableRequest.)]
@@ -591,19 +718,23 @@
       lsindexes (.setLocalSecondaryIndexes
                  (local-2nd-indexes hash-keydef lsindexes))
       gsindexes (.setGlobalSecondaryIndexes
-                 (global-2nd-indexes gsindexes)))))
+                 (global-2nd-indexes gsindexes))
+      stream-spec (.setStreamSpecification
+                   (stream-specification stream-spec)))))
 
 (defn create-table
   "Creates a table with options:
     hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
     :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
     :throughput   - {:read <units> :write <units>}.
+    :block?       - Block for table to actually be active?
     :lsindexes    - [{:name _ :range-keydef _
-                      :projection #{:all :keys-only [<attr> ...]}}].
+                      :projection <#{:all :keys-only [<attr> ...]}>}].
     :gsindexes    - [{:name _ :hash-keydef _ :range-keydef _
-                      :projection #{:all :keys-only [<attr> ...]}
+                      :projection <#{:all :keys-only [<attr> ...]}>
                       :throughput _}].
-    :block?       - Block for table to actually be active?"
+    :stream-spec  - {:enabled? <default true if spec is present>
+                     :view-type <#{:keys-only :new-image :old-image :new-and-old-images}>}"
   [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :as opts}]]
@@ -671,13 +802,14 @@
     nil))
 
 (defn- update-table-request "Implementation detail."
-  [table {:keys [throughput gsindexes]}]
+  [table {:keys [throughput gsindexes stream-spec]}]
   (let [attr-defs (keydefs nil nil nil [gsindexes])]
     (doto-cond
       [_ (UpdateTableRequest.)]
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates gsindexes)])
+      stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
 (defn- validate-update-opts [table-desc {:keys [throughput] :as params}]
@@ -704,15 +836,18 @@
   description.
 
   Update opts:
-    :throughput - {:read <units> :write <units>}
-    :gsindexes  - {:operation    - ; e/o #{:create :update :delete}
-                   :name         _ ; Required
-                   :throughput   _ ; Only for :update / :create
-                   :hash-keydef  _ ; Only for :create
-                   :range-keydef _ ;
-                   :projection   _ ; e/o #{:all :keys-only [<attr> ...]}}
+    :throughput  - {:read <units> :write <units>}
+    :gsindexes   - {:operation    ; e/o #{:create :update :delete}
+                    :name         ; Required
+                    :throughput   ; Only for :update / :create
+                    :hash-keydef  ; Only for :create
+                    :range-keydef ;
+                    :projection   ; e/o #{:all :keys-only [<attr> ...]}}
+    :stream-spec - {:enabled?     ;
+                    :view-type    ; e/o #{:keys-only :new-image :old-image :old-and-new-images}}
 
-  Only one global secondary index operation can take place at a time."
+  Only one global secondary index operation can take place at a time.
+  In order to change a stream view-type, you need to disable and re-enable the stream."
   [client-opts table update-opts & [{:keys [span-reqs]
                                      :or   {span-reqs {:max 5}}}]]
   (let [table-desc  (describe-table client-opts table)
@@ -1263,6 +1398,81 @@
     (->> (mapv (fn [seg] (future (scan client-opts table (assoc opts :segment seg))))
                (range total-segments))
          (mapv deref))))
+
+;;;; DB Streams API
+;; Ref. http://docs.aws.amazon.com/dynamodbstreams/latest/APIReference/Welcome.html
+
+(defn- list-streams-request
+  [{:keys [table-name limit start-arn]}]
+  (enc/doto-cond [_ (ListStreamsRequest.)]
+    table-name (.setTableName (name table-name))
+    limit (.setLimit (int limit))
+    start-arn (.setExclusiveStartStreamArn start-arn)))
+
+(defn list-streams
+  "Returns a lazy sequence of stream descriptions. Each item is a map of:
+   {:stream-arn - Stream identifier string
+    :table-name - The table name for the stream}
+
+    Options:
+     :start-arn  - The stream identifier to start listing from (exclusive)
+     :table-name - List only the streams for <table-name>
+     :limit      - Retrieve streams in batches of <limit> at a time"
+  [client-opts & [{:keys [start-arn table-name limit] :as opts}]]
+  (let [client (db-streams-client client-opts)
+        step (fn step [stream-arn]
+               (lazy-seq
+                 (let [chunk (as-map
+                               (.listStreams client
+                                             (list-streams-request (assoc opts :start-arn stream-arn))))]
+                   (if (:last-stream-arn chunk)
+                     (concat (:streams chunk) (step (:last-stream-arn chunk)))
+                     (seq (:streams chunk))))))]
+    (step start-arn)))
+
+(defn- describe-stream-request
+  ^DescribeStreamRequest [stream-arn {:keys [limit start-shard-id]}]
+  (enc/doto-cond [_ (DescribeStreamRequest.)]
+    stream-arn (.setStreamArn stream-arn)
+    limit (.setLimit (int limit))
+    start-shard-id (.setExclusiveStartShardId start-shard-id)))
+
+(defn describe-stream
+  "Returns a map describing a stream, or nil if the stream doesn't exist."
+  [client-opts stream-arn & [{:keys [limit start-shard-id] :as opts}]]
+  (try (as-map (.describeStream (db-streams-client client-opts)
+                                (describe-stream-request stream-arn opts)))
+       (catch ResourceNotFoundException _ nil)))
+
+(defn- get-shard-iterator-request
+  [stream-arn shard-id iterator-type {:keys [sequence-number]}]
+  (enc/doto-cond [_ (GetShardIteratorRequest.)]
+    :always (.setStreamArn stream-arn)
+    :always (.setShardId shard-id)
+    :always (.setShardIteratorType (utils/enum iterator-type))
+    sequence-number (.setSequenceNumber sequence-number)))
+
+(defn shard-iterator
+  "Returns the iterator string that can be used in the get-stream-records call
+   or nil when the stream or shard doesn't exist."
+  [client-opts stream-arn shard-id iterator-type
+   & [{:keys [sequence-number] :as opts}]]
+  (try
+    (.. (db-streams-client client-opts)
+        (getShardIterator (get-shard-iterator-request stream-arn shard-id iterator-type opts))
+        (getShardIterator))
+    (catch ResourceNotFoundException _ nil)))
+
+(defn- get-records-request
+  [iter-str {:keys [limit]}]
+  (enc/doto-cond [_ (GetRecordsRequest.)]
+    :always (.setShardIterator iter-str)
+    limit (.setLimit (int limit))))
+
+(defn get-stream-records
+  [client-opts shard-iterator & [{:keys [limit] :as opts}]]
+  (as-map (.getRecords (db-streams-client client-opts)
+                       (get-records-request shard-iterator opts))))
 
 ;;;; Misc utils, etc.
 

@@ -15,62 +15,67 @@
     BatchGetItemResult
     BatchWriteItemRequest
     BatchWriteItemResult
-    Condition
-    ConsumedCapacity
     ComparisonOperator
+    Condition
+    ConditionalCheckFailedException
+    ConsumedCapacity
     CreateGlobalSecondaryIndexAction
     CreateTableRequest
     CreateTableResult
+    DeleteGlobalSecondaryIndexAction
     DeleteItemRequest
     DeleteItemResult
     DeleteRequest
     DeleteTableRequest
     DeleteTableResult
+    DescribeStreamRequest
     DescribeTableRequest
     DescribeTableResult
     ExpectedAttributeValue
     GetItemRequest
     GetItemResult
+    GetRecordsRequest
+    GetShardIteratorRequest
+    GlobalSecondaryIndex
+    GlobalSecondaryIndexDescription
+    GlobalSecondaryIndexUpdate
+    InternalServerErrorException
     ItemCollectionMetrics
-    KeysAndAttributes
+    ItemCollectionSizeLimitExceededException
     KeySchemaElement
     KeyType
+    KeysAndAttributes
+    LimitExceededException
+    ListStreamsRequest
     ListTablesRequest
     ListTablesResult
     LocalSecondaryIndex
     LocalSecondaryIndexDescription
-    GlobalSecondaryIndex
-    GlobalSecondaryIndexDescription
-    GlobalSecondaryIndexUpdate
     Projection
     ProjectionType
     ProvisionedThroughput
     ProvisionedThroughputDescription
+    ProvisionedThroughputExceededException
     PutItemRequest
     PutItemResult
     PutRequest
     QueryRequest
     QueryResult
+    ResourceInUseException
+    ResourceNotFoundException
     ReturnValue
     ScanRequest
     ScanResult
     Select
+    ShardIteratorType
+    StreamViewType
     TableDescription
+    UpdateGlobalSecondaryIndexAction
     UpdateItemRequest
     UpdateItemResult
     UpdateTableRequest
     UpdateTableResult
-    WriteRequest
-
-    ConditionalCheckFailedException
-    DeleteGlobalSecondaryIndexAction
-    InternalServerErrorException
-    ItemCollectionSizeLimitExceededException
-    LimitExceededException
-    ProvisionedThroughputExceededException
-    ResourceInUseException
-    ResourceNotFoundException
-    UpdateGlobalSecondaryIndexAction]))
+    WriteRequest]))
 
 (comment
   (remove-ns       'taoensso.faraday.tests.requests)
@@ -78,20 +83,24 @@
 
 ;;;; Private var aliases
 
-(def describe-table-request   #'taoensso.faraday/describe-table-request)
-(def create-table-request     #'taoensso.faraday/create-table-request)
-(def update-table-request     #'taoensso.faraday/update-table-request)
-(def get-item-request         #'taoensso.faraday/get-item-request)
-(def put-item-request         #'taoensso.faraday/put-item-request)
-(def update-item-request      #'taoensso.faraday/update-item-request)
-(def delete-item-request      #'taoensso.faraday/delete-item-request)
-(def batch-get-item-request   #'taoensso.faraday/batch-get-item-request)
-(def batch-request-items      #'taoensso.faraday/batch-request-items)
-(def batch-write-item-request #'taoensso.faraday/batch-write-item-request)
-(def attr-multi-vs            #'taoensso.faraday/attr-multi-vs)
-(def query-request            #'taoensso.faraday/query-request)
-(def write-request            #'taoensso.faraday/write-request)
-(def scan-request             #'taoensso.faraday/scan-request)
+(def describe-table-request     #'taoensso.faraday/describe-table-request)
+(def create-table-request       #'taoensso.faraday/create-table-request)
+(def update-table-request       #'taoensso.faraday/update-table-request)
+(def get-item-request           #'taoensso.faraday/get-item-request)
+(def put-item-request           #'taoensso.faraday/put-item-request)
+(def update-item-request        #'taoensso.faraday/update-item-request)
+(def delete-item-request        #'taoensso.faraday/delete-item-request)
+(def batch-get-item-request     #'taoensso.faraday/batch-get-item-request)
+(def batch-request-items        #'taoensso.faraday/batch-request-items)
+(def batch-write-item-request   #'taoensso.faraday/batch-write-item-request)
+(def attr-multi-vs              #'taoensso.faraday/attr-multi-vs)
+(def query-request              #'taoensso.faraday/query-request)
+(def write-request              #'taoensso.faraday/write-request)
+(def scan-request               #'taoensso.faraday/scan-request)
+(def list-stream-request        #'taoensso.faraday/list-streams-request)
+(def describe-stream-request    #'taoensso.faraday/describe-stream-request)
+(def get-shard-iterator-request #'taoensso.faraday/get-shard-iterator-request)
+(def get-records-request        #'taoensso.faraday/get-records-request)
 
 ;;;;
 
@@ -111,7 +120,9 @@
                      :hash-keydef [:gs-hash-keydef :n]
                      :range-keydef [:gs-range-keydef :n]
                      :projection :keys-only
-                     :throughput {:read 10 :write 2}}]})]
+                     :throughput {:read 10 :write 2}}]
+        :stream-spec {:enabled? true
+                      :view-type :new-image}})]
   (expect "create-table-name" (.getTableName req))
 
   (expect
@@ -149,7 +160,11 @@
      (into #{} (.getKeySchema gsindex)))
     (expect
      (ProvisionedThroughput. 10 2)
-     (.getProvisionedThroughput gsindex))))
+     (.getProvisionedThroughput gsindex)))
+
+  (let [stream-spec (.getStreamSpecification req)]
+    (expect true (.getStreamEnabled stream-spec))
+    (expect (.toString StreamViewType/NEW_IMAGE) (.getStreamViewType stream-spec))))
 
 (expect
  "update-table"
@@ -218,6 +233,13 @@
     (expect nil? rest)
     (expect "global-secondary" (.getIndexName action))
     ))
+
+(let [req ^UpdateTableRequest (update-table-request
+                                :update-table
+                                {:stream-spec {:enabled? false}})
+      stream-spec (.getStreamSpecification req)]
+  (expect false (.getStreamEnabled stream-spec))
+  (expect nil? (.getStreamViewType stream-spec)))
 
 (expect
  "get-item"
@@ -450,3 +472,35 @@
   (expect "age-index" (.getIndexName req))
   (expect (.getConsistentRead req))
   )
+
+(let [req ^ListStreamsRequest (list-stream-request
+                                {:table-name "stream-table-name"
+                                 :limit 42
+                                 :start-arn "arn:aws:dynamodb:ddblocal:0:table/etc"})]
+  (expect "stream-table-name" (.getTableName req))
+  (expect 42 (.getLimit req))
+  (expect "arn:aws:dynamodb:ddblocal:0:table/etc" (.getExclusiveStartStreamArn req)))
+
+(let [req ^DescribeStreamRequest (describe-stream-request
+                                   "arn:aws:dynamodb:ddblocal:0:table/etc"
+                                   {:limit 20
+                                    :start-shard-id "01"})]
+  (expect "arn:aws:dynamodb:ddblocal:0:table/etc" (.getStreamArn req))
+  (expect 20 (.getLimit req))
+  (expect "01" (.getExclusiveStartShardId req)))
+
+(let [req ^GetShardIteratorRequest (get-shard-iterator-request
+                                     "arn:aws:dynamodb:ddblocal:0:table/etc"
+                                     "shardId000"
+                                     :after-sequence-number
+                                     {:sequence-number "000001"})]
+  (expect "arn:aws:dynamodb:ddblocal:0:table/etc" (.getStreamArn req))
+  (expect "shardId000" (.getShardId req))
+  (expect ShardIteratorType/AFTER_SEQUENCE_NUMBER (ShardIteratorType/fromValue (.getShardIteratorType req)))
+  (expect "000001" (.getSequenceNumber req)))
+
+(let [req ^GetRecordsRequest (get-records-request
+                               "arn:aws:dynamodb:us-west-2:111122223333:table/etcetc"
+                               {:limit 50})]
+  (expect "arn:aws:dynamodb:us-west-2:111122223333:table/etcetc" (.getShardIterator req))
+  (expect 50 (.getLimit req)))

@@ -1252,3 +1252,46 @@
 (expect {:b [{:a "b"}], :f false, :g "    "}
   (far/remove-empty-attr-vals
     {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false :g "    "}))
+
+;; Test update table stream-spec
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:title :s]
+                             {:throughput {:read 1 :write 1}
+                              :block? true})
+   updated @(far/update-table *client-opts* temp-table
+                              {:stream-spec {:enabled? true
+                                             :view-type :keys-only}})
+   updated2 @(far/update-table *client-opts* temp-table
+                               {:stream-spec {:enabled? false}})]
+  (expect nil? (:stream-spec created))
+  (expect {:enabled? true
+           :view-type :keys-only} (:stream-spec updated))
+  (expect nil? (:stream-spec updated2)))
+
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:title :s]
+                             {:throughput {:read 10 :write 10}
+                              :stream-spec {:enabled? true
+                                            :view-type :new-and-old-images}
+                              :block? true})
+   [{:keys [stream-arn] :as list-stream-response}] (far/list-streams *client-opts* {:table-name temp-table})
+   items (mapv #(hash-map :title (str "title" %)
+                          :serial-num (rand-int 100)) (range 100))]
+  (expect temp-table (-> list-stream-response :table-name keyword))
+  (expect string? stream-arn)
+  (doseq [chunk (partition 10 items)]
+    (far/batch-write-item *client-opts* {temp-table {:put chunk}}))
+  (let [stream (far/describe-stream *client-opts* stream-arn)
+        shard-id (get-in stream [:shards 0 :shard-id])
+        _ (expect string? shard-id)
+        shard-iterator (far/shard-iterator *client-opts* stream-arn shard-id :trim-horizon)
+        records-result (far/get-stream-records *client-opts* shard-iterator)
+        records (mapv :stream-record (:records records-result))]
+     (expect 100 (count (:records records-result)))
+     (expect string? (:next-shard-iterator records-result))
+     (doseq [[item record] (mapv vector items records)]
+       (expect {:old-image {}
+                :new-image item} (in record))))
+  )
