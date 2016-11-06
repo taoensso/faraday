@@ -65,6 +65,8 @@
              ScanRequest
              ScanResult
              Select
+             StreamSpecification
+             StreamViewType
              TableDescription
              UpdateItemRequest
              UpdateItemResult
@@ -369,15 +371,18 @@
 
   TableDescription
   (as-map [d]
-    {:name          (keyword (.getTableName d))
-     :creation-date (.getCreationDateTime d)
-     :item-count    (.getItemCount d)
-     :size          (.getTableSizeBytes d)
-     :throughput    (as-map (.getProvisionedThroughput  d))
-     :indexes       (as-map (.getLocalSecondaryIndexes  d)) ; DEPRECATED
-     :lsindexes     (as-map (.getLocalSecondaryIndexes  d))
-     :gsindexes     (as-map (.getGlobalSecondaryIndexes d))
-     :status        (utils/un-enum (.getTableStatus d))
+    {:name                 (keyword (.getTableName d))
+     :creation-date        (.getCreationDateTime d)
+     :item-count           (.getItemCount d)
+     :size                 (.getTableSizeBytes d)
+     :throughput           (as-map (.getProvisionedThroughput d))
+     :indexes              (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
+     :lsindexes            (as-map (.getLocalSecondaryIndexes d))
+     :gsindexes            (as-map (.getGlobalSecondaryIndexes d))
+     :stream-specification (as-map (.getStreamSpecification d))
+     :latest-stream-label  (.getLatestStreamLabel d)
+     :latest-stream-arn    (.getLatestStreamArn d)
+     :status               (utils/un-enum (.getTableStatus d))
      :prim-keys
      (let [schema (as-map (.getKeySchema d))
            defs   (as-map (.getAttributeDefinitions d))]
@@ -416,7 +421,11 @@
                :write               (.getWriteCapacityUnits d)
                :last-decrease       (.getLastDecreaseDateTime d)
                :last-increase       (.getLastIncreaseDateTime d)
-               :num-decreases-today (.getNumberOfDecreasesToday d)}))
+               :num-decreases-today (.getNumberOfDecreasesToday d)})
+
+  StreamSpecification
+  (as-map [s] {:enabled?  (.getStreamEnabled s)
+               :view-type (utils/un-enum (.getStreamViewType s))}))
 
 ;;;; Tables
 
@@ -577,9 +586,16 @@
           (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
+(defn- stream-specs "Implementation detail."
+  [{:keys [enabled? view-type] :or {enabled? true
+                                    view-type :new-and-old-images}}]
+  (doto (StreamSpecification.)
+    (.setStreamEnabled enabled?)
+    (.setStreamViewType (StreamViewType/fromValue (utils/enum view-type)))))
+
 (defn- create-table-request "Implementation detail."
   [table-name hash-keydef
-   & [{:keys [range-keydef throughput lsindexes gsindexes]
+   & [{:keys [range-keydef throughput lsindexes gsindexes stream-specification]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts))]
     (doto-cond [_ (CreateTableRequest.)]
@@ -591,7 +607,9 @@
       lsindexes (.setLocalSecondaryIndexes
                  (local-2nd-indexes hash-keydef lsindexes))
       gsindexes (.setGlobalSecondaryIndexes
-                 (global-2nd-indexes gsindexes)))))
+                 (global-2nd-indexes gsindexes))
+      stream-specification (.setStreamSpecification
+                            (stream-specs stream-specification)))))
 
 (defn create-table
   "Creates a table with options:
