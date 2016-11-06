@@ -34,6 +34,8 @@
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
+             DescribeStreamRequest
+             DescribeStreamResult
              DeleteTableRequest
              DeleteTableResult
              DescribeTableRequest
@@ -41,10 +43,15 @@
              ExpectedAttributeValue
              GetItemRequest
              GetItemResult
+             GetRecordsRequest
+             GetRecordsResult
+             GetShardIteratorRequest
              ItemCollectionMetrics
              KeysAndAttributes
              KeySchemaElement
              KeyType
+             ListStreamsRequest
+             ListStreamsResult
              ListTablesRequest
              ListTablesResult
              LocalSecondaryIndex
@@ -61,10 +68,16 @@
              PutRequest
              QueryRequest
              QueryResult
+             Record
              ReturnValue
              ScanRequest
              ScanResult
              Select
+             SequenceNumberRange
+             Shard
+             Stream
+             StreamDescription
+             StreamRecord
              StreamSpecification
              StreamViewType
              TableDescription
@@ -89,8 +102,11 @@
             com.amazonaws.auth.AWSCredentialsProvider
             com.amazonaws.auth.BasicAWSCredentials
             com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-            com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
-            com.amazonaws.services.dynamodbv2.AmazonDynamoDB
+            [com.amazonaws.services.dynamodbv2
+             AmazonDynamoDB
+             AmazonDynamoDBClient
+             AmazonDynamoDBStreams
+             AmazonDynamoDBStreamsClient]
             java.nio.ByteBuffer))
 
 (if (vector? taoensso.encore/encore-version)
@@ -99,6 +115,33 @@
 
 ;;;; Connections
 
+(defn- client-params [{:keys [provider creds access-key secret-key proxy-host proxy-port
+                            proxy-username proxy-password
+                            conn-timeout max-conns max-error-retry socket-timeout keep-alive?]
+                     :as client-opts}]
+  (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
+        _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
+        _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
+        ^AWSCredentials aws-creds
+        (when-not provider
+          (cond
+            creds      creds ; Given explicit AWSCredentials
+            access-key (BasicAWSCredentials. access-key secret-key)))
+        ^AWSCredentialsProvider provider
+        (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
+        client-config
+        (doto-cond [g (ClientConfiguration.)]
+          proxy-host      (.setProxyHost         g)
+          proxy-port      (.setProxyPort         g)
+          proxy-username  (.setProxyUsername     g)
+          proxy-password  (.setProxyPassword     g)
+          conn-timeout    (.setConnectionTimeout g)
+          max-conns       (.setMaxConnections    g)
+          max-error-retry (.setMaxErrorRetry     g)
+          socket-timeout  (.setSocketTimeout     g)
+          keep-alive?     (.setUseTcpKeepAlive   g))]
+    [aws-creds provider client-config]))
+
 (def ^:private db-client*
   "Returns a new AmazonDynamoDBClient instance for the supplied client opts:
     (db-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
@@ -106,38 +149,35 @@
     (db-client* {:creds my-AWSCredentials-instance}),
     etc."
   (memoize
-   (fn [{:keys [provider creds access-key secret-key endpoint proxy-host proxy-port
-               proxy-username proxy-password
-               conn-timeout max-conns max-error-retry socket-timeout keep-alive?]
-        :as client-opts}]
+   (fn [{:keys [endpoint] :as client-opts}]
      (if (empty? client-opts) (AmazonDynamoDBClient.) ; Default client
-       (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
-             _ (assert (or (nil? creds)    (instance? AWSCredentials         creds)))
-             _ (assert (or (nil? provider) (instance? AWSCredentialsProvider provider)))
-             ^AWSCredentials aws-creds
-             (when-not provider
-               (cond
-                 creds      creds ; Given explicit AWSCredentials
-                 access-key (BasicAWSCredentials. access-key secret-key)))
-             ^AWSCredentialsProvider provider
-             (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
-             client-config
-             (doto-cond [g (ClientConfiguration.)]
-               proxy-host      (.setProxyHost         g)
-               proxy-port      (.setProxyPort         g)
-               proxy-username  (.setProxyUsername     g)
-               proxy-password  (.setProxyPassword     g)
-               conn-timeout    (.setConnectionTimeout g)
-               max-conns       (.setMaxConnections    g)
-               max-error-retry (.setMaxErrorRetry     g)
-               socket-timeout  (.setSocketTimeout     g)
-               keep-alive?     (.setUseTcpKeepAlive   g))]
+       (let [[^AWSCredentials aws-creds
+              ^AWSCredentialsProvider provider
+              ^ClientConfiguration client-config] (client-params client-opts)]
          (doto-cond [g (if provider
-                         (AmazonDynamoDBClient. provider  client-config)
+                         (AmazonDynamoDBClient. provider client-config)
                          (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
+(def ^:private db-streams-client*
+  "Returns a new AmazonDynamoDBStreamsClient instance for the supplied client opts:
+    (db-streams-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
+                 :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}),
+    (db-streams-client* {:creds my-AWSCredentials-instance}),
+    etc."
+  (memoize
+    (fn [{:keys [endpoint] :as client-opts}]
+      (if (empty? client-opts) (AmazonDynamoDBStreamsClient.) ; Default client
+        (let [[^AWSCredentials aws-creds
+               ^AWSCredentialsProvider provider
+               ^ClientConfiguration client-config] (client-params client-opts)]
+          (doto-cond [g (if provider
+                          (AmazonDynamoDBStreamsClient. provider client-config)
+                          (AmazonDynamoDBStreamsClient. aws-creds client-config))]
+            endpoint (.setEndpoint g)))))))
+
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
+(defn- db-streams-client ^AmazonDynamoDBStreams [client-opts] (db-streams-client* client-opts))
 
 ;;;; Exceptions
 
@@ -425,7 +465,51 @@
 
   StreamSpecification
   (as-map [s] {:enabled?  (.getStreamEnabled s)
-               :view-type (utils/un-enum (.getStreamViewType s))}))
+               :view-type (utils/un-enum (.getStreamViewType s))})
+
+  DescribeStreamResult
+  (as-map [r] (as-map (.getStreamDescription r)))
+  StreamDescription
+  (as-map [d] {:stream-arn (.getStreamArn d)
+               :stream-label (.getStreamLabel d)
+               :stream-status (utils/un-enum (.getStreamStatus d))
+               :stream-view-type (utils/un-enum (.getStreamViewType d))
+               :creation-request-date-time (.getCreationRequestDateTime d)
+               :table-name (.getTableName d)
+               :key-schema (as-map (.getKeySchema d))
+               :shards (as-map (.getShards d))
+               :last-evaluated-shard-id (.getLastEvaluatedShardId d)})
+  Shard
+  (as-map [d] {:shard-id (.getShardId d)
+               :parent-shard-id (.getParentShardId d)
+               :sequence-number-range (as-map (.getSequenceNumberRange d))})
+  SequenceNumberRange
+  (as-map [d] {:starting-sequence-number (.getStartingSequenceNumber d)
+               :ending-sequence-number (.getEndingSequenceNumber d)})
+
+  GetRecordsResult
+  (as-map [r] {:next-shard-iterator (.getNextShardIterator r)
+               :records (as-map (.getRecords r))})
+  Record
+  (as-map [r] {:event-id (.getEventID r)
+               :event-name (utils/un-enum (.getEventName r))
+               :event-version (.getEventVersion r)
+               :event-source (.getEventSource r)
+               :aws-region (.getAwsRegion r)
+               :stream-record (as-map (.getDynamodb r))})
+  StreamRecord
+  (as-map [r] {:keys (db-item->clj-item (.getKeys r))
+               :old-image (db-item->clj-item (.getOldImage r))
+               :new-image (db-item->clj-item (.getNewImage r))
+               :sequence-number (.getSequenceNumber r)
+               :size (.getSizeBytes r)
+               :view-type (utils/un-enum (.getStreamViewType r))})
+
+  ListStreamsResult
+  (as-map [r] (as-map (.getStreams r)))
+  Stream
+  (as-map [s] {:stream-arn (.getStreamArn s)
+               :table-name (.getTableName s)}))
 
 ;;;; Tables
 
@@ -1281,6 +1365,59 @@
     (->> (mapv (fn [seg] (future (scan client-opts table (assoc opts :segment seg))))
                (range total-segments))
          (mapv deref))))
+
+;;;; DB Streams API
+(defn- list-streams-request
+  [{:keys [table-name limit start-arn]}]
+  (enc/doto-cond [_ (ListStreamsRequest.)]
+    table-name (.setTableName (name table-name))
+    limit (.setLimit (int limit))
+    start-arn (.setExclusiveStartStreamArn start-arn)))
+
+(defn list-streams
+  [client-opts & [{:keys [] :as opts}]]
+  (as-map (.listStreams (db-streams-client client-opts) (list-streams-request opts))))
+
+(defn- describe-stream-request
+  ^DescribeStreamRequest [stream-arn {:keys [limit start-shard-id]}]
+  (enc/doto-cond [_ (DescribeStreamRequest.)]
+    stream-arn (.setStreamArn stream-arn)
+    limit (.setLimit (int limit))
+    from-shard-id (.setExclusiveStartShardId start-shard-id)))
+
+(defn describe-stream
+  "Returns a map describing a stream, or nil if the stream doesn't exist."
+  [client-opts stream-arn & [{:keys [limit start-shard-id] :as opts}]]
+  (try (as-map (.describeStream (db-streams-client client-opts)
+                                (describe-stream-request stream-arn opts)))
+       (catch ResourceNotFoundException _ nil)))
+
+(defn- get-shard-iterator-request
+  [stream-arn shard-id iterator-type]
+  (doto (GetShardIteratorRequest.)
+    (.setStreamArn stream-arn)
+    (.setShardId shard-id)
+    (.setShardIteratorType (utils/enum iterator-type))))
+
+(defn- get-records-request
+  [iter-str & [{:keys [limit]}]]
+  (enc/doto-cond [_ (GetRecordsRequest.)]
+    :always (.setShardIterator iter-str)
+    limit (.setLimit (int limit))))
+
+(defn shard-iterator
+  "Returns the iterator string that can be used in the get-records call or nil if it doesn't exist."
+  [client-opts stream-arn shard-id iterator-type]
+  (try
+    (.. (db-streams-client client-opts)
+        (getShardIterator (get-shard-iterator-request stream-arn shard-id iterator-type))
+        (getShardIterator))
+    (catch ResourceNotFoundException _ nil)))
+
+(defn get-records
+  [client-opts shard-iterator & [{:keys [limit] :as opts}]]
+  (as-map (.getRecords (db-streams-client client-opts)
+                       (get-records-request shard-iterator opts))))
 
 ;;;; Misc utils, etc.
 
