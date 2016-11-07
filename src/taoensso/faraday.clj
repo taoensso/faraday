@@ -671,11 +671,10 @@
       indexes)))
 
 (defn- stream-specs "Implementation detail."
-  [{:keys [enabled? view-type] :or {enabled? true
-                                    view-type :new-and-old-images}}]
-  (doto (StreamSpecification.)
-    (.setStreamEnabled enabled?)
-    (.setStreamViewType (StreamViewType/fromValue (utils/enum view-type)))))
+  [{:keys [enabled? view-type]}]
+  (enc/doto-cond [_ (StreamSpecification.)]
+    (not (nil? enabled?)) (.setStreamEnabled enabled?)
+    view-type (.setStreamViewType (StreamViewType/fromValue (utils/enum view-type)))))
 
 (defn- create-table-request "Implementation detail."
   [table-name hash-keydef
@@ -697,15 +696,18 @@
 
 (defn create-table
   "Creates a table with options:
-    hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
-    :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
-    :throughput   - {:read <units> :write <units>}.
-    :lsindexes    - [{:name _ :range-keydef _
-                      :projection #{:all :keys-only [<attr> ...]}}].
-    :gsindexes    - [{:name _ :hash-keydef _ :range-keydef _
-                      :projection #{:all :keys-only [<attr> ...]}
-                      :throughput _}].
-    :block?       - Block for table to actually be active?"
+    hash-keydef           - [<name> <#{:s :n :ss :ns :b :bs}>].
+    :range-keydef         - [<name> <#{:s :n :ss :ns :b :bs}>].
+    :throughput           - {:read <units> :write <units>}.
+    :lsindexes            - [{:name _ :range-keydef _
+                              :projection #{:all :keys-only [<attr> ...]}}].
+    :gsindexes            - [{:name _ :hash-keydef _ :range-keydef _
+                              :projection #{:all :keys-only [<attr> ...]}
+                              :throughput _}].
+    :stream-specification - {:enabled? - default true if spec is present
+                             :view-type <#{:keys-only :new-image
+                                           :old-image :new-and-old-images}>}
+    :block?               - Block for table to actually be active?"
   [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :as opts}]]
@@ -773,13 +775,14 @@
     nil))
 
 (defn- update-table-request "Implementation detail."
-  [table {:keys [throughput gsindexes]}]
+  [table {:keys [throughput gsindexes stream-specification]}]
   (let [attr-defs (keydefs nil nil nil [gsindexes])]
     (doto-cond
       [_ (UpdateTableRequest.)]
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates gsindexes)])
+      stream-specification (.setStreamSpecification (stream-specs stream-specification))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
 (defn- validate-update-opts [table-desc {:keys [throughput] :as params}]
@@ -807,14 +810,18 @@
 
   Update opts:
     :throughput - {:read <units> :write <units>}
-    :gsindexes  - {:operation    - ; e/o #{:create :update :delete}
+    :gsindexes  - {:operation    _ ; e/o #{:create :update :delete}
                    :name         _ ; Required
                    :throughput   _ ; Only for :update / :create
                    :hash-keydef  _ ; Only for :create
                    :range-keydef _ ;
                    :projection   _ ; e/o #{:all :keys-only [<attr> ...]}}
+    :stream-specification - {:enabled? _
+                             :view-type _ #{:keys-only :new-image
+                                            :old-image :old-and-new-images}}
 
-  Only one global secondary index operation can take place at a time."
+  Only one global secondary index operation can take place at a time.
+  In order to change a stream view-type, you need to disable and re-enable the stream."
   [client-opts table update-opts & [{:keys [span-reqs]
                                      :or   {span-reqs {:max 5}}}]]
   (let [table-desc  (describe-table client-opts table)
@@ -1383,7 +1390,7 @@
   (enc/doto-cond [_ (DescribeStreamRequest.)]
     stream-arn (.setStreamArn stream-arn)
     limit (.setLimit (int limit))
-    from-shard-id (.setExclusiveStartShardId start-shard-id)))
+    start-shard-id (.setExclusiveStartShardId start-shard-id)))
 
 (defn describe-stream
   "Returns a map describing a stream, or nil if the stream doesn't exist."
@@ -1414,7 +1421,7 @@
         (getShardIterator))
     (catch ResourceNotFoundException _ nil)))
 
-(defn get-records
+(defn get-stream-records
   [client-opts shard-iterator & [{:keys [limit] :as opts}]]
   (as-map (.getRecords (db-streams-client client-opts)
                        (get-records-request shard-iterator opts))))
