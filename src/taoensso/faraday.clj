@@ -506,7 +506,8 @@
                :view-type (utils/un-enum (.getStreamViewType r))})
 
   ListStreamsResult
-  (as-map [r] (as-map (.getStreams r)))
+  (as-map [r] {:last-stream-arn (.getLastEvaluatedStreamArn r)
+               :streams (as-map (.getStreams r))})
   Stream
   (as-map [s] {:stream-arn (.getStreamArn s)
                :table-name (.getTableName s)}))
@@ -1382,8 +1383,25 @@
     start-arn (.setExclusiveStartStreamArn start-arn)))
 
 (defn list-streams
-  [client-opts & [{:keys [] :as opts}]]
-  (as-map (.listStreams (db-streams-client client-opts) (list-streams-request opts))))
+  "Returns a lazy sequence of stream descriptions. Each item is a map of:
+   {:stream-arn - Stream identifier string
+    :table-name -  The table name for the stream}
+
+    Options:
+     :start-arn  - The stream identifier to start listing from (exclusive)
+     :table-name - List only the streams for <table-name>
+     :limit      - Retrieve streams in batches of <limit> at a time"
+  [client-opts & [{:keys [start-arn table-name limit] :as opts}]]
+  (let [client (db-streams-client client-opts)
+        step (fn step [stream-arn]
+               (lazy-seq
+                 (let [chunk (as-map
+                               (.listStreams client
+                                             (list-streams-request (assoc opts :start-arn stream-arn))))]
+                   (if (:last-stream-arn chunk)
+                     (concat (:streams chunk) (step (:last-stream-arn chunk)))
+                     (seq (:streams chunk))))))]
+    (step start-arn)))
 
 (defn- describe-stream-request
   ^DescribeStreamRequest [stream-arn {:keys [limit start-shard-id]}]
