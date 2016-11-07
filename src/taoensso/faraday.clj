@@ -1425,14 +1425,9 @@
     :always (.setShardIteratorType (utils/enum iterator-type))
     sequence-number (.setSequenceNumber sequence-number)))
 
-(defn- get-records-request
-  [iter-str {:keys [limit]}]
-  (enc/doto-cond [_ (GetRecordsRequest.)]
-    :always (.setShardIterator iter-str)
-    limit (.setLimit (int limit))))
-
 (defn shard-iterator
-  "Returns the iterator string that can be used in the get-records call or nil if it doesn't exist."
+  "Returns the iterator string that can be used in the get-stream-records call
+   or nil when the stream or shard doesn't exist."
   [client-opts stream-arn shard-id iterator-type
    & [{:keys [sequence-number] :as opts}]]
   (try
@@ -1440,6 +1435,12 @@
         (getShardIterator (get-shard-iterator-request stream-arn shard-id iterator-type opts))
         (getShardIterator))
     (catch ResourceNotFoundException _ nil)))
+
+(defn- get-records-request
+  [iter-str {:keys [limit]}]
+  (enc/doto-cond [_ (GetRecordsRequest.)]
+    :always (.setShardIterator iter-str)
+    limit (.setLimit (int limit))))
 
 (defn get-stream-records
   [client-opts shard-iterator & [{:keys [limit] :as opts}]]
