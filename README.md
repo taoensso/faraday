@@ -7,6 +7,9 @@
 [com.taoensso/faraday "1.9.0"] ; BREAKING, see CHANGELOG for details
 ```
 
+[![build status](https://gitlab.com/ricardojmendez/faraday/badges/master/build.svg)](https://gitlab.com/ricardojmendez/faraday/commits/master)
+
+
 > Please consider helping to [support my continued open-source Clojure/Script work]? 
 > 
 > Even small contributions can add up + make a big difference to help sustain my time writing, maintaining, and supporting Faraday and other Clojure/Script libraries. **Thank you!**
