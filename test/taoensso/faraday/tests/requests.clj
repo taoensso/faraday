@@ -121,8 +121,8 @@
                      :range-keydef [:gs-range-keydef :n]
                      :projection :keys-only
                      :throughput {:read 10 :write 2}}]
-        :stream-specification {:enabled? true
-                               :view-type :new-image}})]
+        :stream-spec {:enabled? true
+                      :view-type :new-image}})]
   (expect "create-table-name" (.getTableName req))
 
   (expect
@@ -236,7 +236,7 @@
 
 (let [req ^UpdateTableRequest (update-table-request
                                 :update-table
-                                {:stream-specification {:enabled? false}})
+                                {:stream-spec {:enabled? false}})
       stream-spec (.getStreamSpecification req)]
   (expect false (.getStreamEnabled stream-spec))
   (expect nil? (.getStreamViewType stream-spec)))

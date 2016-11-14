@@ -411,18 +411,18 @@
 
   TableDescription
   (as-map [d]
-    {:name                 (keyword (.getTableName d))
-     :creation-date        (.getCreationDateTime d)
-     :item-count           (.getItemCount d)
-     :size                 (.getTableSizeBytes d)
-     :throughput           (as-map (.getProvisionedThroughput d))
-     :indexes              (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
-     :lsindexes            (as-map (.getLocalSecondaryIndexes d))
-     :gsindexes            (as-map (.getGlobalSecondaryIndexes d))
-     :stream-specification (as-map (.getStreamSpecification d))
-     :latest-stream-label  (.getLatestStreamLabel d)
-     :latest-stream-arn    (.getLatestStreamArn d)
-     :status               (utils/un-enum (.getTableStatus d))
+    {:name                (keyword (.getTableName d))
+     :creation-date       (.getCreationDateTime d)
+     :item-count          (.getItemCount d)
+     :size                (.getTableSizeBytes d)
+     :throughput          (as-map (.getProvisionedThroughput d))
+     :indexes             (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
+     :lsindexes           (as-map (.getLocalSecondaryIndexes d))
+     :gsindexes           (as-map (.getGlobalSecondaryIndexes d))
+     :stream-spec         (as-map (.getStreamSpecification d))
+     :latest-stream-label (.getLatestStreamLabel d)
+     :latest-stream-arn   (.getLatestStreamArn d)
+     :status              (utils/un-enum (.getTableStatus d))
      :prim-keys
      (let [schema (as-map (.getKeySchema d))
            defs   (as-map (.getAttributeDefinitions d))]
@@ -671,7 +671,7 @@
           (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
-(defn- stream-specs "Implementation detail."
+(defn- stream-specification "Implementation detail."
   [{:keys [enabled? view-type]}]
   (enc/doto-cond [_ (StreamSpecification.)]
     (not (nil? enabled?)) (.setStreamEnabled enabled?)
@@ -679,7 +679,7 @@
 
 (defn- create-table-request "Implementation detail."
   [table-name hash-keydef
-   & [{:keys [range-keydef throughput lsindexes gsindexes stream-specification]
+   & [{:keys [range-keydef throughput lsindexes gsindexes stream-spec]
        :or   {throughput {:read 1 :write 1}} :as opts}]]
   (let [lsindexes (or lsindexes (:indexes opts))]
     (doto-cond [_ (CreateTableRequest.)]
@@ -692,23 +692,22 @@
                  (local-2nd-indexes hash-keydef lsindexes))
       gsindexes (.setGlobalSecondaryIndexes
                  (global-2nd-indexes gsindexes))
-      stream-specification (.setStreamSpecification
-                            (stream-specs stream-specification)))))
+      stream-spec (.setStreamSpecification
+                   (stream-specification stream-spec)))))
 
 (defn create-table
   "Creates a table with options:
-    hash-keydef           - [<name> <#{:s :n :ss :ns :b :bs}>].
-    :range-keydef         - [<name> <#{:s :n :ss :ns :b :bs}>].
-    :throughput           - {:read <units> :write <units>}.
-    :lsindexes            - [{:name _ :range-keydef _
+    hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
+    :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
+    :throughput   - {:read <units> :write <units>}.
+    :lsindexes    - [{:name _ :range-keydef _
                               :projection #{:all :keys-only [<attr> ...]}}].
-    :gsindexes            - [{:name _ :hash-keydef _ :range-keydef _
+    :gsindexes    - [{:name _ :hash-keydef _ :range-keydef _
                               :projection #{:all :keys-only [<attr> ...]}
                               :throughput _}].
-    :stream-specification - {:enabled? - default true if spec is present
-                             :view-type <#{:keys-only :new-image
-                                           :old-image :new-and-old-images}>}
-    :block?               - Block for table to actually be active?"
+    :stream-spec  - {:enabled? - default true if spec is present
+                     :view-type <#{:keys-only :new-image :old-image :new-and-old-images}>}
+    :block?       - Block for table to actually be active?"
   [client-opts table-name hash-keydef
    & [{:keys [range-keydef throughput lsindexes gsindexes block?]
        :as opts}]]
@@ -776,14 +775,14 @@
     nil))
 
 (defn- update-table-request "Implementation detail."
-  [table {:keys [throughput gsindexes stream-specification]}]
+  [table {:keys [throughput gsindexes stream-spec]}]
   (let [attr-defs (keydefs nil nil nil [gsindexes])]
     (doto-cond
       [_ (UpdateTableRequest.)]
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates gsindexes)])
-      stream-specification (.setStreamSpecification (stream-specs stream-specification))
+      stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
 (defn- validate-update-opts [table-desc {:keys [throughput] :as params}]
@@ -810,16 +809,15 @@
   description.
 
   Update opts:
-    :throughput - {:read <units> :write <units>}
-    :gsindexes  - {:operation    _ ; e/o #{:create :update :delete}
-                   :name         _ ; Required
-                   :throughput   _ ; Only for :update / :create
-                   :hash-keydef  _ ; Only for :create
-                   :range-keydef _ ;
-                   :projection   _ ; e/o #{:all :keys-only [<attr> ...]}}
-    :stream-specification - {:enabled? _
-                             :view-type _ #{:keys-only :new-image
-                                            :old-image :old-and-new-images}}
+    :throughput  - {:read <units> :write <units>}
+    :gsindexes   - {:operation    _ ; e/o #{:create :update :delete}
+                    :name         _ ; Required
+                    :throughput   _ ; Only for :update / :create
+                    :hash-keydef  _ ; Only for :create
+                    :range-keydef _ ;
+                    :projection   _ ; e/o #{:all :keys-only [<attr> ...]}}
+    :stream-spec - {:enabled?     _
+                    :view-type    _ ; #{:keys-only :new-image :old-image :old-and-new-images}}
 
   Only one global secondary index operation can take place at a time.
   In order to change a stream view-type, you need to disable and re-enable the stream."

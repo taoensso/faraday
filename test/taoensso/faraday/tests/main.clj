@@ -1253,28 +1253,28 @@
   (far/remove-empty-attr-vals
     {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false :g "    "}))
 
-;; Test update table stream-specification
+;; Test update table stream-spec
 (do-with-temp-table
   [created (far/create-table *client-opts* temp-table
                              [:title :s]
                              {:throughput {:read 1 :write 1}
                               :block? true})
    updated @(far/update-table *client-opts* temp-table
-                              {:stream-specification {:enabled? true
-                                                      :view-type :keys-only}})
+                              {:stream-spec {:enabled? true
+                                             :view-type :keys-only}})
    updated2 @(far/update-table *client-opts* temp-table
-                               {:stream-specification {:enabled? false}})]
-  (expect nil? (:stream-specification created))
+                               {:stream-spec {:enabled? false}})]
+  (expect nil? (:stream-spec created))
   (expect {:enabled? true
-           :view-type :keys-only} (:stream-specification updated))
-  (expect nil? (:stream-specification updated2)))
+           :view-type :keys-only} (:stream-spec updated))
+  (expect nil? (:stream-spec updated2)))
 
 (do-with-temp-table
   [created (far/create-table *client-opts* temp-table
                              [:title :s]
                              {:throughput {:read 10 :write 10}
-                              :stream-specification {:enabled? true
-                                                     :view-type :new-and-old-images}
+                              :stream-spec {:enabled? true
+                                            :view-type :new-and-old-images}
                               :block? true})
    [{:keys [stream-arn] :as list-stream-response}] (far/list-streams *client-opts* {:table-name temp-table})
    items (mapv #(hash-map :title (str "title" %)
