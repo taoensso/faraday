@@ -499,12 +499,12 @@
   (as-map [d]
     {:shard-id              (.getShardId d)
      :parent-shard-id       (.getParentShardId d)
-     :sequence-number-range (as-map (.getSequenceNumberRange d))})
+     :seq-num-range (as-map (.getSequenceNumberRange d))})
 
   SequenceNumberRange
   (as-map [d]
-    {:starting-sequence-number (.getStartingSequenceNumber d)
-     :ending-sequence-number   (.getEndingSequenceNumber d)})
+    {:starting-seq-num (.getStartingSequenceNumber d)
+     :ending-seq-num   (.getEndingSequenceNumber d)})
 
   GetRecordsResult
   (as-map [r]
@@ -525,8 +525,8 @@
     {:keys      (db-item->clj-item (.getKeys r))
      :old-image (db-item->clj-item (.getOldImage r))
      :new-image (db-item->clj-item (.getNewImage r))
-     :sequence-number (.getSequenceNumber r)
-     :size            (.getSizeBytes r)
+     :seq-num   (.getSequenceNumber r)
+     :size      (.getSizeBytes r)
      :view-type (utils/un-enum (.getStreamViewType r))})
 
   ListStreamsResult
@@ -1445,18 +1445,18 @@
        (catch ResourceNotFoundException _ nil)))
 
 (defn- get-shard-iterator-request
-  [stream-arn shard-id iterator-type {:keys [sequence-number]}]
+  [stream-arn shard-id iterator-type {:keys [seq-num]}]
   (enc/doto-cond [_ (GetShardIteratorRequest.)]
     :always (.setStreamArn stream-arn)
     :always (.setShardId shard-id)
     :always (.setShardIteratorType (utils/enum iterator-type))
-    sequence-number (.setSequenceNumber sequence-number)))
+    seq-num (.setSequenceNumber seq-num)))
 
 (defn shard-iterator
   "Returns the iterator string that can be used in the get-stream-records call
    or nil when the stream or shard doesn't exist."
   [client-opts stream-arn shard-id iterator-type
-   & [{:keys [sequence-number] :as opts}]]
+   & [{:keys [seq-num] :as opts}]]
   (try
     (.. (db-streams-client client-opts)
         (getShardIterator (get-shard-iterator-request stream-arn shard-id iterator-type opts))

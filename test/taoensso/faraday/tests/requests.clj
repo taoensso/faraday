@@ -493,7 +493,7 @@
                                      "arn:aws:dynamodb:ddblocal:0:table/etc"
                                      "shardId000"
                                      :after-sequence-number
-                                     {:sequence-number "000001"})]
+                                     {:seq-num "000001"})]
   (expect "arn:aws:dynamodb:ddblocal:0:table/etc" (.getStreamArn req))
   (expect "shardId000" (.getShardId req))
   (expect ShardIteratorType/AFTER_SEQUENCE_NUMBER (ShardIteratorType/fromValue (.getShardIteratorType req)))
