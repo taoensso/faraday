@@ -1070,7 +1070,7 @@
   Ref. https://github.com/ptaoussanis/faraday/issues/63)." nil)
 
 (defmacro with-attr-multi-vs    [& body] `(binding [*attr-multi-vs?*  true] ~@body))
-(defmacro without-attr-multi-vs [& body] ~(binding [*attr-multi-vs?* false] ~@body))
+(defmacro without-attr-multi-vs [& body] `(binding [*attr-multi-vs?* false] ~@body))
 
 (defn- attr-multi-vs
   "Implementation detail.
