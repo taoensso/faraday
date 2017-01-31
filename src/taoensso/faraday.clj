@@ -1079,10 +1079,9 @@
   (let [expand? *attr-multi-vs?*
         expand? (if (nil? expand?) attr-multi-vs?-default expand?)]
 
-    (if-not expand?
-      (clj-item->db-item attr-multi-vs-map)
-      (let [;; ensure-coll (fn [x] (if (coll?* x) x [x]))
-            ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+    (let [ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+      (if-not expand?
+        (mapv clj-item->db-item (ensure-sequential attr-multi-vs-map))
         (reduce
           (fn [r attr-multi-vs]
             (let [attrs (keys attr-multi-vs)
