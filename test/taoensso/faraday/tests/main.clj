@@ -132,23 +132,43 @@
 
 ;;;; Expressions support
 
-(let [i {:id 10 :name "update me"}]
+(let [i-wrong-name {:id 10 :name "update me"}
+      i-no-name {:id 10}
+      abc-set  {:id 10 :someset #{"a" "b" "c"}}
+      abcde-set {:id 10 :someset #{"a" "b" "c" "d" "e"}}
+      abcdef-set {:id 10 :someset #{"a" "b" "c" "d" "e" "f"}}]
   (after-setup!
    #(far/delete-item *client-opts* ttable {:id 10}))
 
   (expect ; Update expression support in update-item
    {:id 10 :name "foo"}
    (do
+     (far/delete-item *client-opts* ttable {:id 10})
+     (far/put-item *client-opts* ttable i-wrong-name)
      (far/update-item *client-opts* ttable
        {:id 10}
        {:update-expr     "SET #name = :name"
         :expr-attr-names {"#name" "name"}
         :expr-attr-vals  {":name" "foo"}
         :return          :all-new})))
+ 
+  (expect ; Update expression support in update-item check wierd capitalization
+   {:id 10 :biddingEnabled true }
+   (do
+     (far/delete-item *client-opts* ttable {:id 10})
+     (far/put-item *client-opts* ttable  i-no-name)
+     (far/update-item *client-opts* ttable
+       {:id 10}
+       {:update-expr     "SET #fieldName = :value"
+        :expr-attr-names {"#fieldName" "biddingEnabled"}
+        :expr-attr-vals  {":value" true}
+        :return          :all-new})))
 
   (expect ; We can add a set item
-    {:id 10 :name "foo" :someset #{"a" "b" "c"}}
+    abc-set
     (do
+      (far/delete-item *client-opts* ttable {:id 10})
+      (far/put-item *client-opts* ttable  i-no-name)
       (far/update-item *client-opts* ttable
                        {:id 10}
                        {:update-expr     "SET someset = :toset"
@@ -156,8 +176,10 @@
                         :return          :all-new})))
 
   (expect ; We can add update a set
-    {:id 10 :name "foo" :someset #{"a" "b" "c" "d" "e"}}
+    abcde-set
     (do
+      (far/delete-item *client-opts* ttable {:id 10})
+      (far/put-item *client-opts* ttable  abc-set)
       (far/update-item *client-opts* ttable
                        {:id 10}
                        {:update-expr     "ADD someset :toset"
@@ -165,8 +187,10 @@
                         :return          :all-new})))
 
   (expect ; Updating an existing element to a set does not duplicate it
-    {:id 10 :name "foo" :someset #{"a" "b" "c" "d" "e" "f"}}
+    abcdef-set
     (do
+      (far/delete-item *client-opts* ttable {:id 10})
+      (far/put-item *client-opts* ttable  abcde-set)
       (far/update-item *client-opts* ttable
                        {:id 10}
                        {:update-expr     "ADD someset :toset"
@@ -174,33 +198,15 @@
                         :return          :all-new})))
 
   (expect ; We can remove elements from a set
-    {:id 10 :name "foo" :someset #{"a" "c" "e" "f"}}
+    {:id 10  :someset #{"a" "c" "e" "f"}}
     (do
+      (far/delete-item *client-opts* ttable {:id 10})
+      (far/put-item *client-opts* ttable  abcdef-set)
       (far/update-item *client-opts* ttable
                        {:id 10}
                        {:update-expr     "DELETE someset :todel"
                         :expr-attr-vals  {":todel" #{"b" "d"}}
-                        :return          :all-new})))
-
-
-  (expect ; Condition expression support in update-item
-   #=(far/ex :conditional-check-failed)
-   (do
-     (far/update-item *client-opts* ttable
-       {:id 10}
-       {:cond-expr       "#name <> :name"
-        :update-expr     "SET #name = :name"
-        :expr-attr-names {"#name" "name"}
-        :expr-attr-vals  {":name" "foo"}
-        :return          :all-new})))
-
-  (expect ; Condition expression support in put-item
-   #=(far/ex :conditional-check-failed)
-   (do
-     (far/put-item *client-opts* ttable i
-       {:cond-expr "attribute_not_exists(id) AND #name <> :name"
-        :expr-attr-names {"#name" "name"}
-        :expr-attr-vals  {":name" "foo"}}))))
+                        :return          :all-new}))))
 
 (let [items [{:id 11 :name "eleven" :test "batch"}
              {:id 12 :name "twelve" :test "batch"}
