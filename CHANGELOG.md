@@ -1,6 +1,10 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
-## v1.9.0-beta1 / 2016 Jan 24
+## v1.9.0 / 2016 Jul 24
+
+```clojure
+[com.taoensso/faraday "1.9.0"]
+```
 
 > This is a major feature release with **BREAKING CHANGES** (see **Migration** section for details).
 > Big thanks to @ricardojmendez for most of the work for this release!
@@ -19,16 +23,11 @@
 * **Change**: implementation details now marked as private
 * **Fix**: `remove-empty-attr-vals` vs blank strings [@crough #72]
 
-```clojure
-[com.taoensso/faraday "1.9.0-RC1"]
-```
-
 #### MIGRATION INSTRUCTIONS
 
 **[1]**: `(update-item <client-opts> <table> <prim-kvs> <update-map> <opts>)` -> `(update-item <client-opts> <table> <prim-kvs> {:update-map <update-map> <other-opts>})`
 
 **[2]**: `(update-table <client-opts> <table> <throughput> <opts>)` -> `(update-table <client-opts> <table> {:through-put <throughput> <other-opts>})`
-
 
 ## v1.8.0 / 2015 September 26
 

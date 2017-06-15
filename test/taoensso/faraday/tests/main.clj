@@ -359,10 +359,20 @@
    (update-t
     {:update-map {:boolT [:put nil]}}))
 
+  (extend-protocol far/ISerializable java.util.Date
+    (serialize [x]
+      (far/serialize (pr-str x))))
+
+  (expect
+    (assoc t :date "#inst \"1970-01-01T00:00:00.000-00:00\"")
+    (update-t
+      {:update-map {:date [:put (java.util.Date. (long 0))]}}))
+
   (expect
    (assoc-in t [:map-new :new] "x")
    (update-t
     {:update-map {:map-new [:put {:new "x"}]}})))
+
 
 ;;;; expectation tests
 (let [t {:id 16
@@ -661,13 +671,7 @@
   )
 
 
-(let
-  ;; Dissoc'ing :bytes, :throwable, :ex-info, and :exception because Object#equals()
-  ;; is reference-based and not structural. `expect` falls back to Java equality,
-  ;; and so will fail when presented with different Java objects that don't themselves
-  ;; implement #equals() - such as arrays and Exceptions - despite having identical data.
-  [data ;; nippy/stress-data-comparable ; Awaiting Nippy v2.6
-      (dissoc nippy/stress-data :bytes :throwable :exception :ex-info)]
+(let [data nippy/stress-data-comparable]
   (expect ; Serialization
     {:id 10 :nippy-data data}
     (do (far/put-item *client-opts* ttable {:id 10 :nippy-data (far/freeze data)})
@@ -1041,11 +1045,11 @@
                                            :throughput  {:read 4 :write 2}
                                            }})
    ;; We need to wait until the index is created before updating it, or the call will fail
-   _       @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
+   _ @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
    inc-idx @(far/update-table *client-opts* temp-table
-                              {:gsindexes {:operation   :update
-                                           :name        "genre-index"
-                                           :throughput  {:read 6 :write 6}
+                              {:gsindexes {:operation  :update
+                                           :name       "genre-index"
+                                           :throughput {:read 6 :write 6}
                                            }})
    ;; We can create a second index right after
    amt-idx @(far/update-table *client-opts* temp-table
@@ -1057,12 +1061,12 @@
    ;; Let's wait until amount-index is created before deleting genre-index,
    ;; so that we can consistently evaluate the result (otherwise we might not
    ;; know if size/item-count are 0 or nil.
-   _       @(index-status-watch *client-opts* temp-table :gsindexes "amount-index")
+   _ @(index-status-watch *client-opts* temp-table :gsindexes "amount-index")
    del-idx @(far/update-table *client-opts* temp-table
-                              {:gsindexes {:operation   :delete
-                                           :name        "genre-index"
+                              {:gsindexes {:operation :delete
+                                           :name      "genre-index"
                                            }})
-   _       @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
+   _ @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
    ;; And get the final state
    fin-idx (far/describe-table *client-opts* temp-table)
    ]
@@ -1088,34 +1092,33 @@
             :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
           (:gsindexes inc-idx))
   ;; The second index created comes back without a size or item count
-  (expect [{:name       :amount-index
-            :size       nil
-            :item-count nil
-            :key-schema [{:name :amount :type :hash}]
-            :projection {:projection-type "ALL" :non-key-attributes nil}
-            :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
-           {:name       :genre-index
-            :size       0
-            :item-count 0
-            :key-schema [{:name :genre :type :hash}]
-            :projection {:projection-type "ALL" :non-key-attributes nil}
-            :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
-          (:gsindexes amt-idx))
+  (expect #{{:name       :amount-index
+             :size       nil
+             :item-count nil
+             :key-schema [{:name :amount :type :hash}]
+             :projection {:projection-type "ALL" :non-key-attributes nil}
+             :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
+            {:name       :genre-index
+             :size       0
+             :item-count 0
+             :key-schema [{:name :genre :type :hash}]
+             :projection {:projection-type "ALL" :non-key-attributes nil}
+             :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}}
+          (set (:gsindexes amt-idx)))
   ;; When we request that the genre index be deleted, it returns that it's being destroyed
-  (expect [{:name       :amount-index
-            :size       0
-            :item-count 0
-            :key-schema [{:name :amount :type :hash}]
-            :projection {:projection-type "ALL" :non-key-attributes nil}
-            :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
-           {:name       :genre-index
-            :size       nil
-            :item-count nil
-            :key-schema [{:name :genre :type :hash}]
-            :projection {:projection-type "ALL" :non-key-attributes nil}
-            :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}
-           ]
-          (:gsindexes del-idx))
+  (expect #{{:name       :amount-index
+             :size       0
+             :item-count 0
+             :key-schema [{:name :amount :type :hash}]
+             :projection {:projection-type "ALL" :non-key-attributes nil}
+             :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
+            {:name       :genre-index
+             :size       nil
+             :item-count nil
+             :key-schema [{:name :genre :type :hash}]
+             :projection {:projection-type "ALL" :non-key-attributes nil}
+             :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}}
+          (set (:gsindexes del-idx)))
   ;; And finally, we were left only with the amount index
   (expect [{:name       :amount-index
             :size       0
@@ -1249,3 +1252,46 @@
 (expect {:b [{:a "b"}], :f false, :g "    "}
   (far/remove-empty-attr-vals
     {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false :g "    "}))
+
+;; Test update table stream-spec
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:title :s]
+                             {:throughput {:read 1 :write 1}
+                              :block? true})
+   updated @(far/update-table *client-opts* temp-table
+                              {:stream-spec {:enabled? true
+                                             :view-type :keys-only}})
+   updated2 @(far/update-table *client-opts* temp-table
+                               {:stream-spec {:enabled? false}})]
+  (expect nil? (:stream-spec created))
+  (expect {:enabled? true
+           :view-type :keys-only} (:stream-spec updated))
+  (expect nil? (:stream-spec updated2)))
+
+(do-with-temp-table
+  [created (far/create-table *client-opts* temp-table
+                             [:title :s]
+                             {:throughput {:read 10 :write 10}
+                              :stream-spec {:enabled? true
+                                            :view-type :new-and-old-images}
+                              :block? true})
+   [{:keys [stream-arn] :as list-stream-response}] (far/list-streams *client-opts* {:table-name temp-table})
+   items (mapv #(hash-map :title (str "title" %)
+                          :serial-num (rand-int 100)) (range 100))]
+  (expect temp-table (-> list-stream-response :table-name keyword))
+  (expect string? stream-arn)
+  (doseq [chunk (partition 10 items)]
+    (far/batch-write-item *client-opts* {temp-table {:put chunk}}))
+  (let [stream (far/describe-stream *client-opts* stream-arn)
+        shard-id (get-in stream [:shards 0 :shard-id])
+        _ (expect string? shard-id)
+        shard-iterator (far/shard-iterator *client-opts* stream-arn shard-id :trim-horizon)
+        records-result (far/get-stream-records *client-opts* shard-iterator)
+        records (mapv :stream-record (:records records-result))]
+     (expect 100 (count (:records records-result)))
+     (expect string? (:next-shard-iterator records-result))
+     (doseq [[item record] (mapv vector items records)]
+       (expect {:old-image {}
+                :new-image item} (in record))))
+  )
