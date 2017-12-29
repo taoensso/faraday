@@ -38,6 +38,7 @@ else
     export AWS_DYNAMODB_ACCESS_KEY="test"
     export AWS_DYNAMODB_SECRET_KEY="test"
     export AWS_DYNAMODB_ENDPOINT="http://localhost:6798"
+    export AWS_DYNAMODB_LOCAL=1
   else
     echo "Using $1 for IAM creds..."
     source $1

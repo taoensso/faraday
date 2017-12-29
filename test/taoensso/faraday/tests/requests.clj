@@ -31,6 +31,8 @@
     DescribeStreamRequest
     DescribeTableRequest
     DescribeTableResult
+    DescribeTimeToLiveRequest
+    DescribeTimeToLiveResult
     ExpectedAttributeValue
     GetItemRequest
     GetItemResult
@@ -70,11 +72,15 @@
     ShardIteratorType
     StreamViewType
     TableDescription
+    TimeToLiveDescription
+    TimeToLiveSpecification
     UpdateGlobalSecondaryIndexAction
     UpdateItemRequest
     UpdateItemResult
     UpdateTableRequest
     UpdateTableResult
+    UpdateTimeToLiveRequest
+    UpdateTimeToLiveResult
     WriteRequest]))
 
 (comment
@@ -101,6 +107,8 @@
 (def describe-stream-request    #'taoensso.faraday/describe-stream-request)
 (def get-shard-iterator-request #'taoensso.faraday/get-shard-iterator-request)
 (def get-records-request        #'taoensso.faraday/get-records-request)
+(def describe-ttl-request       #'taoensso.faraday/describe-ttl-request)
+(def update-ttl-request         #'taoensso.faraday/update-ttl-request)
 
 ;;;;
 
@@ -504,3 +512,16 @@
                                {:limit 50})]
   (expect "arn:aws:dynamodb:us-west-2:111122223333:table/etcetc" (.getShardIterator req))
   (expect 50 (.getLimit req)))
+
+(let [req ^DescribeTimeToLiveRequest (describe-ttl-request
+                                      {:table-name :my-desc-ttl-table})]
+  (expect "my-desc-ttl-table" (.getTableName req)))
+
+(let [req ^UpdateTimeToLiveRequest (update-ttl-request
+                                    {:table-name :my-update-ttl-table
+                                     :enabled? true
+                                     :key-name :ttl})]
+  (expect "my-update-ttl-table" (.getTableName req))
+  (let [ttl-spec (.getTimeToLiveSpecification req)]
+    (expect true (.getEnabled ttl-spec))
+    (expect "ttl" (.getAttributeName ttl-spec))))
