@@ -1252,7 +1252,7 @@
     expr-attr-names (.setExpressionAttributeNames expr-attr-names)
     expr-attr-vals  (.setExpressionAttributeValues (clj->db-expr-vals-map expr-attr-vals))
     limit           (.setLimit     (int g))
-    index           (.setIndexName      g)
+    index           (.setIndexName      (name g))
     consistent?     (.setConsistentRead g)
     (coll?* return) (.setAttributesToGet (mapv name return))
     return-cc?      (.setReturnConsumedCapacity (utils/enum :total))
@@ -1316,7 +1316,7 @@
     expr-attr-names (.setExpressionAttributeNames expr-attr-names)
     expr-attr-vals  (.setExpressionAttributeValues (clj->db-expr-vals-map expr-attr-vals))
     filter-expr     (.setFilterExpression filter-expr)
-    index           (.setIndexName index)
+    index           (.setIndexName (name index))
     last-prim-kvs   (.setExclusiveStartKey
                      (clj-item->db-item last-prim-kvs))
     limit           (.setLimit             (int g))
