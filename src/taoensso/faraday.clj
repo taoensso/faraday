@@ -10,6 +10,7 @@
     * Primary key - Partition (hash) key or
                     Partition (hash) AND sort (range) key"
   {:author "Peter Taoussanis & contributors"}
+  (:refer-clojure :exclude [update])
   (:require [clojure.string         :as str]
             [taoensso.encore        :as enc :refer (doto-cond)]
             [taoensso.nippy         :as nippy]
@@ -87,6 +88,7 @@
              TransactWriteItem
              TransactWriteItemsRequest
              TransactWriteItemsResult
+             Update
              UpdateItemRequest
              UpdateItemResult
              UpdateTableRequest
@@ -1267,6 +1269,20 @@
                      (clj->db-expr-vals-map expr-attr-vals))
     return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
 
+(defn- update
+  [table-name prim-kvs update-expr
+   {:keys [cond-expr expr-attr-names expr-attr-vals return]
+    :or {return :none}}]
+  (doto-cond [g (Update.)]
+    :always         (.setTableName (name table-name))
+    :always         (.setKey (clj-item->db-item prim-kvs))
+    :always         (.setUpdateExpression update-expr)
+    cond-expr       (.setConditionExpression cond-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                     (clj->db-expr-vals-map expr-attr-vals))
+    return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
+
 (defmulti ^:private transact-write-item (comp first keys))
 
 (defmethod transact-write-item :cond-check
@@ -1283,6 +1299,11 @@
   [{{:keys [table-name prim-kvs] :as request} :delete}]
   (doto (TransactWriteItem.)
     (.setDelete (delete table-name prim-kvs request))))
+
+(defmethod transact-write-item :update
+  [{{:keys [table-name prim-kvs update-expr] :as request} :update}]
+  (doto (TransactWriteItem.)
+    (.setUpdate (update table-name prim-kvs update-expr request))))
 
 (defn- transact-write-items-request
   [{:keys [client-req-token return-cc? items] :as raw-req}]

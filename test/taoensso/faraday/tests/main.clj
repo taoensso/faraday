@@ -221,7 +221,31 @@
   (expect ; Verify delete results
    [nil nil]
    [(far/get-item *client-opts* ttable {:id  302})
-    (far/get-item *client-opts* ttable {:id  303})]))
+    (far/get-item *client-opts* ttable {:id  303})])
+
+  (expect ; Update
+   nil
+   (far/transact-write-items *client-opts*
+                             {:items [{:update {:table-name ttable
+                                                :prim-kvs  {:id 300}
+                                                :update-expr "SET #name = :name"
+                                                :cond-expr "attribute_exists(#id) AND #name = :oldname"
+                                                :expr-attr-names {"#id" "id", "#name" "name"}
+                                                :expr-attr-vals  {":oldname" "foo", ":name" "foofoo"}}}]}))
+
+  (expect ; Second update should fail
+   TransactionCanceledException
+   (far/transact-write-items *client-opts*
+                             {:items [{:update {:table-name ttable
+                                                :prim-kvs  {:id 300}
+                                                :update-expr "SET #name = :name"
+                                                :cond-expr "attribute_exists(#id) AND #name = :oldname"
+                                                :expr-attr-names {"#id" "id", "#name" "name"}
+                                                :expr-attr-vals  {":oldname" "foo", ":name" "foobar"}}}]}))
+
+  (expect ; Verify first update results
+   "foofoo"
+   (:name (far/get-item *client-opts* ttable {:id 300}))))
 
 
 
