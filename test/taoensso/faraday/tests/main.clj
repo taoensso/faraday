@@ -167,7 +167,44 @@
                              {:items [{:cond-check {:table-name ttable
                                                     :prim-kvs {:id 30001}
                                                     :cond-expr "attribute_exists(#id)"
-                                                    :expr-attr-names {"#id" "id"}}}]})))
+                                                    :expr-attr-names {"#id" "id"}}}]}))
+
+  (expect ; Put
+   nil
+   (far/transact-write-items *client-opts*
+                          {:items [{:put {:table-name ttable
+                                          :item  i2
+                                          :cond-expr "attribute_not_exists(#id)"
+                                          :expr-attr-names {"#id" "id"}}}
+                                   {:put {:table-name ttable
+                                          :item  i3
+                                          :cond-expr "attribute_not_exists(#id)"
+                                          :expr-attr-names {"#id" "id"}}}
+                                   ]}))
+
+  (expect ; Verify put results
+   [i2 i3]
+   [(far/get-item *client-opts* ttable {:id  302})
+    (far/get-item *client-opts* ttable {:id  303})])
+
+
+  (expect ; Put transaction should fail
+   TransactionCanceledException
+   (far/transact-write-items *client-opts*
+                          {:items [{:put {:table-name ttable
+                                          :item  i4
+                                          :cond-expr "attribute_not_exists(#id)"
+                                          :expr-attr-names {"#id" "id"}}}
+                                   {:put {:table-name ttable
+                                          :item  i3 ;; This already exists
+                                          :cond-expr "attribute_not_exists(#id)"
+                                          :expr-attr-names {"#id" "id"}}}
+                                   ]}))
+
+  (expect ; Verify that Put failed (i4 should not have been written)
+   nil
+   (far/get-item *client-opts* ttable {:id  304})))
+
 
 
 ;;;; Expressions support

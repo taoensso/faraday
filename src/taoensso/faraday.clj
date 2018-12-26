@@ -64,6 +64,7 @@
              ProjectionType
              ProvisionedThroughput
              ProvisionedThroughputDescription
+             Put
              PutItemRequest
              PutItemResult
              PutRequest
@@ -1241,12 +1242,29 @@
                       (clj->db-expr-vals-map expr-attr-vals))
     return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
 
+(defn- put
+  [table item {:keys [cond-expr expr-attr-names expr-attr-vals return]
+               :or {return :none}}]
+  (doto-cond [g (Put.)]
+    :always         (.setTableName (name table))
+    :always         (.setItem (clj-item->db-item item))
+    cond-expr       (.setConditionExpression cond-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                     (clj->db-expr-vals-map expr-attr-vals))
+    return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
+
 (defmulti ^:private transact-write-item (comp first keys))
 
 (defmethod transact-write-item :cond-check
   [{{:keys [table-name prim-kvs cond-expr] :as request} :cond-check}]
   (doto (TransactWriteItem.)
     (.setConditionCheck (cond-check table-name prim-kvs cond-expr request))))
+
+(defmethod transact-write-item :put
+  [{{:keys [table-name item] :as request} :put}]
+  (doto (TransactWriteItem.)
+    (.setPut (put table-name item request))))
 
 (defn- transact-write-items-request
   [{:keys [client-req-token return-cc? items] :as raw-req}]
