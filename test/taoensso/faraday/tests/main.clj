@@ -8,7 +8,7 @@
   (:import
    [com.amazonaws.auth BasicAWSCredentials]
    [com.amazonaws.internal StaticCredentialsProvider]
-   [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]
+   [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException TransactionCanceledException]
    [com.amazonaws AmazonServiceException]))
 
 (comment
@@ -129,6 +129,46 @@
                      {:id 10}
                      {:update-map {:name [:put "baz"]}
                       :expected   {:name "garbage"}})))
+
+
+;;;; Transaction Support
+
+(let [i0 {:id 300 :name "foo"}
+      i1 {:id 301 :name "bar"}
+      i2 {:id 302 :name "baz"}
+      i3 {:id 303 :name "qux"}
+      i4 {:id 304 :name "quux"}]
+
+  (after-setup!
+    #(far/batch-write-item *client-opts*
+                           {ttable {:delete [{:id 300} {:id 301} {:id 302} {:id 303}]}}))
+
+  (expect ; Batch put
+   [i0 i1] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
+                   [(far/get-item *client-opts* ttable {:id  300})
+                    (far/get-item *client-opts* ttable {:id  301})]))
+
+  (expect ; Condition Check
+   nil
+   (far/transact-write-items *client-opts*
+                             {:items [{:cond-check {:table-name ttable
+                                                    :prim-kvs {:id 300}
+                                                    :cond-expr "attribute_exists(#id)"
+                                                    :expr-attr-names {"#id" "id"}}}
+                                      {:cond-check {:table-name ttable
+                                                    :prim-kvs {:id 301}
+                                                    :cond-expr "attribute_exists(#id)"
+                                                    :expr-attr-names {"#id" "id"}}}
+                                      ]}))
+
+  (expect ; Condition Check Fail
+   TransactionCanceledException
+   (far/transact-write-items *client-opts*
+                             {:items [{:cond-check {:table-name ttable
+                                                    :prim-kvs {:id 30001}
+                                                    :cond-expr "attribute_exists(#id)"
+                                                    :expr-attr-names {"#id" "id"}}}]})))
+
 
 ;;;; Expressions support
 

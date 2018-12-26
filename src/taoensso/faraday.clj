@@ -26,6 +26,7 @@
              BatchWriteItemRequest
              BatchWriteItemResult
              Condition
+             ConditionCheck
              ConsumedCapacity
              ComparisonOperator
              CreateGlobalSecondaryIndexAction
@@ -81,6 +82,9 @@
              StreamSpecification
              StreamViewType
              TableDescription
+             TransactWriteItem
+             TransactWriteItemsRequest
+             TransactWriteItemsResult
              UpdateItemRequest
              UpdateItemResult
              UpdateTableRequest
@@ -416,6 +420,10 @@
   (as-map [r]
     {:unprocessed (.getUnprocessedItems r)
      :cc-units    (batch-cc-units (.getConsumedCapacity r))})
+
+  TransactWriteItemsResult
+  (as-map [r] (when-let [cc (.getConsumedCapacity r)]
+                {:cc-units (batch-cc-units cc)}))
 
   TableDescription
   (as-map [d]
@@ -1219,6 +1227,47 @@
                       :let [items (attr-multi-vs (table-request action))]]
                   (mapv (partial write-request action) items))))
             requests))))))
+
+(defn- cond-check
+  [table prim-kvs cond-expr
+   {:keys [expr-attr-names expr-attr-vals return]
+    :or   {return :none}}]
+  (doto-cond [g (ConditionCheck.)]
+    :always         (.setTableName    (name table))
+    :always         (.setKey          (clj-item->db-item prim-kvs))
+    :always         (.setConditionExpression cond-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                      (clj->db-expr-vals-map expr-attr-vals))
+    return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
+
+(defmulti ^:private transact-write-item (comp first keys))
+
+(defmethod transact-write-item :cond-check
+  [{{:keys [table-name prim-kvs cond-expr] :as request} :cond-check}]
+  (doto (TransactWriteItem.)
+    (.setConditionCheck (cond-check table-name prim-kvs cond-expr request))))
+
+(defn- transact-write-items-request
+  [{:keys [client-req-token return-cc? items] :as raw-req}]
+  (doto-cond [t (TransactWriteItemsRequest.)]
+    :always          (.setTransactItems (mapv transact-write-item items))
+    client-req-token (.setClientRequestToken client-req-token)
+    return-cc?       (.setReturnConsumedCapacity (utils/enum :total))))
+
+(defn transact-write-items
+  [client-opts raw-req]
+  (as-map
+   (.transactWriteItems (db-client client-opts)
+     (transact-write-items-request raw-req))))
+
+(comment
+  (transact-write-items {:client-req-token "foo"
+                         :return-cc? true
+                         :items [{:cond-check {:table-name "foo"
+                                               :prim-kvs   {:a 1}
+                                               :cond-expr "attribute_exists(a)"}}]}))
+
 
 ;;;; API - queries & scans
 
