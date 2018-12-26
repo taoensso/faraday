@@ -32,6 +32,7 @@
              CreateGlobalSecondaryIndexAction
              CreateTableRequest
              CreateTableResult
+             Delete
              DeleteItemRequest
              DeleteItemResult
              DeleteRequest
@@ -1254,6 +1255,18 @@
                      (clj->db-expr-vals-map expr-attr-vals))
     return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
 
+(defn- delete
+  [table-name prim-kvs {:keys [cond-expr expr-attr-names expr-attr-vals return]
+                   :or {return :none}}]
+  (doto-cond [g (Delete.)]
+    :always (.setTableName (name table-name))
+    :always (.setKey (clj-item->db-item prim-kvs))
+    cond-expr       (.setConditionExpression cond-expr)
+    expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+    expr-attr-vals  (.withExpressionAttributeValues
+                     (clj->db-expr-vals-map expr-attr-vals))
+    return          (.setReturnValuesOnConditionCheckFailure (utils/enum g))))
+
 (defmulti ^:private transact-write-item (comp first keys))
 
 (defmethod transact-write-item :cond-check
@@ -1265,6 +1278,11 @@
   [{{:keys [table-name item] :as request} :put}]
   (doto (TransactWriteItem.)
     (.setPut (put table-name item request))))
+
+(defmethod transact-write-item :delete
+  [{{:keys [table-name prim-kvs] :as request} :delete}]
+  (doto (TransactWriteItem.)
+    (.setDelete (delete table-name prim-kvs request))))
 
 (defn- transact-write-items-request
   [{:keys [client-req-token return-cc? items] :as raw-req}]

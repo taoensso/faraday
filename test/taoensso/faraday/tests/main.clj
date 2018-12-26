@@ -203,7 +203,25 @@
 
   (expect ; Verify that Put failed (i4 should not have been written)
    nil
-   (far/get-item *client-opts* ttable {:id  304})))
+   (far/get-item *client-opts* ttable {:id  304}))
+
+  (expect ; Delete
+   nil
+   (far/transact-write-items *client-opts*
+                             {:items [{:delete {:table-name ttable
+                                                :prim-kvs {:id 302}
+                                                :cond-expr "attribute_exists(#id)"
+                                                :expr-attr-names {"#id" "id"}}}
+                                      {:delete {:table-name ttable
+                                                :prim-kvs {:id 303}
+                                                :cond-expr "attribute_exists(#id)"
+                                                :expr-attr-names {"#id" "id"}}}
+                                      ]}))
+
+  (expect ; Verify delete results
+   [nil nil]
+   [(far/get-item *client-opts* ttable {:id  302})
+    (far/get-item *client-opts* ttable {:id  303})]))
 
 
 
