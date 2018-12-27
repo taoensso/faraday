@@ -50,6 +50,7 @@
              GetRecordsResult
              GetShardIteratorRequest
              ItemCollectionMetrics
+             ItemResponse
              KeysAndAttributes
              KeySchemaElement
              KeyType
@@ -59,6 +60,7 @@
              ListTablesResult
              LocalSecondaryIndex
              LocalSecondaryIndexDescription
+             Get
              GlobalSecondaryIndex
              GlobalSecondaryIndexDescription
              GlobalSecondaryIndexUpdate
@@ -85,6 +87,9 @@
              StreamSpecification
              StreamViewType
              TableDescription
+             TransactGetItem
+             TransactGetItemsRequest
+             TransactGetItemsResult
              TransactWriteItem
              TransactWriteItemsRequest
              TransactWriteItemsResult
@@ -428,6 +433,11 @@
   TransactWriteItemsResult
   (as-map [r] (when-let [cc (.getConsumedCapacity r)]
                 {:cc-units (batch-cc-units cc)}))
+
+  TransactGetItemsResult
+  (as-map [r]
+    {:items (mapv #(utils/keyword-map as-map (.getItem ^ItemResponse %)) (.getResponses r))
+     :cc-units (batch-cc-units (.getConsumedCapacity r))})
 
   TableDescription
   (as-map [d]
@@ -1324,6 +1334,24 @@
                          :items [{:cond-check {:table-name "foo"
                                                :prim-kvs   {:a 1}
                                                :cond-expr "attribute_exists(a)"}}]}))
+
+(defn- transact-get-item [{:keys [table-name prim-kvs expr-attr-names proj-expr]}]
+  (doto (TransactGetItem.)
+    (.setGet (doto-cond [g (Get.)]
+               :always         (.setTableName (name table-name))
+               :always         (.setKey (clj-item->db-item prim-kvs))
+               expr-attr-names (.setExpressionAttributeNames expr-attr-names)
+               proj-expr       (.setProjectionExpression proj-expr)))))
+
+(defn- transact-get-items-request [{:keys [return-cc? items]}]
+  (doto-cond [t (TransactGetItemsRequest.)]
+    :always (.setTransactItems (mapv transact-get-item items))
+    return-cc?       (.setReturnConsumedCapacity (utils/enum :total))))
+
+(defn transact-get-items [client-opts raw-req]
+  (as-map
+   (.transactGetItems (db-client client-opts)
+     (transact-get-items-request raw-req))))
 
 
 ;;;; API - queries & scans

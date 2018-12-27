@@ -137,16 +137,21 @@
       i1 {:id 301 :name "bar"}
       i2 {:id 302 :name "baz"}
       i3 {:id 303 :name "qux"}
-      i4 {:id 304 :name "quux"}]
+      i4 {:id 304 :name "quux"}
+      i5 {:id 305 :name "corge"}
+      i6 {:id 306 :name "grault"}]
 
   (after-setup!
     #(far/batch-write-item *client-opts*
-                           {ttable {:delete [{:id 300} {:id 301} {:id 302} {:id 303}]}}))
+                           {ttable {:delete [{:id 300} {:id 301} {:id 302} {:id 303}
+                                             {:id 304} {:id 305} {:id 306}]}}))
 
   (expect ; Batch put
-   [i0 i1] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1]}})
-                   [(far/get-item *client-opts* ttable {:id  300})
-                    (far/get-item *client-opts* ttable {:id  301})]))
+   [i0 i1 i5 i6] (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1 i5 i6]}})
+                   [(far/get-item *client-opts* ttable {:id 300})
+                    (far/get-item *client-opts* ttable {:id 301})
+                    (far/get-item *client-opts* ttable {:id 305})
+                    (far/get-item *client-opts* ttable {:id 306})]))
 
   (expect ; Condition Check
    nil
@@ -245,8 +250,18 @@
 
   (expect ; Verify first update results
    "foofoo"
-   (:name (far/get-item *client-opts* ttable {:id 300}))))
+   (:name (far/get-item *client-opts* ttable {:id 300})))
 
+
+
+  (expect ; Transact Get Items
+   [i5 i6]
+   (:items (far/transact-get-items *client-opts*
+                                   {:return-cc? true
+                                    :items [{:table-name ttable
+                                             :prim-kvs {:id 305}}
+                                            {:table-name ttable
+                                             :prim-kvs {:id 306}}]}))))
 
 
 ;;;; Expressions support
