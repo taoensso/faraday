@@ -1,3 +1,6 @@
+;; This file mirrors vital parts of `project.clj`
+;; It exists only to add possibility to include this project as a git dependency
+
 {:paths ["src"]
 
  ;; [org.clojure/clojure "1.5.1"]
