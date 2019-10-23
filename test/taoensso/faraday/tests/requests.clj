@@ -416,7 +416,7 @@
                          {:name [:eq "Steve"]
                           :age [:between [10 30]]}
                          {:return :all-projected-attributes
-                          :index "lsindex"
+                          :index :lsindex
                           :order :desc
                           :limit 2})]
   (expect "query" (.getTableName req))
@@ -439,7 +439,7 @@
 (let [req ^ScanRequest (scan-request
                          :scan
                          {:attr-conds      {:age [:in [24 27]]}
-                          :index           "age-index"
+                          :index           :age-index
                           :proj-expr       "age, #t"
                           :expr-attr-names {"#t" "year"}
                           :return          :count
