@@ -67,7 +67,7 @@ And setup your namespace imports:
 
 #### Option 1 - Run a local DDB instance
 
-First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [instructions from AWS][] (don't worry, you basically just download a JAR file and run it).
+First thing is to make sure you've got a DynamoDB Local instance up and running. Follow the [instructions from AWS][https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html] (don't worry, you basically just download a JAR file and run it).
 
 Once DynamoDB Local is up and running in your terminal, you should see something like:
 
