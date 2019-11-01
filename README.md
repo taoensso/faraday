@@ -72,9 +72,9 @@ First thing is to make sure you've got a DynamoDB Local instance up and running.
 Once DynamoDB Local is up and running in your terminal, you should see something like:
 
 ```sh
-$ dynamodb-local
-2014-04-30 16:08:51.050:INFO:oejs.Server:jetty-8.1.12.v20130726
-2014-04-30 16:08:51.104:INFO:oejs.AbstractConnector:Started SelectChannelConnector@0.0.0.0:8000
+$ lein dynamodb-local
+dynamodb-local: Options {:port 6798, :in-memory? true, :db-path /home/.../.clj-dynamodb-local}
+dynamodb-local: Started DynamoDB Local
 ```
 
 Then proceed to connecting with your local instance in the next section.
@@ -96,7 +96,7 @@ Ready?
 
    ;;; You may optionally override the default endpoint if you'd like to use DDB
    ;;; Local or a different AWS Region (Ref. http://goo.gl/YmV80o), etc.:
-   ;; :endpoint "http://localhost:8000"                   ; For DDB Local
+   ;; :endpoint "http://localhost:6798"                   ; For DDB Local
    ;; :endpoint "http://dynamodb.eu-west-1.amazonaws.com" ; For EU West 1 AWS region
   })
 
@@ -161,7 +161,7 @@ To run all the tests locally, run:
 ./run-tests local
 ```
 
-To run tests from a repl using a local DynamoDB instance, run:
+If you intend to run tests from a repl, you can start a local DynamoDB instance:
 
 ```bash
 lein dynamodb-local
