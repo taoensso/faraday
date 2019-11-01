@@ -12,19 +12,19 @@
    [com.amazonaws AmazonServiceException]))
 
 (comment
-  (remove-ns       'taoensso.faraday.tests.main)
-  (test/run-tests '[taoensso.faraday.tests.main]))
+  (remove-ns       'far.tests.main)
+  (test/run-tests '[far.tests.main]))
 
 ;;;; Private var aliases
 
-(def index-status-watch #'taoensso.faraday/index-status-watch)
+(def index-status-watch #'far/index-status-watch)
 
 ;;;; Config & setup
 
 (def ^:dynamic *client-opts*
-  {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
-   :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")
-   :endpoint   (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")})
+  {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "")
+   :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "")
+   :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")})
 
 (def ttable      :faraday.tests.main)
 (def range-table :faraday.tests.range)

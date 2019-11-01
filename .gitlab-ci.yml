@@ -5,5 +5,5 @@ before_script:
 
 test:
   script:
-  - ./run-tests local --no-kill
+  - ./run-tests local
 

@@ -1,9 +1,10 @@
 (ns taoensso.faraday.utils
   {:author "Peter Taoussanis"}
-  (:require [clojure.string  :as str]))
+  (:require [clojure.string :as str])
+  (:import (java.util HashMap)))
 
 (defn map-kvs [kf vf m]
-  (let [m (if (instance? java.util.HashMap m) (into {} m) m)]
+  (let [m (if (instance? HashMap m) (into {} m) m)]
     (persistent! (reduce-kv (fn [m k v] (assoc! m (if kf (kf k) k)
                                                  (if vf (vf v) v)))
                             (transient {}) m))))
@@ -37,6 +38,3 @@
                     (lazy-seq (step (increment v-seqs)))))))]
     (when (every? seq seqs)
       (lazy-seq (step v-original-seqs)))))
-
-(comment (cartesian-product [:a :b] [1 2] [:A :B])
-         (cartesian-product [:a :b]))

@@ -1,49 +1,23 @@
 #!/bin/bash
 
-if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 [<env-file>|local] [--auto|--no-kill]"
+if [[ "$#" -lt 1 ]]; then
+  echo "Usage: $0 [<env-file>|local] [--auto]"
   echo ""
-  echo "Use --no-kill if the tests will be run in a CI environment like travis,"
-  echo "since it seems it's trapping the exit signal from the first round of"
-  echo "tests and killing the local DynamoDB instance."
   exit 1
-elif [ "$1" != "local" ] && [ ! -f "$1" ]; then
+elif [[ "$1" != "local" ]] && [[ ! -f "$1" ]]; then
   echo "ABORTING: specified env-file not found: $1"
   exit 1
 else
-
-  if [ "$1" = "local" ]; then
-
-    if [ ! -f ./local-dynamo/DynamoDBLocal.jar ]; then
-      echo "Downloading local dynamo"
-      mkdir local-dynamo
-      cd local-dynamo
-      wget "http://dynamodb-local.s3-website-us-west-2.amazonaws.com/dynamodb_local_latest.tar.gz"
-      tar zxf dynamodb_local_latest.tar.gz
-      rm dynamodb_local_latest.tar.gz
-      cd -
-    fi
-
-
-    echo "Starting local Dynamodb"
-    java -Djava.library.path=./local-dynamo/DynamoDBLocal_lib -jar ./local-dynamo/DynamoDBLocal.jar -port 6798 -inMemory &
-
-    if [ "$2" != "--no-kill" ]; then
-      echo "Will kill DynamoDBLocal on exit"
-      trap "pkill -f DynamoDBLocal" EXIT
-    else
-      echo "Will NOT kill DynamoDBLocal on exit"
-    fi
-
-    export AWS_DYNAMODB_ACCESS_KEY="test"
-    export AWS_DYNAMODB_SECRET_KEY="test"
+  if [[ "$1" = "local" ]]; then
+    export AWS_DYNAMODB_ACCESS_KEY=""
+    export AWS_DYNAMODB_SECRET_KEY=""
     export AWS_DYNAMODB_ENDPOINT="http://localhost:6798"
   else
     echo "Using $1 for IAM creds..."
     source $1
   fi
 
-  if [ "$2" = "--auto" ]; then
+  if [[ "$2" = "--auto" ]]; then
     lein test-auto
   else
     lein test-all
