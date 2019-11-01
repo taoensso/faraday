@@ -15,99 +15,94 @@
             [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
-  (:import  [clojure.lang BigInt]
-            [com.amazonaws.services.dynamodbv2.model
-             AttributeAction
-             AttributeDefinition
-             AttributeValue
-             AttributeValueUpdate
-             BatchGetItemRequest
-             BatchGetItemResult
-             BatchWriteItemRequest
-             BatchWriteItemResult
-             Condition
-             ConsumedCapacity
-             ComparisonOperator
-             CreateGlobalSecondaryIndexAction
-             CreateTableRequest
-             CreateTableResult
-             DeleteItemRequest
-             DeleteItemResult
-             DeleteRequest
-             DescribeStreamRequest
-             DescribeStreamResult
-             DeleteTableRequest
-             DeleteTableResult
-             DescribeTableRequest
-             DescribeTableResult
-             ExpectedAttributeValue
-             GetItemRequest
-             GetItemResult
-             GetRecordsRequest
-             GetRecordsResult
-             GetShardIteratorRequest
-             ItemCollectionMetrics
-             KeysAndAttributes
-             KeySchemaElement
-             KeyType
-             ListStreamsRequest
-             ListStreamsResult
-             ListTablesRequest
-             ListTablesResult
-             LocalSecondaryIndex
-             LocalSecondaryIndexDescription
-             GlobalSecondaryIndex
-             GlobalSecondaryIndexDescription
-             GlobalSecondaryIndexUpdate
-             Projection
-             ProjectionType
-             ProvisionedThroughput
-             ProvisionedThroughputDescription
-             PutItemRequest
-             PutItemResult
-             PutRequest
-             QueryRequest
-             QueryResult
-             Record
-             ReturnValue
-             ScanRequest
-             ScanResult
-             Select
-             SequenceNumberRange
-             Shard
-             Stream
-             StreamDescription
-             StreamRecord
-             StreamSpecification
-             StreamViewType
-             TableDescription
-             UpdateItemRequest
-             UpdateItemResult
-             UpdateTableRequest
-             UpdateTableResult
-             WriteRequest
+  (:import [clojure.lang BigInt Keyword IPersistentVector]
+           [com.amazonaws.services.dynamodbv2.model
+            AttributeAction
+            AttributeDefinition
+            AttributeValue
+            AttributeValueUpdate
+            BatchGetItemRequest
+            BatchGetItemResult
+            BatchWriteItemRequest
+            BatchWriteItemResult
+            Condition
+            ConsumedCapacity
+            ComparisonOperator
+            CreateGlobalSecondaryIndexAction
+            CreateTableRequest
+            CreateTableResult
+            DeleteItemRequest
+            DeleteItemResult
+            DeleteRequest
+            DescribeStreamRequest
+            DescribeStreamResult
+            DeleteTableRequest
+            DeleteTableResult
+            DescribeTableRequest
+            DescribeTableResult
+            ExpectedAttributeValue
+            GetItemRequest
+            GetItemResult
+            GetRecordsRequest
+            GetRecordsResult
+            GetShardIteratorRequest
+            KeysAndAttributes
+            KeySchemaElement
+            ListStreamsRequest
+            ListStreamsResult
+            LocalSecondaryIndex
+            LocalSecondaryIndexDescription
+            GlobalSecondaryIndex
+            GlobalSecondaryIndexDescription
+            GlobalSecondaryIndexUpdate
+            Projection
+            ProvisionedThroughput
+            ProvisionedThroughputDescription
+            PutItemRequest
+            PutItemResult
+            PutRequest
+            QueryRequest
+            QueryResult
+            Record
+            ScanRequest
+            ScanResult
+            SequenceNumberRange
+            Shard
+            Stream
+            StreamDescription
+            StreamRecord
+            StreamSpecification
+            StreamViewType
+            TableDescription
+            UpdateItemRequest
+            UpdateItemResult
+            UpdateTableRequest
+            UpdateTableResult
+            WriteRequest
 
-             ConditionalCheckFailedException
-             DeleteGlobalSecondaryIndexAction
-             InternalServerErrorException
-             ItemCollectionSizeLimitExceededException
-             LimitExceededException
-             ProvisionedThroughputExceededException
-             ResourceInUseException
-             ResourceNotFoundException
-             UpdateGlobalSecondaryIndexAction]
+            ConditionalCheckFailedException
+            DeleteGlobalSecondaryIndexAction
+            InternalServerErrorException
+            ItemCollectionSizeLimitExceededException
+            LimitExceededException
+            ProvisionedThroughputExceededException
+            ResourceInUseException
+            ResourceNotFoundException
+            UpdateGlobalSecondaryIndexAction]
 
-            com.amazonaws.ClientConfiguration
-            com.amazonaws.auth.AWSCredentials
-            com.amazonaws.auth.AWSCredentialsProvider
-            com.amazonaws.auth.BasicAWSCredentials
-            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-            [com.amazonaws.services.dynamodbv2
-             AmazonDynamoDB
-             AmazonDynamoDBClient
-             AmazonDynamoDBStreams
-             AmazonDynamoDBStreamsClient]
-            java.nio.ByteBuffer))
+           com.amazonaws.ClientConfiguration
+           com.amazonaws.auth.AWSCredentials
+           com.amazonaws.auth.AWSCredentialsProvider
+           com.amazonaws.auth.BasicAWSCredentials
+           com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+           [com.amazonaws.services.dynamodbv2
+            AmazonDynamoDB
+            AmazonDynamoDBClient
+            AmazonDynamoDBStreams
+            AmazonDynamoDBStreamsClient]
+           java.nio.ByteBuffer
+           (taoensso.nippy.tools WrappedForFreezing)
+           (java.util Map Set ArrayList HashMap)))
 
 (if (vector? taoensso.encore/encore-version)
   (enc/assert-min-encore-version [2 67 2])
@@ -227,12 +222,6 @@
            "arbitrary-precision binary serialization."))
     x))
 
-(comment
-  (assert-precision "0.00000000000000000000000000000000000001")
-  (assert-precision "0.12345678901234567890123456789012345678")
-  (assert-precision "12345678901234567890123456789012345678")
-  (assert-precision 10))
-
 (defn- ddb-num? [x]
   "Is `x` a number type natively storable by DynamoDB? Note that DDB stores _all_
   numbers as exact-value strings with <= 38 digits of precision. For greater
@@ -246,12 +235,6 @@
       (and (instance? BigInt     x) (assert-precision x))
       (and (instance? BigDecimal x) (assert-precision x))
       (and (instance? BigInteger x) (assert-precision x))))
-
-(defn- num->ddb-num
-  "Coerce any special Clojure types that'd trip up the DDB Java client."
-  [x]
-  (cond (instance? BigInt x) (biginteger x)
-        :else x))
 
 (defn- ddb-num-str->num [^String s]
   ;; In both cases we'll err on the side of caution, assuming the most
@@ -277,18 +260,18 @@
           (some-> (.getL    x) (vector :l)))]
 
     (case type
-      :s    x
-      :n    (ddb-num-str->num x)
+      :s x
+      :n (ddb-num-str->num x)
       :null nil
       :bool (boolean  x)
-      :ss   (into #{} x)
-      :ns   (into #{} (mapv ddb-num-str->num x))
-      :bs   (into #{} (mapv nt-thaw          x))
-      :b    (nt-thaw  x)
+      :ss (into #{} x)
+      :ns (into #{} (mapv ddb-num-str->num x))
+      :bs (into #{} (mapv nt-thaw          x))
+      :b (nt-thaw  x)
 
       :l (mapv deserialize x)
-      :m (zipmap (mapv keyword     (.keySet ^java.util.HashMap x))
-                 (mapv deserialize (.values ^java.util.HashMap x))))))
+      :m (zipmap (mapv keyword (.keySet ^HashMap x))
+                 (mapv deserialize (.values ^HashMap x))))))
 
 (defprotocol ISerializable
   "Extensible protocol for mapping Clojure vals to AttributeValue objects."
@@ -306,20 +289,20 @@
   BigDecimal (serialize [x] (doto (AttributeValue.) (.setN (str (assert-precision x)))))
   BigInteger (serialize [x] (doto (AttributeValue.) (.setN (str (assert-precision x)))))
 
-  taoensso.nippy.tools.WrappedForFreezing
+  WrappedForFreezing
   (serialize [x] (doto (AttributeValue.) (.setB (nt-freeze x))))
 
-  clojure.lang.Keyword (serialize [kw] (serialize (enc/as-qname kw)))
+  Keyword (serialize [kw] (serialize (enc/as-qname kw)))
   String
   (serialize [s]
     (if (.isEmpty s)
       (throw (Exception. "Invalid DynamoDB value: \"\" (empty string)"))
       (doto (AttributeValue.) (.setS s))))
 
-  clojure.lang.IPersistentVector
+  IPersistentVector
   (serialize [v] (doto (AttributeValue.) (.setL (mapv serialize v))))
 
-  java.util.Map
+  Map
   (serialize [m]
     (doto (AttributeValue.)
       (.setM
@@ -329,7 +312,7 @@
             (transient {})
             m)))))
 
-  java.util.Set
+  Set
   (serialize [s]
     (if (empty? s)
       (throw (Exception. "Invalid DynamoDB value: empty set"))
@@ -342,11 +325,6 @@
 (extend-type (Class/forName "[B")
   ISerializable
   (serialize [ba] (doto (AttributeValue.) (.setB (nt-freeze ba)))))
-
-(comment
-  (mapv serialize
-    [  "a"    1 3.14    (.getBytes "a")    (freeze :a)
-     #{"a"} #{1 3.14} #{(.getBytes "a")} #{(freeze :a)}]))
 
 (defn- enum-op ^String [operator]
   (-> operator {:> "GT" :>= "GE" :< "LT" :<= "LE" := "EQ"} (or operator)
@@ -382,8 +360,8 @@
 
 (extend-protocol AsMap
   nil                 (as-map [_] nil)
-  java.util.ArrayList (as-map [a] (mapv as-map a))
-  java.util.HashMap   (as-map [m] (utils/keyword-map as-map m))
+  ArrayList (as-map [a] (mapv as-map a))
+  HashMap   (as-map [m] (utils/keyword-map as-map m))
 
   AttributeValue      (as-map [v] (deserialize v))
   AttributeDefinition (as-map [d] {:name (keyword       (.getAttributeName d))
@@ -603,11 +581,6 @@
 
           :else index)))))
 
-(comment
-  (create-table mc "delete-me5" [:id :s])
-  @(table-status-watch mc "delete-me5" :creating) ; ~53000ms
-  (def descr (describe-table mc "delete-me5")))
-
 (defn- key-schema-element "Returns a new KeySchemaElement object."
   [key-name key-type]
   (doto (KeySchemaElement.)
@@ -747,8 +720,6 @@
       result
       @(table-status-watch client-opts table-name :creating))))
 
-(comment (time (create-table mc "delete-me7" [:id :s] {:block? true})))
-
 (defn ensure-table "Creates a table iff it doesn't already exist."
   [client-opts table-name hash-keydef & [opts]]
   (when-not (describe-table client-opts table-name)
@@ -871,10 +842,6 @@
               (update-table-request table update-opts))
             ;; Returns _new_ descr when ready:
             @(table-status-watch client-opts table :updating)))))))
-
-(comment
-  (def dt (describe-table client-opts :faraday.tests.main))
-  @(update-table client-opts :faraday.tests.main {:read 1 :write 1}))
 
 (defn- delete-table-request "Implementation detail."
   ^DeleteTableRequest [table]
@@ -1093,16 +1060,6 @@
                         (apply utils/cartesian-product vs)))))
           [] (ensure-sequential attr-multi-vs-map))))))
 
-(comment
-  (with-attr-multi-vs ; ex:
-    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1" "c2"]}))
-
-  (with-attr-multi-vs ; Range over b's:
-    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c ["c1"]}))
-
-  (with-attr-multi-vs ; '':
-    (attr-multi-vs {:a "a1" :b ["b1" "b2" "b3"] :c #{"c1" "c2"}})))
-
 (defn- batch-request-items
   "Implementation detail.
   {<table> <request> ...} -> {<table> KeysAndAttributes> ...}"
@@ -1114,11 +1071,6 @@
        consistent? (.setConsistentRead  g)
        :always     (.setKeys (attr-multi-vs prim-kvs))))
    requests))
-
-(comment
-  (batch-request-items {:my-table {:prim-kvs [{:my-hash  ["a" "b"]
-                                               :my-range ["0" "1"]}]
-                                   :attrs []}}))
 
 (defn- merge-more
   "Enables auto paging for batch batch-get/write and query/scan requests.
@@ -1167,13 +1119,6 @@
               (.batchGetItem (db-client client-opts)
                 (batch-get-item-request return-cc? raw-req))))]
       (merge-more run1 span-reqs (run1 (batch-request-items requests))))))
-
-(comment
-  (def bigval (.getBytes (apply str (range 14000))))
-  (defn- ids [from to] (for [n (range from to)] {:id n :name bigval}))
-  (batch-write-item client-opts {:faraday.tests.main {:put (ids 0 10)}})
-  (batch-get-item   client-opts {:faraday.tests.main {:prim-kvs {:id (range 20)}}})
-  (scan client-opts :faraday.tests.main))
 
 (defn- write-request [action item] "Implementation detail."
   (case action
@@ -1492,17 +1437,6 @@
       (let [items item-or-items]
         (into {} (mapv (partial item-by-attrs attr-or-attrs) items))))))
 
-(comment
-  (items-by-attrs :a      {:a :A :b :B :c :C})
-  (items-by-attrs [:a]    {:a :A :b :B :c :C})
-  (items-by-attrs [:a :b] {:a :A :b :B :c :C})
-  (items-by-attrs :a      [{:a :A1 :b :B1 :c :C2}
-                           {:a :A2 :b :B2 :c :C2}])
-  (items-by-attrs [:a]    [{:a :A1 :b :B1 :c :C2}
-                           {:a :A2 :b :B2 :c :C2}])
-  (items-by-attrs [:a :b] [{:a :A1 :b :B1 :c :C2}
-                           {:a :A2 :b :B2 :c :C2}]))
-
 (def remove-empty-attr-vals
   "Alpha, subject to change.
   Util to help remove (or coerce to nil) empty val types prohibited by DDB,
@@ -1526,43 +1460,3 @@
         (enc/bytes? x) (when-not (zero? (alength ^bytes x)) x)
         :else x))))
 
-(comment
-  (remove-empty-attr-vals ; => {:b [{:a "b"}], :f false}
-    {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false}))
-
-(comment ; README
-
-(require '[taoensso.faraday :as far])
-
-(def client-opts
-  {:access-key "<AWS_DYNAMODB_ACCESS_KEY>"
-   :secret-key "<AWS_DYNAMODB_SECRET_KEY>"} ; Your IAM keys here
-  )
-
-(far/list-tables client-opts)
-;; => [] ; No tables yet :-(
-
-(far/create-table client-opts :my-table
-  [:id :n]  ; Primary key named "id", (:n => number type)
-  {:throughput {:read 1 :write 1} ; Read & write capacity (units/sec)
-   :block? true ; Block thread during table creation
-   })
-
-;; Wait a minute for the table to be created... got a sandwich handy?
-
-(far/list-tables client-opts)
-;; => [:my-table] ; There's our new table!
-
-(far/put-item client-opts
-  :my-table
-  {:id 0 ; Remember that this is our primary (indexed) key
-   :name "Steve" :age 22 :data (far/freeze {:vector    [1 2 3]
-                                            :set      #{1 2 3}
-                                            :rational (/ 22 7)
-                                            ;; ... Any Clojure data goodness
-                                            })})
-
-(far/get-item client-opts :my-table {:id 0})
-;; => {:id 0 :name "Steve" :age 22 :data {:vector [1 2 3] ...}}
-
-)

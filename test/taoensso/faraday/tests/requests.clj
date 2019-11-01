@@ -1,80 +1,46 @@
 (ns taoensso.faraday.tests.requests
   (:require
-   [expectations     :as test :refer :all]
-   [taoensso.encore  :as encore]
    [taoensso.faraday :as far]
-   [taoensso.nippy   :as nippy])
+   [expectations     :as test :refer :all])
 
   (:import
    [com.amazonaws.services.dynamodbv2.model
     AttributeAction
-    AttributeDefinition
     AttributeValue
     AttributeValueUpdate
     BatchGetItemRequest
-    BatchGetItemResult
     BatchWriteItemRequest
-    BatchWriteItemResult
     ComparisonOperator
     Condition
-    ConditionalCheckFailedException
-    ConsumedCapacity
-    CreateGlobalSecondaryIndexAction
     CreateTableRequest
-    CreateTableResult
-    DeleteGlobalSecondaryIndexAction
     DeleteItemRequest
-    DeleteItemResult
     DeleteRequest
-    DeleteTableRequest
-    DeleteTableResult
     DescribeStreamRequest
     DescribeTableRequest
-    DescribeTableResult
     ExpectedAttributeValue
     GetItemRequest
-    GetItemResult
     GetRecordsRequest
     GetShardIteratorRequest
     GlobalSecondaryIndex
-    GlobalSecondaryIndexDescription
     GlobalSecondaryIndexUpdate
-    InternalServerErrorException
-    ItemCollectionMetrics
-    ItemCollectionSizeLimitExceededException
     KeySchemaElement
     KeyType
     KeysAndAttributes
-    LimitExceededException
     ListStreamsRequest
-    ListTablesRequest
-    ListTablesResult
     LocalSecondaryIndex
-    LocalSecondaryIndexDescription
     Projection
     ProjectionType
     ProvisionedThroughput
-    ProvisionedThroughputDescription
-    ProvisionedThroughputExceededException
     PutItemRequest
-    PutItemResult
     PutRequest
     QueryRequest
-    QueryResult
-    ResourceInUseException
-    ResourceNotFoundException
     ReturnValue
     ScanRequest
-    ScanResult
     Select
     ShardIteratorType
     StreamViewType
-    TableDescription
-    UpdateGlobalSecondaryIndexAction
     UpdateItemRequest
-    UpdateItemResult
     UpdateTableRequest
-    UpdateTableResult
     WriteRequest]))
 
 (comment
@@ -83,24 +49,24 @@
 
 ;;;; Private var aliases
 
-(def describe-table-request     #'taoensso.faraday/describe-table-request)
-(def create-table-request       #'taoensso.faraday/create-table-request)
-(def update-table-request       #'taoensso.faraday/update-table-request)
-(def get-item-request           #'taoensso.faraday/get-item-request)
-(def put-item-request           #'taoensso.faraday/put-item-request)
-(def update-item-request        #'taoensso.faraday/update-item-request)
-(def delete-item-request        #'taoensso.faraday/delete-item-request)
-(def batch-get-item-request     #'taoensso.faraday/batch-get-item-request)
-(def batch-request-items        #'taoensso.faraday/batch-request-items)
-(def batch-write-item-request   #'taoensso.faraday/batch-write-item-request)
-(def attr-multi-vs              #'taoensso.faraday/attr-multi-vs)
-(def query-request              #'taoensso.faraday/query-request)
-(def write-request              #'taoensso.faraday/write-request)
-(def scan-request               #'taoensso.faraday/scan-request)
-(def list-stream-request        #'taoensso.faraday/list-streams-request)
-(def describe-stream-request    #'taoensso.faraday/describe-stream-request)
-(def get-shard-iterator-request #'taoensso.faraday/get-shard-iterator-request)
-(def get-records-request        #'taoensso.faraday/get-records-request)
+(def describe-table-request     #'far/describe-table-request)
+(def create-table-request       #'far/create-table-request)
+(def update-table-request       #'far/update-table-request)
+(def get-item-request           #'far/get-item-request)
+(def put-item-request           #'far/put-item-request)
+(def update-item-request        #'far/update-item-request)
+(def delete-item-request        #'far/delete-item-request)
+(def batch-get-item-request     #'far/batch-get-item-request)
+(def batch-request-items        #'far/batch-request-items)
+(def batch-write-item-request   #'far/batch-write-item-request)
+(def attr-multi-vs              #'far/attr-multi-vs)
+(def query-request              #'far/query-request)
+(def write-request              #'far/write-request)
+(def scan-request               #'far/scan-request)
+(def list-stream-request        #'far/list-streams-request)
+(def describe-stream-request    #'far/describe-stream-request)
+(def get-shard-iterator-request #'far/get-shard-iterator-request)
+(def get-records-request        #'far/get-records-request)
 
 ;;;;
 

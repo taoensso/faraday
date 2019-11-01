@@ -12,12 +12,12 @@
    [com.amazonaws AmazonServiceException]))
 
 (comment
-  (remove-ns       'taoensso.faraday.tests.main)
-  (test/run-tests '[taoensso.faraday.tests.main]))
+  (remove-ns       'far.tests.main)
+  (test/run-tests '[far.tests.main]))
 
 ;;;; Private var aliases
 
-(def index-status-watch #'taoensso.faraday/index-status-watch)
+(def index-status-watch #'far/index-status-watch)
 
 ;;;; Config & setup
 
