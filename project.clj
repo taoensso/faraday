@@ -33,7 +33,11 @@
    :dev
    [:1.9 :test :server-jvm
     {:plugins [[lein-ancient "0.6.4"]
-               [lein-codox   "0.9.1"]]}]}
+               [lein-codox   "0.9.1"]
+               [clj-dynamodb-local "0.1.2"]]}]}
+
+  :dynamodb-local {:port 6798
+                   :in-memory? true}
 
   :test-paths ["test" "src"]
 
@@ -42,8 +46,8 @@
    :source-uri "https://github.com/ptaoussanis/faraday/blob/master/{filepath}#L{line}"}
 
   :aliases
-  {"test-all"   ["with-profile" "+1.9:+1.8:+1.7:+1.6:+1.5" "expectations"]
-   "test-auto"  ["with-profile" "+test" "autoexpect"]
+  {"test-all"   ["with-profile" "+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "expectations"]
+   "test-auto"  ["with-profile" "+test" "dynamodb-local" "autoexpect"]
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}
 

@@ -151,6 +151,22 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 You can also check out the [official AWS DynamoDB documentation] though there's a lot of irrelevant Java-land complexity you won't need to deal with with Faraday. The most useful single doc is probably on the [DynamoDB data model].
 
+## Development
+
+This project uses the [dynamodb-local] Lein plugin to manage downloading, starting and stopping an in-memory DynamoDB instance.
+
+To run all the tests locally, run:
+
+```bash
+./run-tests local
+```
+
+To run tests from a repl using a local DynamoDB instance, run:
+
+```bash
+lein dynamodb-local
+```
+
 ## Contacting me / contributions
 
 Please use the project's [GitHub issues page] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors page] for a list of contributors.
@@ -194,3 +210,4 @@ Copyright &copy; 2013-2016 [Peter Taoussanis].
 [primary keys]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html#DataModelPrimaryKey
 [official AWS DynamoDB documentation]: http://aws.amazon.com/documentation/dynamodb/
 [DynamoDB data model]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html
+[dynamodb-local]: https://github.com/dmcgillen/clj-dynamodb-local

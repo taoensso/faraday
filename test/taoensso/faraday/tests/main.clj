@@ -22,9 +22,9 @@
 ;;;; Config & setup
 
 (def ^:dynamic *client-opts*
-  {:access-key (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY")
-   :secret-key (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY")
-   :endpoint   (get (System/getenv) "AWS_DYNAMODB_ENDPOINT")})
+  {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "")
+   :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "")
+   :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")})
 
 (def ttable      :faraday.tests.main)
 (def range-table :faraday.tests.range)
