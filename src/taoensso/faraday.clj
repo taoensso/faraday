@@ -17,7 +17,6 @@
             [taoensso.faraday.utils :as utils :refer (coll?*)])
   (:import [clojure.lang BigInt Keyword IPersistentVector]
            [com.amazonaws.services.dynamodbv2.model
-            AttributeAction
             AttributeDefinition
             AttributeValue
             AttributeValueUpdate
@@ -88,7 +87,8 @@
             ProvisionedThroughputExceededException
             ResourceInUseException
             ResourceNotFoundException
-            UpdateGlobalSecondaryIndexAction]
+            UpdateGlobalSecondaryIndexAction
+            BillingModeSummary]
 
            com.amazonaws.ClientConfiguration
            com.amazonaws.auth.AWSCredentials
@@ -402,6 +402,7 @@
      :item-count          (.getItemCount d)
      :size                (.getTableSizeBytes d)
      :throughput          (as-map (.getProvisionedThroughput d))
+     :billing-mode        (as-map (.getBillingModeSummary d))
      :indexes             (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
      :lsindexes           (as-map (.getLocalSecondaryIndexes d))
      :gsindexes           (as-map (.getGlobalSecondaryIndexes d))
@@ -452,6 +453,11 @@
      :last-decrease       (.getLastDecreaseDateTime d)
      :last-increase       (.getLastIncreaseDateTime d)
      :num-decreases-today (.getNumberOfDecreasesToday d)})
+
+  BillingModeSummary
+  (as-map [d]
+    {:name                (utils/un-enum (.getBillingMode d))
+     :last-update         (.getLastUpdateToPayPerRequestDateTime d)})
 
   StreamSpecification
   (as-map [s]
@@ -649,26 +655,28 @@
   "Implementation detail.
   [{:name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _} ...]
   indexes -> [GlobalSecondaryIndex ...]"
-  [indexes]
+  [indexes billing-mode]
   (when indexes
     (mapv
       (fn [{index-name :name
            :keys [hash-keydef range-keydef throughput projection]
            :or   {projection :all}
            :as   index}]
-        (assert (and index-name hash-keydef projection throughput)
+        (assert (and index-name hash-keydef projection (or
+                                                        (and throughput (not (= :pay-per-request billing-mode)))
+                                                        (and (= :pay-per-request billing-mode) (not throughput))))
                 (str "Malformed global secondary index (GSI): " index))
-        (doto (GlobalSecondaryIndex.)
-          (.setIndexName (name index-name))
-          (.setKeySchema (key-schema hash-keydef range-keydef))
-          (.setProjection
-            (let [pr (Projection.)
-                  ptype (if (coll?* projection) :include projection)]
-              (.setProjectionType pr (utils/enum ptype))
-              (when (= ptype :include)
-                (.setNonKeyAttributes pr (mapv name projection)))
-              pr))
-          (.setProvisionedThroughput (provisioned-throughput throughput))))
+        (doto-cond [_ (GlobalSecondaryIndex.)]
+          :always (.setIndexName (name index-name))
+          :always (.setKeySchema (key-schema hash-keydef range-keydef))
+          :always (.setProjection
+                    (let [pr (Projection.)
+                          ptype (if (coll?* projection) :include projection)]
+                      (.setProjectionType pr (utils/enum ptype))
+                      (when (= ptype :include)
+                        (.setNonKeyAttributes pr (mapv name projection)))
+                      pr))
+          throughput (.setProvisionedThroughput (provisioned-throughput throughput))))
       indexes)))
 
 (defn- stream-specification "Implementation detail."
@@ -679,19 +687,21 @@
 
 (defn- create-table-request "Implementation detail."
   [table-name hash-keydef
-   & [{:keys [range-keydef throughput lsindexes gsindexes stream-spec]
-       :or   {throughput {:read 1 :write 1}} :as opts}]]
+   & [{:keys [range-keydef throughput lsindexes gsindexes stream-spec billing-mode]
+       :or   {billing-mode :provisioned} :as opts}]]
+  (assert (not (and throughput (= :pay-per-request billing-mode))) "Can't specify :throughput and :pay-per-request billing-mode")
   (let [lsindexes (or lsindexes (:indexes opts))]
     (doto-cond [_ (CreateTableRequest.)]
       :always (.setTableName (name table-name))
       :always (.setKeySchema (key-schema hash-keydef range-keydef))
-      :always (.setProvisionedThroughput (provisioned-throughput throughput))
+      throughput (.setProvisionedThroughput (provisioned-throughput (or throughput {:read 1 :write 1})))
+      :always (.setBillingMode (utils/enum billing-mode))
       :always (.setAttributeDefinitions
                (keydefs hash-keydef range-keydef lsindexes gsindexes))
       lsindexes (.setLocalSecondaryIndexes
                  (local-2nd-indexes hash-keydef lsindexes))
       gsindexes (.setGlobalSecondaryIndexes
-                 (global-2nd-indexes gsindexes))
+                 (global-2nd-indexes gsindexes billing-mode))
       stream-spec (.setStreamSpecification
                    (stream-specification stream-spec)))))
 
@@ -700,6 +710,7 @@
     hash-keydef   - [<name> <#{:s :n :ss :ns :b :bs}>].
     :range-keydef - [<name> <#{:s :n :ss :ns :b :bs}>].
     :throughput   - {:read <units> :write <units>}.
+    :billing-mode - :provisioned | :pay-per-request ; defaults to provisioned
     :block?       - Block for table to actually be active?
     :lsindexes    - [{:name _ :range-keydef _
                       :projection <#{:all :keys-only [<attr> ...]}>}].
@@ -709,10 +720,8 @@
     :stream-spec  - {:enabled? <default true if spec is present>
                      :view-type <#{:keys-only :new-image :old-image :new-and-old-images}>}"
   [client-opts table-name hash-keydef
-   & [{:keys [range-keydef throughput lsindexes gsindexes block?]
-       :as opts}]]
-  (let [lsindexes (or lsindexes (:indexes opts)) ; DEPRECATED
-        result
+   & [{:keys [block?] :as opts}]]
+  (let [result
         (as-map
          (.createTable (db-client client-opts)
            (create-table-request table-name hash-keydef opts)))]
@@ -773,17 +782,20 @@
     nil))
 
 (defn- update-table-request "Implementation detail."
-  [table {:keys [throughput gsindexes stream-spec]}]
+  [table {:keys [throughput gsindexes stream-spec billing-mode] :as params}]
+  (assert (not (and throughput
+               (= :pay-per-request billing-mode))) "Can't specify :throughput and :pay-per-request billing-mode")
   (let [attr-defs (keydefs nil nil nil [gsindexes])]
     (doto-cond
       [_ (UpdateTableRequest.)]
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
+      billing-mode (.setBillingMode (utils/enum billing-mode))
       gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates gsindexes)])
       stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
-(defn- validate-update-opts [table-desc {:keys [throughput] :as params}]
+(defn- validate-update-opts [table-desc {:keys [throughput billing-mode] :as params}]
   (let [{read* :read write* :write} throughput
         current-throughput (:throughput table-desc)
         {:keys [read write num-decreases-today]} current-throughput
@@ -791,6 +803,15 @@
         write*             (or write* write)
         decreasing?        (or (< read* read) (< write* write))]
     (cond
+
+      (and throughput
+           (= :pay-per-request billing-mode))
+      (throw (Exception. "Can't specify :throughput and :pay-per-request billing-mode"))
+
+      (and (not throughput)
+           (= :pay-per-request billing-mode))
+      params
+
       ;; Hard API limit
       (and decreasing? (>= num-decreases-today 4))
       (throw (Exception. (str "API Limit - Max 4 decreases per 24hr period")))
@@ -807,15 +828,16 @@
   description.
 
   Update opts:
-    :throughput  - {:read <units> :write <units>}
-    :gsindexes   - {:operation    ; e/o #{:create :update :delete}
-                    :name         ; Required
-                    :throughput   ; Only for :update / :create
-                    :hash-keydef  ; Only for :create
-                    :range-keydef ;
-                    :projection   ; e/o #{:all :keys-only [<attr> ...]}}
-    :stream-spec - {:enabled?     ;
-                    :view-type    ; e/o #{:keys-only :new-image :old-image :old-and-new-images}}
+    :throughput   - {:read <units> :write <units>}
+    :billing-mode - :provisioned | :pay-per-request   ; defaults to provisioned
+    :gsindexes    - {:operation                       ; e/o #{:create :update :delete}
+                    :name                             ; Required
+                    :throughput                       ; Only for :update / :create
+                    :hash-keydef                      ; Only for :create
+                    :range-keydef                     ;
+                    :projection                       ; e/o #{:all :keys-only [<attr> ...]}}
+    :stream-spec  - {:enabled?                        ;
+                    :view-type                        ; e/o #{:keys-only :new-image :old-image :old-and-new-images}}
 
   Only one global secondary index operation can take place at a time.
   In order to change a stream view-type, you need to disable and re-enable the stream."
