@@ -1,7 +1,8 @@
 (ns taoensso.faraday.tests.requests
   (:require
    [taoensso.faraday :as far]
-   [expectations     :as test :refer :all])
+   [expectations :as test :refer :all]
+   [taoensso.faraday.utils :as utils])
 
   (:import
    [com.amazonaws.services.dynamodbv2.model
@@ -132,6 +133,42 @@
     (expect true (.getStreamEnabled stream-spec))
     (expect (.toString StreamViewType/NEW_IMAGE) (.getStreamViewType stream-spec))))
 
+(expect AssertionError
+        (create-table-request
+         :create-table-name [:hash-keydef :n]
+         {:range-keydef [:range-keydef :n]
+          :billing-mode :pay-per-request
+          :throughput {:read 5 :write 10}}))
+
+(expect AssertionError
+        (create-table-request
+         :create-table-name [:hash-keydef :n]
+         {:range-keydef [:range-keydef :n]
+          :billing-mode :pay-per-request
+          :gsindexes [{:name "global-secondary"
+                       :hash-keydef [:gs-hash-keydef :n]
+                       :range-keydef [:gs-range-keydef :n]
+                       :projection :keys-only
+                       :throughput {:read 10 :write 2}}]}))
+
+(let [req ^CreateTableRequest
+          (create-table-request
+           :create-table-name [:hash-keydef :n]
+           {:range-keydef [:range-keydef :n]
+            :billing-mode :pay-per-request
+            :gsindexes [{:name "global-secondary"
+                         :hash-keydef [:gs-hash-keydef :n]
+                         :range-keydef [:gs-range-keydef :n]
+                         :projection :keys-only}]})]
+
+  (expect nil (.getProvisionedThroughput req))
+
+  (expect (utils/enum :pay-per-request) (.getBillingMode req))
+  (let [[^GlobalSecondaryIndex gsindex & rest] (.getGlobalSecondaryIndexes req)]
+    (expect
+     nil
+     (.getProvisionedThroughput gsindex))))
+
 (expect
  "update-table"
  (.getTableName
@@ -197,8 +234,7 @@
   (let [[^GlobalSecondaryIndexUpdate gsindex & rest] (.getGlobalSecondaryIndexUpdates req)
         action (.getDelete gsindex)]
     (expect nil? rest)
-    (expect "global-secondary" (.getIndexName action))
-    ))
+    (expect "global-secondary" (.getIndexName action))))
 
 (let [req ^UpdateTableRequest (update-table-request
                                 :update-table
@@ -206,6 +242,19 @@
       stream-spec (.getStreamSpecification req)]
   (expect false (.getStreamEnabled stream-spec))
   (expect nil? (.getStreamViewType stream-spec)))
+
+(expect
+ (utils/enum :pay-per-request)
+ (.getBillingMode
+  ^UpdateTableRequest
+  (update-table-request :update-table {:billing-mode :pay-per-request})))
+
+(expect
+ AssertionError
+ (update-table-request
+  :update-table
+  {:throughput {:read 4 :write 2}
+   :billing-mode :pay-per-request}))
 
 (expect
  "get-item"

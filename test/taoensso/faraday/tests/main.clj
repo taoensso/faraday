@@ -425,8 +425,7 @@
    ConditionalCheckFailedException
    (update-t
      {:update-map {:val [:add 1]}
-      :expected   {:val [:= 2]}}))
-  )
+      :expected   {:val [:= 2]}})))
 
 ;;; Query and delete-item tests
 (let [i0    {:name    "Nineteen Eighty-Four"
@@ -454,15 +453,13 @@
              :author "George Orwell"
              :year   1945
              :read?  true}
-      books [i0 i1 i2 i3 i4]
-      ]
+      books [i0 i1 i2 i3 i4]]
 
   (after-setup!
     #(do
       (far/batch-write-item *client-opts*
                             {book-table {:delete (mapv (fn [m] (select-keys m [:author :name])) books)}})
-      (far/batch-write-item *client-opts* {book-table {:put books}})
-      ))
+      (far/batch-write-item *client-opts* {book-table {:put books}})))
 
   ;; Books are returned ordered by the sort key
   (expect
@@ -614,9 +611,7 @@
                            {:name   "Animal Farm"
                             :author "George Orwell"}
                            {:cond-expr       "#y = 1945"
-                            :expr-attr-names {"#y" "year"}}))
-
-  )
+                            :expr-attr-names {"#y" "year"}})))
 
 
 ;;;; range queries
@@ -625,8 +620,7 @@
       k0 {:title "Two" :number 0}
       k1 {:title "Two" :number 1}
       k2 {:title "Two" :number 2}
-      k3 {:title "Two" :number 3}
-      ]
+      k3 {:title "Two" :number 3}]
 
   (after-setup!
     #(far/batch-write-item *client-opts* {range-table {:put [j0 j1 k0 k1 k2 k3]}}))
@@ -666,9 +660,7 @@
   (expect
     [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
                                                   :number [:ge 1]}
-                       {:limit 2 :span-reqs {:max 1}}))
-
-  )
+                       {:limit 2 :span-reqs {:max 1}})))
 
 
 (let [data nippy/stress-data-comparable]
@@ -725,9 +717,6 @@
           [(far/get-item *client-opts* ttable {:id  0})
            (far/get-item *client-opts* ttable {:id  1})
            (far/get-item *client-opts* ttable {:id -1})])))))
-
-
-
 
 ;;; Test global secondary index creation
 (defn get-temp-table []
@@ -900,8 +889,7 @@
             :key-schema [{:type :hash :name :artist} {:name :year :type :range}]
             :projection {:projection-type    "ALL"
                          :non-key-attributes nil}}]
-          (:lsindexes created))
-  )
+          (:lsindexes created)))
 
 ;; We can combine local secondary and global secondary indexes
 (do-with-temp-table
@@ -961,8 +949,7 @@
                              {:throughput {:read 1 :write 1}
                               :block?     true})
    updated @(far/update-table *client-opts* temp-table {:throughput {:read 16 :write 16}})
-   again   @(far/update-table *client-opts* temp-table {:throughput {:read 256 :write 256}})
-   ]
+   again   @(far/update-table *client-opts* temp-table {:throughput {:read 256 :write 256}})]
   ; Both table descriptions are the same other than the throughput
   (expect (dissoc created :throughput)
           (dissoc updated :throughput))
@@ -978,8 +965,7 @@
     {:read 256 :write 256}
     (-> again
         :throughput
-        (select-keys #{:read :write})))
-  )
+        (select-keys #{:read :write}))))
 
 ;; Test decreasing throughput
 (do-with-temp-table
@@ -988,8 +974,7 @@
                              {:throughput {:read 256 :write 256}
                               :block?     true})
    updated @(far/update-table *client-opts* temp-table {:throughput {:read 16 :write 16}})
-   again   @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})
-   ]
+   again   @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})]
   ; Both table descriptions are the same other than the throughput
   (expect (dissoc created :throughput)
           (dissoc updated :throughput))
@@ -1005,8 +990,7 @@
     {:read 1 :write 1}
     (-> again
         :throughput
-        (select-keys #{:read :write})))
-  )
+        (select-keys #{:read :write}))))
 
 ;; Sending the same throughput as what the table has should have no effect
 (do-with-temp-table
@@ -1014,11 +998,9 @@
                              [:artist :s]
                              {:throughput {:read 1 :write 1}
                               :block?     true})
-   updated @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})
-   ]
+   updated @(far/update-table *client-opts* temp-table {:throughput {:read 1 :write 1}})]
   ; Both table descriptions are the same
-  (expect created updated)
-  )
+  (expect created updated))
 
 ;; Sending an empty parameter set should have no effect
 (do-with-temp-table
@@ -1026,8 +1008,7 @@
                              [:artist :s]
                              {:throughput {:read 1 :write 1}
                               :block?     true})
-   updated @(far/update-table *client-opts* temp-table {})
-   ]
+   updated @(far/update-table *client-opts* temp-table {})]
   ; Both table descriptions are the same
   (expect created updated))
 
@@ -1068,8 +1049,7 @@
                                            }})
    _ @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
    ;; And get the final state
-   fin-idx (far/describe-table *client-opts* temp-table)
-   ]
+   fin-idx (far/describe-table *client-opts* temp-table)]
 
   ;; Tables are the same other than the global indexes
   (expect (dissoc created :gsindexes :prim-keys)
@@ -1126,8 +1106,7 @@
             :key-schema [{:name :amount :type :hash}]
             :projection {:projection-type "ALL" :non-key-attributes nil}
             :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
-          (:gsindexes fin-idx))
-  )
+          (:gsindexes fin-idx)))
 
 ;; We can scan with an index, and do projections
 (do-with-temp-table
@@ -1173,8 +1152,7 @@
                                                  :index     "genre-index"})
    with-name (far/scan *client-opts* temp-table {:proj-expr       "genre, #y"
                                                  :index           "year-index"
-                                                 :expr-attr-names {"#y" "year"}})
-   ]
+                                                 :expr-attr-names {"#y" "year"}})]
   ;; Querying for a range key returns items sorted
   (expect
     [{:artist     "The Mars Volta"
@@ -1213,8 +1191,7 @@
       :year       2007}
      {:genre      "Electro"
       :year       2012}]
-    with-name)
-  )
+    with-name))
 
 
 ;;; Test `list-tables` lazy sequence
@@ -1293,5 +1270,27 @@
      (expect string? (:next-shard-iterator records-result))
      (doseq [[item record] (mapv vector items records)]
        (expect {:old-image {}
-                :new-image item} (in record))))
-  )
+                :new-image item} (in record)))))
+
+
+(do-with-temp-table
+ [created (far/create-table *client-opts* temp-table
+                            [:title :s]
+                            {:billing-mode :provisioned
+                             :block? true
+                             :throughput {:read 10 :write 10}})]
+ (let [create-described (far/describe-table *client-opts* temp-table)]
+   (expect :provisioned (-> create-described :billing-mode :name))
+   @(far/update-table *client-opts* temp-table
+                     {:billing-mode :pay-per-request}))
+ (let [update-described (far/describe-table *client-opts* temp-table)]
+   (expect :pay-per-request (-> update-described :billing-mode :name))))
+
+(do-with-temp-table
+ [created (far/create-table *client-opts* temp-table
+                            [:title :s]
+                            {:billing-mode :pay-per-request
+                             :block? true})]
+ (let [described (far/describe-table *client-opts* temp-table)]
+   (expect :pay-per-request (-> described :billing-mode :name))))
+
