@@ -48,8 +48,6 @@ Your link here?          | **PR's welcome!**
 
 ## Getting started
 
-> See also [@ricardojmendez/ddb-tutorial] for a full tutorial!
-
 Add the necessary dependency to your project:
 
 ```clojure
