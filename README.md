@@ -7,8 +7,7 @@
 [com.taoensso/faraday "1.9.0"] ; BREAKING, see CHANGELOG for details
 ```
 
-[![build status](https://gitlab.com/ricardojmendez/faraday/badges/master/build.svg)](https://gitlab.com/ricardojmendez/faraday/commits/master)
-
+[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
 
 > Please consider helping to [support my continued open-source Clojure/Script work]? 
 > 

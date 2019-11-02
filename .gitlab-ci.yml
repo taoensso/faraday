@@ -1,9 +1,0 @@
-image: clojure:lein-2.7.0
-
-before_script:
-  - chmod a+x run-tests
-
-test:
-  script:
-  - ./run-tests local
-
