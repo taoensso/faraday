@@ -52,5 +52,16 @@
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}
 
-  :repositories {"sonatype-oss-public"
+  :release-tasks [["vcs" "assert-committed"]
+                  ["change" "version" "leiningen.release/bump-version" "release"]
+                  ["vcs" "commit"]
+                  ["vcs" "tag" "v"]
+                  ["deploy" "clojars"]
+                  ["change" "version" "leiningen.release/bump-version"]
+                  ["vcs" "commit"]
+                  ["vcs" "push"]]
+
+  :repositories {"releases" {:url "https://clojars.org/repo"
+                             :creds :gpg}
+                 "sonatype-oss-public"
                  "https://oss.sonatype.org/content/groups/public/"})
