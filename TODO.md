@@ -17,7 +17,7 @@ Table configuration
 - [ ] Point-in-time recovery
 - [ ] Encryption type (+ KMS)
 - [ ] Auto-scaling
-- [ ] On-Demand capacity  
+- [X] On-Demand capacity  
 - [ ] Global tables
 - [ ] Triggers
 - [ ] Tags
