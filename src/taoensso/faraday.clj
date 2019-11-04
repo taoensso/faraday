@@ -663,7 +663,7 @@
            :or   {projection :all}
            :as   index}]
         (assert (and index-name hash-keydef projection (or
-                                                        (and throughput (not (= :pay-per-request billing-mode)))
+                                                        (not (= :pay-per-request billing-mode))
                                                         (and (= :pay-per-request billing-mode) (not throughput))))
                 (str "Malformed global secondary index (GSI): " index))
         (doto-cond [_ (GlobalSecondaryIndex.)]

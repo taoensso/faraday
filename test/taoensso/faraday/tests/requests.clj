@@ -169,6 +169,18 @@
      nil
      (.getProvisionedThroughput gsindex))))
 
+(let [req ^CreateTableRequest
+          (create-table-request
+           :create-table-name [:hash-keydef :n]
+           {:range-keydef [:range-keydef :n]
+            :gsindexes [{:name "global-secondary"
+                         :hash-keydef [:gs-hash-keydef :n]
+                         :range-keydef [:gs-range-keydef :n]
+                         :projection :keys-only}]})]
+
+  (expect nil (.getProvisionedThroughput req))
+  (expect (utils/enum :throughput) (.getBillingMode req)))
+
 (expect
  "update-table"
  (.getTableName
