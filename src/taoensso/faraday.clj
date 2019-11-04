@@ -1105,10 +1105,12 @@
           (with-meta items (dissoc last-result :items))
           last-result)
         (let [merge-results (fn [l r] (cond (number? l) (+    l r)
-                                           (vector? l) (into l r)
-                                           :else               r))]
+                                            (vector? l) (into l r)
+                                            :else               r))]
           (when throttle-ms (Thread/sleep throttle-ms))
-          (recur (merge-with merge-results last-result (more-f more))
+          (recur (let [next-result (more-f more)]
+                   (merge (merge-with merge-results (dissoc last-result :items) (dissoc next-result :items))
+                          {:items (enc/nested-merge-with into (:items last-result) (:items next-result))}))
                  (inc idx)))))))
 
 (defn- batch-get-item-request "Implementation detail."
@@ -1264,12 +1266,14 @@
        :or   {span-reqs {:max 5}}}]]
   (let [run1
         (fn [last-prim-kvs]
-          (as-map
-            (.query
-              (db-client client-opts)
-              (query-request table prim-key-conds
-                (assoc opts :last-prim-kvs last-prim-kvs)))))]
-    (merge-more run1 span-reqs (run1 last-prim-kvs))))
+          (update-in
+            (as-map
+              (.query
+                (db-client client-opts)
+                (query-request table prim-key-conds
+                  (assoc opts :last-prim-kvs last-prim-kvs))))
+           [:items] (fn [items] {table items})))]
+    (table (merge-more run1 span-reqs (run1 last-prim-kvs)))))
 
 (defn- scan-request
   [table
@@ -1340,11 +1344,13 @@
 
   (let [run1
         (fn [last-prim-kvs]
-          (as-map
-            (.scan
-              (db-client client-opts)
-              (scan-request table (assoc opts :last-prim-kvs last-prim-kvs)))))]
-    (merge-more run1 span-reqs (run1 last-prim-kvs))))
+          (update-in
+            (as-map
+              (.scan
+                (db-client client-opts)
+                (scan-request table (assoc opts :last-prim-kvs last-prim-kvs))))
+            [:items] (fn [items] {table items})))]
+    (table (merge-more run1 span-reqs (run1 last-prim-kvs)))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
