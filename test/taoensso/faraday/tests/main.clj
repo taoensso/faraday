@@ -29,6 +29,7 @@
 (def ttable      :faraday.tests.main)
 (def range-table :faraday.tests.range)
 (def book-table  :faraday.tests.books)
+(def bulk-table  :faraday.tests.bulk)
 
 (def run-after-setup (atom #{}))
 (defn- after-setup! [thunk] (swap! run-after-setup conj thunk))
@@ -53,6 +54,12 @@
   (far/ensure-table *client-opts* book-table
     [:author :s]
     {:range-keydef [:name :s]
+     :throughput   {:read 1 :write 1}
+     :block?       true})
+
+  (far/ensure-table *client-opts* bulk-table
+    [:group :s]
+    {:range-keydef [:id :n]
      :throughput   {:read 1 :write 1}
      :block?       true})
 
@@ -109,6 +116,41 @@
    [nil nil] (do (far/batch-write-item *client-opts* {ttable {:delete {:id [0 1]}}})
                  [(far/get-item *client-opts* ttable {:id 0})
                   (far/get-item *client-opts* ttable {:id 1})])))
+
+(let [num-items 100]
+
+  (after-setup!
+   #(doseq [batch (partition 25 (range num-items))]
+      (far/batch-write-item *client-opts*
+                            {bulk-table {:delete (map (fn [i] {:group "group" :id i}) batch)}})))
+
+  (expect
+   [100 100 100] (do (let [long-text (apply str (repeatedly 300000 (constantly "n")))]
+                       (doseq [i (range num-items)]
+                         (far/put-item *client-opts* bulk-table {:group "group"
+                                                                 :id i
+                                                                 :text long-text})))
+                     [(->> (far/batch-get-item *client-opts*
+                                               {bulk-table {:prim-kvs {:group "group"
+                                                                       :id (range num-items)}
+                                                            :attrs [:id]
+                                                            :consistent? true}})
+                           bulk-table set count)
+                      (->> (far/query *client-opts*
+                                      bulk-table {:group [:eq "group"]
+                                                  :id [:lt num-items]}
+                                      {:consistent? true
+                                       :limit 100
+                                       :span-reqs {:max 25}
+                                       :return #{:id}})
+                           set count)
+                      (->> (far/scan *client-opts*
+                                     bulk-table
+                                     {:consistent? true
+                                      :limit 100
+                                      :span-reqs {:max 25}
+                                      :return #{:id}})
+                           set count)])))
 
 (let [i {:id 10 :name "update me"}]
 
@@ -1293,4 +1335,3 @@
                              :block? true})]
  (let [described (far/describe-table *client-opts* temp-table)]
    (expect :pay-per-request (-> described :billing-mode :name))))
-
