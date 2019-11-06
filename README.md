@@ -185,14 +185,13 @@ Copyright &copy; 2013-2016 [Peter Taoussanis].
 
 <!--- Standard links (repo specific) -->
 [CHANGELOG]: https://github.com/ptaoussanis/faraday/releases
-[API]: http://ptaoussanis.github.io/faraday/
+[API]: http://taoensso.github.io/faraday/
 [GitHub issues page]: https://github.com/ptaoussanis/faraday/issues
 [GitHub contributors page]: https://github.com/ptaoussanis/faraday/graphs/contributors
 [EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/faraday/master/LICENSE
 [Hero]: https://raw.githubusercontent.com/ptaoussanis/faraday/master/hero.png "Title"
 
 <!--- Unique links -->
-
 [DynamoDB]: http://aws.amazon.com/dynamodb/
 [Rotary client]: https://github.com/weavejester/rotary
 [contributors]: https://github.com/ptaoussanis/faraday/graphs/contributors
