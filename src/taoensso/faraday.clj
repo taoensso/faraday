@@ -1272,8 +1272,10 @@
                 (db-client client-opts)
                 (query-request table prim-key-conds
                   (assoc opts :last-prim-kvs last-prim-kvs))))
-           [:items] (fn [items] {table items})))]
-    (table (merge-more run1 span-reqs (run1 last-prim-kvs)))))
+            [:items]
+            (fn [items] {table items})))
+        result (merge-more run1 span-reqs (run1 last-prim-kvs))]
+    (with-meta (table result) (meta result))))
 
 (defn- scan-request
   [table
@@ -1349,8 +1351,10 @@
               (.scan
                 (db-client client-opts)
                 (scan-request table (assoc opts :last-prim-kvs last-prim-kvs))))
-            [:items] (fn [items] {table items})))]
-    (table (merge-more run1 span-reqs (run1 last-prim-kvs)))))
+            [:items]
+            (fn [items] {table items})))
+        result (merge-more run1 span-reqs (run1 last-prim-kvs))]
+    (with-meta (table result) (meta result))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles

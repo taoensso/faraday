@@ -589,6 +589,15 @@
                                              :limit           1
                                              :span-reqs       {:max 1}
                                              :expr-attr-vals  {":r" true}}))
+  ;; Paging metadata is returned
+  (expect
+   {:cc-units nil, :last-prim-kvs {:author "George Orwell", :name "Animal Farm"}, :count 1, :scanned-count 1}
+   (meta (far/scan *client-opts* book-table {:filter-expr "#r = :r"
+                                             :expr-attr-names {"#r" "read?"}
+                                             :limit 1
+                                             :span-reqs {:max 1}
+                                             :expr-attr-vals {":r" true}})))
+
   ;; Confirm we combine projection and filter expressions on scan
   (expect
     ["George Orwell" "Arthur C. Clarke"]
@@ -677,6 +686,11 @@
   (expect ; Query with :limit
     [j0] (far/query *client-opts* range-table {:title [:eq "One"]}
            {:limit 1 :span-reqs {:max 1}}))
+
+  (expect ; Query with more results
+   {:cc-units nil, :last-prim-kvs {:number 0N, :title "One"}, :count 1}
+   (meta (far/query *client-opts* range-table {:title [:eq "One"]}
+                    {:limit 1 :span-reqs {:max 1}})))
 
   (expect ; Query, with range
     [k1 k2] (far/query *client-opts* range-table {:title  [:eq "Two"]
