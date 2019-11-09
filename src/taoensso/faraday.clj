@@ -39,6 +39,8 @@
             DeleteTableResult
             DescribeTableRequest
             DescribeTableResult
+            DescribeTimeToLiveRequest
+            DescribeTimeToLiveResult
             ExpectedAttributeValue
             GetItemRequest
             GetItemResult
@@ -73,10 +75,14 @@
             StreamSpecification
             StreamViewType
             TableDescription
+            TimeToLiveDescription
+            TimeToLiveSpecification
             UpdateItemRequest
             UpdateItemResult
             UpdateTableRequest
             UpdateTableResult
+            UpdateTimeToLiveRequest
+            UpdateTimeToLiveResult
             WriteRequest
 
             ConditionalCheckFailedException
@@ -527,7 +533,19 @@
   Stream
   (as-map [s]
     {:stream-arn (.getStreamArn s)
-     :table-name (.getTableName s)}))
+     :table-name (.getTableName s)})
+
+  DescribeTimeToLiveResult
+  (as-map [r]
+    (let [ttl-desc (.getTimeToLiveDescription r)]
+      {:attribute-name (.getAttributeName ttl-desc)
+       :status (utils/un-enum (.getTimeToLiveStatus ttl-desc))}))
+
+  UpdateTimeToLiveResult
+  (as-map [r]
+    (let [ttl-spec (.getTimeToLiveSpecification r)]
+      {:enabled? (.getEnabled ttl-spec)
+       :attribute-name (.getAttributeName ttl-spec)})))
 
 ;;;; Tables
 
@@ -1455,6 +1473,50 @@
   [client-opts shard-iterator & [{:keys [limit] :as opts}]]
   (as-map (.getRecords (db-streams-client client-opts)
                        (get-records-request shard-iterator opts))))
+
+;;;; TTL API
+
+(defn- describe-ttl-request
+  [{:keys [table-name]}]
+  (doto (DescribeTimeToLiveRequest.)
+    (.setTableName (name table-name))))
+
+(defn describe-ttl
+  "Returns a map describing the TTL configuration for a table, or nil if
+  the table does not exist."
+  [client-opts table-name]
+  (try
+    (as-map
+     (.describeTimeToLive (db-client client-opts)
+                          (describe-ttl-request {:table-name table-name})))
+    (catch ResourceNotFoundException _ nil)))
+
+(defn- update-ttl-request
+  [{:keys [table-name enabled? key-name]}]
+  (let [ttl-spec (doto-cond [g (TimeToLiveSpecification.)]
+                   :always (.setEnabled enabled?)
+                   key-name (.setAttributeName (name key-name)))]
+    (doto (UpdateTimeToLiveRequest.)
+      (.setTableName (name table-name))
+      (.setTimeToLiveSpecification ttl-spec))))
+
+(defn update-ttl
+  "Updates the TTL configuration for a table."
+  [client-opts table-name enabled? key-name]
+  (as-map
+   (.updateTimeToLive (db-client client-opts)
+                      (update-ttl-request {:table-name table-name
+                                           :enabled? enabled?
+                                           :key-name key-name}))))
+
+(defn ensure-ttl
+  "Activates TTL with the given key-name iff the TTL configuration is
+  not already set in this way."
+  [client-opts table-name key-name]
+  (let [ttl-spec (describe-ttl client-opts table-name)]
+    (when-not (or (= {:attribute-name (name key-name) :status :enabled} ttl-spec)
+                  (= {:attribute-name (name key-name) :status :enabling} ttl-spec))
+      (update-ttl client-opts table-name true key-name))))
 
 ;;;; Misc utils, etc.
 

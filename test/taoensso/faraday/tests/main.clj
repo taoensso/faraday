@@ -1355,3 +1355,40 @@
 
     (far/put-item *client-opts* ttable {:id 10 :items (mapv str (range 5))})
     (is (= ["0" "1" "2" "3" "4"] (:items (far/get-item *client-opts* ttable {:id 10}))))))
+
+(deftest ttl
+  (testing "activate and deactivate ttl using update-ttl"
+    (do-with-temp-table
+     [created (far/create-table *client-opts* temp-table
+                                [:id :n]
+                                {:throughput {:read 1 :write 1}
+                                 :block? true})
+      before (far/describe-ttl *client-opts* temp-table)
+      result (far/update-ttl *client-opts* temp-table true :ttl)
+      after  (far/describe-ttl *client-opts* temp-table)]
+     (is (= {:status :disabled :attribute-name nil} before))
+     (is (= {:enabled? true :attribute-name "ttl"} result))
+     (is (= {:status :enabled :attribute-name "ttl"} after))
+
+     (let [result (far/update-ttl *client-opts* temp-table false :ttl)
+           after  (far/describe-ttl *client-opts* temp-table)]
+       (is (= {:enabled? false :attribute-name "ttl"} result))
+       (is (= {:status :disabled :attribute-name nil} after)))))
+
+  (testing "activate ttl using ensure-ttl"
+    (do-with-temp-table
+     [created (far/create-table *client-opts* temp-table
+                                [:id :n]
+                                {:throughput {:read 1 :write 1}
+                                 :block? true})
+      before (far/describe-ttl *client-opts* temp-table)
+      result (far/ensure-ttl *client-opts* temp-table :ttl)
+      after  (far/describe-ttl *client-opts* temp-table)]
+     (is (= {:status :disabled :attribute-name nil} before))
+     (is (= {:enabled? true :attribute-name "ttl"} result))
+     (is (= {:status :enabled :attribute-name "ttl"} after))
+
+     (let [result (far/ensure-ttl *client-opts* temp-table :ttl)
+           after  (far/describe-ttl *client-opts* temp-table)]
+       (is (nil? result))
+       (is (= {:status :enabled :attribute-name "ttl"} after))))))
