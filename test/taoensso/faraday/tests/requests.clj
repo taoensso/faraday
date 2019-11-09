@@ -179,7 +179,7 @@
                          :projection :keys-only}]})]
 
   (expect nil (.getProvisionedThroughput req))
-  (expect (utils/enum :throughput) (.getBillingMode req)))
+  (expect (utils/enum :provisioned) (.getBillingMode req)))
 
 (expect
  "update-table"

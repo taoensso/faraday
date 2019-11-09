@@ -1,2 +1,2 @@
 language: clojure
-script: lein dynamodb-local test
+script: lein test-all
