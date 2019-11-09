@@ -93,6 +93,10 @@ Ready?
    ;;; Local or a different AWS Region (Ref. http://goo.gl/YmV80o), etc.:
    ;; :endpoint "http://localhost:6798"                   ; For DDB Local
    ;; :endpoint "http://dynamodb.eu-west-1.amazonaws.com" ; For EU West 1 AWS region
+
+   ;;; You may optionally provide your own (pre-configured) instance of the Amazon
+   ;;; DynamoDB client for Faraday functions to use.
+   ;; :client (AmazonDynamoDBClientBuilder/defaultClient)
   })
 
 (far/list-tables client-opts)
