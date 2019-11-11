@@ -1,2 +1,2 @@
 language: clojure
-script: lein test-all
+script: lein test
