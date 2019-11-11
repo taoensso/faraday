@@ -26,12 +26,8 @@
    :1.8  {:dependencies [[org.clojure/clojure "1.8.0"]]}
    :1.9  {:dependencies [[org.clojure/clojure "1.9.0"]]}
    :1.10 {:dependencies [[org.clojure/clojure "1.10.1"]]}
-   :test {:dependencies [[expectations           "2.1.3"]
-                         [org.clojure/test.check "0.10.0"]]
-          :plugins [[lein-expectations "0.0.8"]
-                    [lein-autoexpect   "1.9.0"]]}
    :dev
-   [:1.9 :test :server-jvm
+   [:1.9 :server-jvm
     {:plugins [[lein-ancient "0.6.14"]
                [lein-codox   "0.9.1"]
                [clj-dynamodb-local "0.1.2"]]}]}
@@ -46,8 +42,7 @@
    :source-uri "https://github.com/ptaoussanis/faraday/blob/master/{filepath}#L{line}"}
 
   :aliases
-  {"test"       ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "expectations"]
-   "test-auto"  ["with-profile" "+test" "dynamodb-local" "autoexpect"]
+  {"test"   ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "test"]
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}
 
