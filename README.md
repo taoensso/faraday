@@ -9,8 +9,8 @@
 
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
 
-> Please consider helping to [support my continued open-source Clojure/Script work]? 
-> 
+> Please consider helping to [support my continued open-source Clojure/Script work].
+>
 > Even small contributions can add up + make a big difference to help sustain my time writing, maintaining, and supporting Faraday and other Clojure/Script libraries. **Thank you!**
 >
 > \- Peter Taoussanis
@@ -27,14 +27,14 @@ Faraday was originally adapted from the [Rotary client] by James Reeves.
 
 I'm not currently using DDB or Faraday myself but will make a best effort to continue maintaining the library as I can.
 
-The bulk of recent development work has been thanks to the generosity of Faraday's [contributors]! 
+The bulk of recent development work has been thanks to the generosity of Faraday's [contributors]!
 
 PRs for fixes and/or new features **very welcome**!
 
 \- [Peter Taoussanis]
 
 ## Features
- * Small, simple, API: **complete coverage of DynamoDBv2 features**
+ * Small, simple, API: **coverage of the most useful DynamoDB features**
  * **Great performance** (zero overhead to the official Java SDK)
  * Uses [Nippy] for full support of **Clojure's rich data types**
 
@@ -176,7 +176,7 @@ Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
 
 ## License
 
-Distributed under the [EPL v1.0] \(same as Clojure).  
+Distributed under the [EPL v1.0] \(same as Clojure).
 Copyright &copy; 2013-2016 [Peter Taoussanis].
 
 <!--- Standard links -->
