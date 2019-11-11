@@ -8,6 +8,7 @@
   (:import
    [com.amazonaws.auth BasicAWSCredentials]
    [com.amazonaws.internal StaticCredentialsProvider]
+   [com.amazonaws.services.dynamodbv2 AmazonDynamoDBClient AmazonDynamoDBStreamsClient]
    [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]
    [com.amazonaws AmazonServiceException]))
 
@@ -1349,3 +1350,22 @@
                              :block? true})]
  (let [described (far/describe-table *client-opts* temp-table)]
    (expect :pay-per-request (-> described :billing-mode :name))))
+
+(let [calls (atom 0)
+      client (proxy [AmazonDynamoDBClient] [(BasicAWSCredentials. (:access-key *client-opts*)
+                                                                  (:secret-key *client-opts*))]
+               (describeTable [describe-table-request]
+                 (swap! calls inc)
+                 (proxy-super describeTable describe-table-request)))]
+  (.setEndpoint client (:endpoint *client-opts*))
+  (far/describe-table (assoc *client-opts* :client client) ttable)
+  (expect (= 1 @calls)))
+
+(let [calls (atom 0)
+      client (proxy [AmazonDynamoDBStreamsClient] [(BasicAWSCredentials. (:access-key *client-opts*)
+                                                                         (:secret-key *client-opts*))]
+               (listStreams [list-streams-request]
+                 (swap! calls inc)
+                 (proxy-super listStreams list-streams-request)))]
+  (doall (far/list-streams (assoc *client-opts* :client client) {:table-name ttable}))
+  (expect (= 1 @calls)))

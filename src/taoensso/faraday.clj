@@ -151,15 +151,15 @@
     (db-client* {:creds my-AWSCredentials-instance}),
     etc."
   (memoize
-   (fn [{:keys [endpoint] :as client-opts}]
+   (fn [{:keys [client endpoint] :as client-opts}]
      (if (empty? client-opts)
        (AmazonDynamoDBClient.) ; Default client
        (let [[^AWSCredentials aws-creds
               ^AWSCredentialsProvider provider
               ^ClientConfiguration client-config] (client-params client-opts)]
-         (doto-cond [g (if provider
-                         (AmazonDynamoDBClient. provider client-config)
-                         (AmazonDynamoDBClient. aws-creds client-config))]
+         (doto-cond [g (cond client client
+                             provider (AmazonDynamoDBClient. provider client-config)
+                             :else (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)))))))
 
 (def ^:private db-streams-client*
@@ -168,15 +168,15 @@
     (db-streams-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
                          :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}), etc."
   (memoize
-    (fn [{:keys [endpoint] :as client-opts}]
+    (fn [{:keys [client endpoint] :as client-opts}]
       (if (empty? client-opts)
         (AmazonDynamoDBStreamsClient.) ; Default client
         (let [[^AWSCredentials aws-creds
                ^AWSCredentialsProvider provider
                ^ClientConfiguration client-config] (client-params client-opts)]
-          (doto-cond [g (if provider
-                          (AmazonDynamoDBStreamsClient. provider client-config)
-                          (AmazonDynamoDBStreamsClient. aws-creds client-config))]
+          (doto-cond [g (cond client client
+                              provider (AmazonDynamoDBStreamsClient. provider client-config)
+                              :else (AmazonDynamoDBStreamsClient. aws-creds client-config))]
             endpoint (.setEndpoint g)))))))
 
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
@@ -1491,4 +1491,3 @@
         (string?    x) (when-not (.isEmpty ^String x)       x)
         (enc/bytes? x) (when-not (zero? (alength ^bytes x)) x)
         :else x))))
-
