@@ -19,8 +19,7 @@
     :exclusions [joda-time]]]
 
   :profiles
-  {;; :default [:base :system :user :provided :dev]
-   :server-jvm {:jvm-opts ^:replace ["-server"]}
+  {:server-jvm {:jvm-opts ^:replace ["-server"]}
    :1.5  {:dependencies [[org.clojure/clojure "1.5.1"]]}
    :1.6  {:dependencies [[org.clojure/clojure "1.6.0"]]}
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
@@ -47,7 +46,7 @@
    :source-uri "https://github.com/ptaoussanis/faraday/blob/master/{filepath}#L{line}"}
 
   :aliases
-  {"test-all"   ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "expectations"]
+  {"test"       ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "expectations"]
    "test-auto"  ["with-profile" "+test" "dynamodb-local" "autoexpect"]
    "deploy-lib" ["do" "deploy" "clojars," "install"]
    "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}

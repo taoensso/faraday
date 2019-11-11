@@ -157,7 +157,7 @@ This project uses the [dynamodb-local] Lein plugin to manage downloading, starti
 To run all the tests locally, run:
 
 ```bash
-./run-tests local
+lein test
 ```
 
 If you intend to run tests from a repl, you can start a local DynamoDB instance:
