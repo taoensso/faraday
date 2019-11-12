@@ -1294,3 +1294,38 @@
                    (proxy-super listStreams list-streams-request)))]
     (doall (far/list-streams (assoc *client-opts* :client client) {:table-name ttable}))
     (is (= 1 @calls))))
+
+(deftest attribute-not-exists
+  ;;https://github.com/Taoensso/faraday/issues/106
+
+  (far/put-item *client-opts* range-table {:title "Three" :number 33})
+
+  (is (thrown?
+       ConditionalCheckFailedException
+       (far/put-item *client-opts* range-table {:title "Three" :number 33}
+                     {:cond-expr "attribute_not_exists(#t) AND attribute_not_exists(#n)"
+                      ;; note typo in the issue. 'name' should be 'number'
+                      :expr-attr-names {"#n" "name"
+                                        "#t" "title"}})))
+
+  (is (thrown?
+       ConditionalCheckFailedException
+       (far/put-item *client-opts* range-table {:title "Three" :number 33}
+                     {:cond-expr "attribute_not_exists(#t) AND attribute_not_exists(#n)"
+                      ;; note typo in the issue: fixed here
+                      :expr-attr-names {"#n" "number"
+                                        "#t" "title"}})))
+
+  (is (thrown? ConditionalCheckFailedException
+               (far/put-item *client-opts* range-table {:title "Three" :number 33}
+                             {:cond-expr "attribute_not_exists(#t)"
+                              :expr-attr-names {"#t" "title"}})))
+
+  (is (thrown? ConditionalCheckFailedException
+               (far/put-item *client-opts* range-table {:title "Three" :number 33}
+                             {:cond-expr "attribute_not_exists(#n)"
+                              :expr-attr-names {"#n" "number"}})))
+
+  (far/put-item *client-opts* range-table {:title "Three" :number 35}
+                {:cond-expr "attribute_not_exists(#t)"
+                 :expr-attr-names {"#t" "title"}}))
