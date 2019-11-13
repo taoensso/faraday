@@ -29,7 +29,7 @@
    :dev
    [:1.9 :server-jvm
     {:plugins [[lein-ancient "0.6.14"]
-               [lein-codox   "0.9.1"]
+               [lein-codox   "0.10.6"]
                [clj-dynamodb-local "0.1.2"]]}]}
 
   :dynamodb-local {:port 6798
