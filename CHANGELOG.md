@@ -1,5 +1,23 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+
+## v1.10.0 / 2019 Nov 13
+
+```clojure
+[com.taoensso/faraday "1.10.0"]
+```
+* **New** `client-opts` can now include `:client` to specify a custom, pre-configured AmazonDynamoDBClient instance
+* **New** `create-table` and `update-table` now support `:billing-mode` of `:provisioned` (default) or `:pay-per-request` (on-demand)
+* **New** Accept keywords for index names in `scan` and `query`
+* **New** `create-table` and `update-table` now support `:stream-spec` to activate DynamoDB Streams
+* **New** `list-streams`, `describe-stream`, `shard-iterator` and `get-stream-records` added to interact with DynamoDB Streams
+* **New** `CljVal->DbVal` protocol for extensible serialisation
+* **Change**: Upgrade to com.amazonaws/aws-java-sdk-dynamodb 1.11.x
+* **Change**: Migrate from expectations to clojure.test
+* **Fix**: Fix syntax quote for `without-attr-multi-vs`
+* **Fix**: Fix 'non-expand' mode `batch-write-item`
+* **Fix**: Fix merging of pages in `batch-get-item`
+
 ## v1.9.0 / 2016 Jul 24
 
 ```clojure
