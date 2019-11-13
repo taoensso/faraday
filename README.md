@@ -4,7 +4,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/faraday "1.9.0"] ; BREAKING, see CHANGELOG for details
+[com.taoensso/faraday "1.10.0"] ; see CHANGELOG for details
 ```
 
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
@@ -38,20 +38,12 @@ PRs for fixes and/or new features **very welcome**!
  * **Great performance** (zero overhead to the official Java SDK)
  * Uses [Nippy] for full support of **Clojure's rich data types**
 
-## 3rd-party stuff
-
-Link                     | Description
------------------------- | -----------------------------------------------------
-[@mixradio/faraday-atom] | Atom implementation for Faraday
-[@ricardojmendez/ddb-tutorial] | **Tutorial**: Clojure and DDB with Faraday
-Your link here?          | **PR's welcome!**
-
 ## Getting started
 
 Add the necessary dependency to your project:
 
 ```clojure
-[com.taoensso/faraday "1.9.0"]
+[com.taoensso/faraday "1.10.0"]
 ```
 
 And setup your namespace imports:
