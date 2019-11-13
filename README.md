@@ -160,7 +160,7 @@ lein dynamodb-local
 
 ## Contacting me / contributions
 
-Please use the project's [GitHub issues page] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors page] for a list of contributors.
+Please use the project's [GitHub issues page] for all questions, ideas, etc. **Pull requests welcome**. See the project's [GitHub contributors page] for a list of contributors. You'll also find Faraday users and developers in `#faraday` at clojurians.slack.com.
 
 Otherwise, you can reach me at [Taoensso.com]. Happy hacking!
 
