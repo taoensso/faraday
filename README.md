@@ -1,19 +1,13 @@
 <a href="https://www.taoensso.com" title="More stuff by @ptaoussanis at www.taoensso.com">
 <img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="400"/></a>
 
-**[CHANGELOG]** | [API] | current [Break Version]:
+**[CHANGELOG]** | [API] | [Donate] | current [Break Version]:
 
 ```clojure
 [com.taoensso/faraday "1.10.0"] ; see CHANGELOG for details
 ```
 
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
-
-> Please consider helping to [support my continued open-source Clojure/Script work].
->
-> Even small contributions can add up + make a big difference to help sustain my time writing, maintaining, and supporting Faraday and other Clojure/Script libraries. **Thank you!**
->
-> \- Peter Taoussanis
 
 # Faraday
 
@@ -22,16 +16,6 @@
 [DynamoDB] is *awesome* and makes a great companion for Clojure web apps that need a **simple, reliable way to scale with predictable performance and without the usual headaches**.
 
 Faraday was originally adapted from the [Rotary client] by James Reeves.
-
-## Library status
-
-I'm not currently using DDB or Faraday myself but will make a best effort to continue maintaining the library as I can.
-
-The bulk of recent development work has been thanks to the generosity of Faraday's [contributors]!
-
-PRs for fixes and/or new features **very welcome**!
-
-\- [Peter Taoussanis]
 
 ## Features
  * Small, simple, API: **coverage of the most useful DynamoDB features**
@@ -177,7 +161,7 @@ Copyright &copy; 2013-2016 [Peter Taoussanis].
 [@ptaoussanis]: https://www.taoensso.com
 [More by @ptaoussanis]: https://www.taoensso.com
 [Break Version]: https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md
-[support my continued open-source Clojure/Script work]: http://taoensso.com/clojure/backers
+[Donate]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
 [CHANGELOG]: https://github.com/ptaoussanis/faraday/releases
@@ -192,8 +176,6 @@ Copyright &copy; 2013-2016 [Peter Taoussanis].
 [Rotary client]: https://github.com/weavejester/rotary
 [contributors]: https://github.com/ptaoussanis/faraday/graphs/contributors
 [Nippy]: https://github.com/ptaoussanis/nippy
-[@mixradio/faraday-atom]: https://github.com/mixradio/faraday-atom
-[@ricardojmendez/ddb-tutorial]: http://numergent.com/2016-01/Clojure-and-DynamoDB-with-Faraday-part-1.html
 [instructions from AWS]: http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Tools.DynamoDBLocal.html
 [AWS DynamoDB account]: http://aws.amazon.com/dynamodb/
 [provisions capacity]: http://aws.amazon.com/dynamodb/pricing/
