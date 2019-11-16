@@ -1,7 +1,4 @@
-<a href="https://www.taoensso.com" title="More stuff by @ptaoussanis at www.taoensso.com">
-<img src="https://www.taoensso.com/taoensso-open-source.png" alt="Taoensso open-source" width="400"/></a>
-
-**[CHANGELOG]** | [API] | [Donate] | current [Break Version]:
+**[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
 [com.taoensso/faraday "1.10.0"] ; see CHANGELOG for details
@@ -149,7 +146,7 @@ Please use the project's [GitHub issues page] for all questions, ideas, etc. **P
 ## License
 
 Distributed under the [EPL v1.0] \(same as Clojure).
-Copyright &copy; 2013-2016 [Peter Taoussanis].
+Copyright &copy; 2013-2019 [Peter Taoussanis] and contributors.
 
 <!--- Standard links -->
 [Taoensso.com]: https://www.taoensso.com
