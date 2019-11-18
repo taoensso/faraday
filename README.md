@@ -157,8 +157,7 @@ Copyright &copy; 2013-2019 [Peter Taoussanis] and contributors.
 [Donate]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
-[CHANGELOG]: https://github.com/ptaoussanis/faraday/releases
-[API]: http://taoensso.github.io/faraday/
+[API Docs]: http://taoensso.github.io/faraday/
 [GitHub issues page]: https://github.com/ptaoussanis/faraday/issues
 [GitHub contributors page]: https://github.com/ptaoussanis/faraday/graphs/contributors
 [EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/faraday/master/LICENSE
