@@ -1329,3 +1329,16 @@
   (far/put-item *client-opts* range-table {:title "Three" :number 35}
                 {:cond-expr "attribute_not_exists(#t)"
                  :expr-attr-names {"#t" "title"}}))
+
+(deftest lazy-seqs
+
+  (testing "Lazy seq that is not realized cannot be serialized"
+      (is (thrown? IllegalArgumentException
+                   (far/put-item *client-opts* ttable {:id 10 :items (map str (range 5))}))))
+
+  (testing "Lazy seqs that are realized are okay"
+    (far/put-item *client-opts* ttable {:id 10 :items (doall (map str (range 5)))})
+    (is (= ["0" "1" "2" "3" "4"] (:items (far/get-item *client-opts* ttable {:id 10}))))
+
+    (far/put-item *client-opts* ttable {:id 10 :items (mapv str (range 5))})
+    (is (= ["0" "1" "2" "3" "4"] (:items (far/get-item *client-opts* ttable {:id 10}))))))

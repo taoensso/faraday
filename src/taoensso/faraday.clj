@@ -320,7 +320,13 @@
         (enc/revery? enc/stringy? s) (doto (AttributeValue.) (.setSS (mapv enc/as-qname s)))
         (enc/revery? ddb-num?     s) (doto (AttributeValue.) (.setNS (mapv str s)))
         (enc/revery? freeze?      s) (doto (AttributeValue.) (.setBS (mapv nt-freeze s)))
-        :else (throw (Exception. "Invalid DynamoDB value: set of invalid type or more than one type"))))))
+        :else (throw (Exception. "Invalid DynamoDB value: set of invalid type or more than one type")))))
+
+  clojure.lang.LazySeq
+  (serialize [s]
+    (if (.isRealized s)
+      (doto (AttributeValue.) (.setL (mapv serialize s)))
+      (throw (IllegalArgumentException. "Unrealized lazy sequences are not supported. Realize this sequence before calling Faraday (e.g. doall) or replace the sequence with a non-lazy alternative (e.g. 'mapv' instead of 'map', or use 'into []'). Faraday avoids attempting to realize values that might be infinite, since this could cause strange an unexpected problems that are hard to diagnose.")))))
 
 (extend-type (Class/forName "[B")
   ISerializable
