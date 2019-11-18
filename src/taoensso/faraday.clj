@@ -743,49 +743,49 @@
 ;;;; Table updates
 
 (defn- global-2nd-index-updates
-  "Implementation detail.
-  {:operation _ :name _ :hash-keydef _ :range-keydef _ :projection _ :throughput _}
-  index -> GlobalSecondaryIndexUpdate}"
-  [{index-name :name
-    :keys [hash-keydef range-keydef throughput projection operation]
-    :or   {projection :all}
-    :as   index}]
+  "Validate new GSI configuration and create a GlobalSecondaryIndexUpdate"
+  [{:keys [gsindexes billing-mode] :as params}]
+  (let [{index-name :name
+         :keys [hash-keydef range-keydef throughput projection operation]
+         :or {projection :all}
+         :as index} gsindexes]
+    (case operation
+      :create
+      (do
+        (assert (and index-name hash-keydef projection (or (and throughput
+                                                                (not= :pay-per-request billing-mode))
+                                                           (and (not throughput)
+                                                                (= :pay-per-request billing-mode))))
+                (str "Malformed global secondary index (GSI): " index))
+        (doto (GlobalSecondaryIndexUpdate.)
+          (.setCreate
+           (doto-cond [_ (CreateGlobalSecondaryIndexAction.)]
+                      :always (.setIndexName (name index-name))
+                      :always (.setKeySchema (key-schema hash-keydef range-keydef))
+                      :always (.setProjection
+                               (let [pr (Projection.)
+                                     ptype (if (coll?* projection) :include projection)]
+                                 (.setProjectionType pr (utils/enum ptype))
+                                 (when (= ptype :include)
+                                   (.setNonKeyAttributes pr (mapv name projection)))
+                                 pr))
+                      throughput (.setProvisionedThroughput (provisioned-throughput throughput))))))
 
-  (case operation
-    :create
-    (do
-      (assert (and index-name hash-keydef projection throughput)
-              (str "Malformed global secondary index (GSI): " index))
+      :update
       (doto (GlobalSecondaryIndexUpdate.)
-        (.setCreate
-          (doto
-            (CreateGlobalSecondaryIndexAction.)
-            (.setIndexName (name index-name))
-            (.setKeySchema (key-schema hash-keydef range-keydef))
-            (.setProjection
-              (let [pr    (Projection.)
-                    ptype (if (coll?* projection) :include projection)]
-                (.setProjectionType pr (utils/enum ptype))
-                (when (= ptype :include)
-                  (.setNonKeyAttributes pr (mapv name projection)))
-                pr))
-            (.setProvisionedThroughput (provisioned-throughput throughput))))))
-
-    :update
-    (doto (GlobalSecondaryIndexUpdate.)
-      (.setUpdate
-        (doto
+        (.setUpdate
+         (doto
           (UpdateGlobalSecondaryIndexAction.)
-          (.setIndexName (name index-name))
-          (.setProvisionedThroughput (provisioned-throughput throughput)))))
+           (.setIndexName (name index-name))
+           (.setProvisionedThroughput (provisioned-throughput throughput)))))
 
-    :delete
-    (doto (GlobalSecondaryIndexUpdate.)
-      (.setDelete
-        (doto
+      :delete
+      (doto (GlobalSecondaryIndexUpdate.)
+        (.setDelete
+         (doto
           (DeleteGlobalSecondaryIndexAction.)
-          (.setIndexName (name index-name)))))
-    nil))
+           (.setIndexName (name index-name)))))
+      nil)))
 
 (defn- update-table-request "Implementation detail."
   [table {:keys [throughput gsindexes stream-spec billing-mode] :as params}]
@@ -797,7 +797,7 @@
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       billing-mode (.setBillingMode (utils/enum billing-mode))
-      gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates gsindexes)])
+      gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates params)])
       stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
