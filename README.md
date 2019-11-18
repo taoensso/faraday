@@ -1,4 +1,4 @@
-**[CHANGELOG]** | [API] | current [Break Version]:
+**[API Docs]** | current [Break Version]:
 
 ```clojure
 [com.taoensso/faraday "1.10.1"] ; see CHANGELOG for details
