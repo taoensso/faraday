@@ -247,7 +247,29 @@
                  (update-table-request
                   :update-table
                   {:throughput {:read 4 :write 2}
-                   :billing-mode :pay-per-request})))))
+                   :billing-mode :pay-per-request}))))
+
+  (testing "If parent table is pay-per-request, then can't specify throughput when adding a GSI"
+    (is (thrown? AssertionError
+                 (update-table-request
+                  :update-table
+                  {:billing-mode :pay-per-request
+                   :gsindexes {:name "new-global-secondary"
+                               :operation :create
+                               :hash-keydef [:id :s]
+                               :projection :keys-only
+                               :throughput {:read 10 :write 9}}})))  )
+
+  (testing "If parent table is pay-per-request, then no need to specify billing mode on new GSIs"
+    (let [req ^UpdateTableRequest
+              (update-table-request
+               :update-table
+               {:billing-mode :pay-per-request
+                :gsindexes {:name "new-global-secondary"
+                            :operation :create
+                            :hash-keydef [:id :s]
+                            :projection :keys-only}})]
+      (is (= "update-table" (.getTableName req))))))
 
 (deftest get-item-request-creation
   (is (= "get-item"
