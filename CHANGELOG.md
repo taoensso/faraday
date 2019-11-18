@@ -1,5 +1,12 @@
 > This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
 
+## v1.10.1 / 2019 Nov 18
+
+```clojure
+[com.taoensso/faraday "1.10.1"]
+```
+* **New** `put-item` and other fns now support lazy seqs, as long as they have been realized
+* **Fix** `update-table` should not require that `throughput` is given for GSIs on-demand tables
 
 ## v1.10.0 / 2019 Nov 13
 

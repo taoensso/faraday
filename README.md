@@ -1,7 +1,7 @@
 **[CHANGELOG]** | [API] | current [Break Version]:
 
 ```clojure
-[com.taoensso/faraday "1.10.0"] ; see CHANGELOG for details
+[com.taoensso/faraday "1.10.1"] ; see CHANGELOG for details
 ```
 
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
@@ -24,7 +24,7 @@ Faraday was originally adapted from the [Rotary client] by James Reeves.
 Add the necessary dependency to your project:
 
 ```clojure
-[com.taoensso/faraday "1.10.0"]
+[com.taoensso/faraday "1.10.1"]
 ```
 
 And setup your namespace imports:
