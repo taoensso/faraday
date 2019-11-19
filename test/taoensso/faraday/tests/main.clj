@@ -1272,9 +1272,19 @@
    [created (far/create-table *client-opts* temp-table
                               [:title :s]
                               {:billing-mode :pay-per-request
+                               :gsindexes [{:name "gsi"
+                                            :hash-keydef [:some_id :s]
+                                            :projection :all}]
                                :block? true})]
    (let [described (far/describe-table *client-opts* temp-table)]
-     (is (= :pay-per-request (-> described :billing-mode :name))))))
+     (is (= :pay-per-request (-> described :billing-mode :name))))
+   @(far/update-table *client-opts* temp-table
+                     {:gsindexes {:name "new_gsi"
+                                  :hash-keydef [:new_id :s]
+                                  :operation :create
+                                  :projection :all}})
+   (let [described (far/describe-table *client-opts* temp-table)]
+     (is (= 2 (-> described :gsindexes count))))))
 
 (deftest custom-client
   (let [calls (atom 0)
