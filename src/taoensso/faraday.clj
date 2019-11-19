@@ -744,51 +744,51 @@
 
 (defn- global-2nd-index-updates
   "Validate new GSI configuration and create a GlobalSecondaryIndexUpdate"
-  [{:keys [gsindexes billing-mode] :as params}]
-  (let [{index-name :name
-         :keys [hash-keydef range-keydef throughput projection operation]
-         :or {projection :all}
-         :as index} gsindexes]
-    (case operation
-      :create
-      (do
-        (assert (and index-name hash-keydef projection (or (and throughput
-                                                                (not= :pay-per-request billing-mode))
-                                                           (and (not throughput)
-                                                                (= :pay-per-request billing-mode))))
-                (str "Malformed global secondary index (GSI): " index))
-        (doto (GlobalSecondaryIndexUpdate.)
-          (.setCreate
-           (doto-cond [_ (CreateGlobalSecondaryIndexAction.)]
-                      :always (.setIndexName (name index-name))
-                      :always (.setKeySchema (key-schema hash-keydef range-keydef))
-                      :always (.setProjection
-                               (let [pr (Projection.)
-                                     ptype (if (coll?* projection) :include projection)]
-                                 (.setProjectionType pr (utils/enum ptype))
-                                 (when (= ptype :include)
-                                   (.setNonKeyAttributes pr (mapv name projection)))
-                                 pr))
-                      throughput (.setProvisionedThroughput (provisioned-throughput throughput))))))
-
-      :update
+  [{:keys [billing-mode] :as table-desc}
+   {index-name :name
+    :keys [hash-keydef range-keydef throughput projection operation]
+    :or {projection :all}
+    :as index}]
+  (case operation
+    :create
+    (do
+      (assert (and index-name hash-keydef projection (or (and throughput
+                                                              (not= :pay-per-request (:name billing-mode)))
+                                                         (and (not throughput)
+                                                              (= :pay-per-request (:name billing-mode)))))
+              (str "Malformed global secondary index (GSI): " index))
       (doto (GlobalSecondaryIndexUpdate.)
-        (.setUpdate
-         (doto
-          (UpdateGlobalSecondaryIndexAction.)
-           (.setIndexName (name index-name))
-           (.setProvisionedThroughput (provisioned-throughput throughput)))))
+        (.setCreate
+         (doto-cond [_ (CreateGlobalSecondaryIndexAction.)]
+                    :always (.setIndexName (name index-name))
+                    :always (.setKeySchema (key-schema hash-keydef range-keydef))
+                    :always (.setProjection
+                             (let [pr (Projection.)
+                                   ptype (if (coll?* projection) :include projection)]
+                               (.setProjectionType pr (utils/enum ptype))
+                               (when (= ptype :include)
+                                 (.setNonKeyAttributes pr (mapv name projection)))
+                               pr))
+                    throughput (.setProvisionedThroughput (provisioned-throughput throughput))))))
 
-      :delete
-      (doto (GlobalSecondaryIndexUpdate.)
-        (.setDelete
-         (doto
-          (DeleteGlobalSecondaryIndexAction.)
-           (.setIndexName (name index-name)))))
-      nil)))
+    :update
+    (doto (GlobalSecondaryIndexUpdate.)
+      (.setUpdate
+       (doto
+        (UpdateGlobalSecondaryIndexAction.)
+         (.setIndexName (name index-name))
+         (.setProvisionedThroughput (provisioned-throughput throughput)))))
+
+    :delete
+    (doto (GlobalSecondaryIndexUpdate.)
+      (.setDelete
+       (doto
+        (DeleteGlobalSecondaryIndexAction.)
+         (.setIndexName (name index-name)))))
+    nil))
 
 (defn- update-table-request "Implementation detail."
-  [table {:keys [throughput gsindexes stream-spec billing-mode] :as params}]
+  [table table-desc {:keys [throughput gsindexes stream-spec billing-mode] :as params}]
   (assert (not (and throughput
                (= :pay-per-request billing-mode))) "Can't specify :throughput and :pay-per-request billing-mode")
   (let [attr-defs (keydefs nil nil nil [gsindexes])]
@@ -797,7 +797,7 @@
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       billing-mode (.setBillingMode (utils/enum billing-mode))
-      gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates params)])
+      gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates table-desc gsindexes)])
       stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 
@@ -867,7 +867,7 @@
           (do
             (.updateTable
               (db-client client-opts)
-              (update-table-request table update-opts))
+              (update-table-request table table-desc update-opts))
             ;; Returns _new_ descr when ready:
             @(table-status-watch client-opts table :updating)))))))
 

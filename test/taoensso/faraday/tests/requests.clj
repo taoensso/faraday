@@ -172,16 +172,17 @@
   (is (= "update-table"
          (.getTableName
           ^UpdateTableRequest
-          (update-table-request :update-table {:throughput {:read 1 :write 1}}))))
+          (update-table-request :update-table {} {:throughput {:read 1 :write 1}}))))
 
   (is (= (ProvisionedThroughput. 15 7)
          (.getProvisionedThroughput
           ^UpdateTableRequest
-          (update-table-request :update-table {:throughput {:read 15 :write 7}}))))
+          (update-table-request :update-table {} {:throughput {:read 15 :write 7}}))))
 
   (let [req ^UpdateTableRequest
             (update-table-request
              :update-table
+             {}
              {:gsindexes {:name "global-secondary"
                           :operation :create
                           :hash-keydef [:gs-hash-keydef :n]
@@ -206,6 +207,7 @@
   (let [req ^UpdateTableRequest
             (update-table-request
              :update-table
+             {}
              {:gsindexes {:name "global-secondary"
                           :operation :update
                           :throughput {:read 4 :write 2}}})]
@@ -221,6 +223,7 @@
   (let [req ^UpdateTableRequest
             (update-table-request
              :update-table
+             {}
              {:gsindexes {:name "global-secondary"
                           :operation :delete}})]
     (is (= "update-table" (.getTableName req)))
@@ -232,6 +235,7 @@
 
   (let [req ^UpdateTableRequest (update-table-request
                                  :update-table
+                                 {}
                                  {:stream-spec {:enabled? false}})
         stream-spec (.getStreamSpecification req)]
     (is false? (.getStreamEnabled stream-spec))
@@ -241,20 +245,21 @@
     (is (= (utils/enum :pay-per-request)
            (.getBillingMode
             ^UpdateTableRequest
-            (update-table-request :update-table {:billing-mode :pay-per-request}))))
+            (update-table-request :update-table {} {:billing-mode :pay-per-request}))))
 
     (is (thrown? AssertionError
                  (update-table-request
                   :update-table
+                  {}
                   {:throughput {:read 4 :write 2}
                    :billing-mode :pay-per-request}))))
 
-  (testing "If parent table is pay-per-request, then can't specify throughput when adding a GSI"
+  (testing "If main table is pay-per-request, then can't specify throughput when adding a GSI"
     (is (thrown? AssertionError
                  (update-table-request
                   :update-table
-                  {:billing-mode :pay-per-request
-                   :gsindexes {:name "new-global-secondary"
+                  {:billing-mode {:name :pay-per-request}}
+                  {:gsindexes {:name "new-global-secondary"
                                :operation :create
                                :hash-keydef [:id :s]
                                :projection :keys-only
@@ -264,8 +269,8 @@
     (let [req ^UpdateTableRequest
               (update-table-request
                :update-table
-               {:billing-mode :pay-per-request
-                :gsindexes {:name "new-global-secondary"
+               {:billing-mode {:name :pay-per-request}}
+               {:gsindexes {:name "new-global-secondary"
                             :operation :create
                             :hash-keydef [:id :s]
                             :projection :keys-only}})]
