@@ -42,9 +42,7 @@
    :source-uri "https://github.com/ptaoussanis/faraday/blob/master/{filepath}#L{line}"}
 
   :aliases
-  {"test"   ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "test"]
-   "deploy-lib" ["do" "deploy" "clojars," "install"]
-   "start-dev"  ["with-profile" "+dev" "repl" ":headless"]}
+  {"test-all" ["with-profile" "+1.10:+1.9:+1.8:+1.7:+1.6:+1.5" "dynamodb-local" "test"]}
 
   :release-tasks [["vcs" "assert-committed"]
                   ["change" "version" "leiningen.release/bump-version" "release"]
