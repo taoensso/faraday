@@ -132,7 +132,8 @@
                                          {bulk-table {:prim-kvs {:group "group"
                                                                  :id (range num-items)}
                                                       :attrs [:id]
-                                                      :consistent? true}})
+                                                      :consistent? true}}
+                                         {:span-reqs {:max 2}})
                      bulk-table set count)
                 (->> (far/query *client-opts*
                                 bulk-table {:group [:eq "group"]

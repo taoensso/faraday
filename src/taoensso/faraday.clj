@@ -847,8 +847,7 @@
 
   Only one global secondary index operation can take place at a time.
   In order to change a stream view-type, you need to disable and re-enable the stream."
-  [client-opts table update-opts & [{:keys [span-reqs]
-                                     :or   {span-reqs {:max 5}}}]]
+  [client-opts table update-opts & [{:keys [span-reqs]}]]
   (let [table-desc  (describe-table client-opts table)
         status      (:status table-desc)
         update-opts (validate-update-opts table-desc update-opts)]
@@ -1147,7 +1146,7 @@
           (fn [raw-req]
             (as-map
               (.batchGetItem (db-client client-opts)
-                (batch-get-item-request return-cc? raw-req))))]
+                             (batch-get-item-request return-cc? raw-req))))]
       (merge-more run1 span-reqs (run1 (batch-request-items requests))))))
 
 (defn- write-request [action item] "Implementation detail."
@@ -1174,8 +1173,7 @@
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
   [client-opts requests &
-   [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
-     :or   {span-reqs {:max 5}}}]]
+   [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts}]]
 
   (binding [*attr-multi-vs?* attr-multi-vs?]
     (let [run1
@@ -1268,8 +1266,7 @@
   Ref. http://goo.gl/XfGKW for query+scan best practices."
   [client-opts table prim-key-conds
    & [{:keys [last-prim-kvs query-filter span-reqs return index order limit consistent?
-              return-cc?] :as opts
-       :or   {span-reqs {:max 5}}}]]
+              return-cc?] :as opts}]]
   (let [run1
         (fn [last-prim-kvs]
           (update-in
@@ -1344,8 +1341,7 @@
   [client-opts table
    & [{:keys [attr-conds last-prim-kvs span-reqs return limit total-segments
               filter-expr
-              segment return-cc?] :as opts
-       :or   {span-reqs {:max 5}}}]]
+              segment return-cc?] :as opts}]]
 
   (assert (not (and filter-expr (seq attr-conds)))
           "Only one of ':filter-expr' or :attr-conds should be provided")
