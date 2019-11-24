@@ -13,6 +13,9 @@
    [com.amazonaws AmazonServiceException]
    (java.util Date)))
 
+(defmethod clojure.test/report :begin-test-var [m]
+  (println "\u001B[32mTesting" (-> m :var meta :name) "\u001B[0m"))
+
 ;;;; Private var aliases
 
 (def index-status-watch #'far/index-status-watch)
