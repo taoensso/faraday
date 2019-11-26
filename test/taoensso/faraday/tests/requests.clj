@@ -18,6 +18,7 @@
     DeleteRequest
     DescribeStreamRequest
     DescribeTableRequest
+    DescribeTimeToLiveRequest
     ExpectedAttributeValue
     GetItemRequest
     GetRecordsRequest
@@ -42,6 +43,7 @@
     StreamViewType
     UpdateItemRequest
     UpdateTableRequest
+    UpdateTimeToLiveRequest
     WriteRequest]))
 
 ;;;; Private var aliases
@@ -64,6 +66,8 @@
 (def describe-stream-request #'far/describe-stream-request)
 (def get-shard-iterator-request #'far/get-shard-iterator-request)
 (def get-records-request #'far/get-records-request)
+(def describe-ttl-request #'far/describe-ttl-request)
+(def update-ttl-request #'far/update-ttl-request)
 
 (deftest describe-table-request-creation
   (is (= "describe-table-name"
@@ -535,3 +539,25 @@
                                 {:limit 50})]
     (is (= "arn:aws:dynamodb:us-west-2:111122223333:table/etcetc" (.getShardIterator req)))
     (is (= 50 (.getLimit req)))))
+
+(deftest decribe-ttl-request-creation
+  (let [req ^DescribeTimeToLiveRequest (describe-ttl-request {:table-name :my-desc-ttl-table})]
+    (is "my-desc-ttl-table" (.getTableName req))))
+
+(deftest update-ttl-request-creation
+  (let [req ^UpdateTimeToLiveRequest (update-ttl-request
+                                      {:table-name :my-update-ttl-table
+                                       :enabled? false})]
+    (is "my-update-ttl-table" (.getTableName req))
+    (let [ttl-spec (.getTimeToLiveSpecification req)]
+      (is (not (.getEnabled ttl-spec)))
+      (is "ttl" (.getAttributeName ttl-spec))))
+
+  (let [req ^UpdateTimeToLiveRequest (update-ttl-request
+                                      {:table-name :my-update-ttl-table
+                                       :enabled? true
+                                       :key-name :ttl})]
+    (is "my-update-ttl-table" (.getTableName req))
+    (let [ttl-spec (.getTimeToLiveSpecification req)]
+      (is (.getEnabled ttl-spec))
+      (is "ttl" (.getAttributeName ttl-spec)))))
