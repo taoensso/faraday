@@ -157,7 +157,7 @@
     (db-client* {:creds my-AWSCredentials-instance}),
     etc."
   (memoize
-   (fn [{:keys [client endpoint] :as client-opts}]
+   (fn [{:keys [client endpoint region] :as client-opts}]
      (if (empty? client-opts)
        (AmazonDynamoDBClient.) ; Default client
        (let [[^AWSCredentials aws-creds
@@ -166,7 +166,8 @@
          (doto-cond [g (cond client client
                              provider (AmazonDynamoDBClient. provider client-config)
                              :else (AmazonDynamoDBClient. aws-creds client-config))]
-           endpoint (.setEndpoint g)))))))
+           endpoint (.setEndpoint g)
+           region (.setRegion g)))))))
 
 (def ^:private db-streams-client*
   "Returns a new AmazonDynamoDBStreamsClient instance for the given client opts:
@@ -174,7 +175,7 @@
     (db-streams-client* {:access-key \"<AWS_DYNAMODB_ACCESS_KEY>\"
                          :secret-key \"<AWS_DYNAMODB_SECRET_KEY>\"}), etc."
   (memoize
-    (fn [{:keys [client endpoint] :as client-opts}]
+    (fn [{:keys [client endpoint region] :as client-opts}]
       (if (empty? client-opts)
         (AmazonDynamoDBStreamsClient.) ; Default client
         (let [[^AWSCredentials aws-creds
@@ -183,7 +184,8 @@
           (doto-cond [g (cond client client
                               provider (AmazonDynamoDBStreamsClient. provider client-config)
                               :else (AmazonDynamoDBStreamsClient. aws-creds client-config))]
-            endpoint (.setEndpoint g)))))))
+            endpoint (.setEndpoint g)
+            region (.setRegion g)))))))
 
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
 (defn- db-streams-client ^AmazonDynamoDBStreams [client-opts] (db-streams-client* client-opts))
