@@ -9,7 +9,7 @@
 - [X] Update the Changelog for 1.10 
 
 ## Features
-- [ ] Transactions
+- [x] Transactions
 
 Table configuration
 - [ ] TTL

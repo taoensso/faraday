@@ -9,7 +9,7 @@
    [com.amazonaws.auth BasicAWSCredentials]
    [com.amazonaws.internal StaticCredentialsProvider]
    [com.amazonaws.services.dynamodbv2 AmazonDynamoDBClient AmazonDynamoDBStreamsClient]
-   [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException]
+   [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException TransactionCanceledException]
    [com.amazonaws AmazonServiceException]
    (java.util Date)))
 
@@ -1393,3 +1393,131 @@
            after  (far/describe-ttl *client-opts* temp-table)]
        (is (nil? result))
        (is (= {:status :enabled :attribute-name "ttl"} after))))))
+
+(deftest transaction-support
+  (let [i0 {:id 300 :name "foo"}
+        i1 {:id 301 :name "bar"}
+        i2 {:id 302 :name "baz"}
+        i3 {:id 303 :name "qux"}
+        i4 {:id 304 :name "quux"}
+        i5 {:id 305 :name "corge"}
+        i6 {:id 306 :name "grault"}]
+
+    (far/batch-write-item *client-opts*
+                          {ttable {:delete [{:id 300} {:id 301} {:id 302} {:id 303}
+                                            {:id 304} {:id 305} {:id 306}]}})
+    (testing "Batch put"
+      (is (= [i0 i1 i5 i6]
+             (do (far/batch-write-item *client-opts* {ttable {:put [i0 i1 i5 i6]}})
+                 [(far/get-item *client-opts* ttable {:id 300})
+                  (far/get-item *client-opts* ttable {:id 301})
+                  (far/get-item *client-opts* ttable {:id 305})
+                  (far/get-item *client-opts* ttable {:id 306})]))))
+
+    (testing "Condition Check"
+      (is (= {:cc-units {}}
+             (far/transact-write-items *client-opts*
+                                       {:items [[:cond-check {:table-name ttable
+                                                              :prim-kvs {:id 300}
+                                                              :cond-expr "attribute_exists(#id)"
+                                                              :expr-attr-names {"#id" "id"}}]
+                                                [:cond-check {:table-name ttable
+                                                              :prim-kvs {:id 301}
+                                                              :cond-expr "attribute_exists(#id)"
+                                                              :expr-attr-names {"#id" "id"}}]]}))))
+
+    (testing "Condition Check Fail"
+      (is (thrown? TransactionCanceledException
+                   (far/transact-write-items *client-opts*
+                                             {:items [[:cond-check {:table-name ttable
+                                                                    :prim-kvs {:id 30001}
+                                                                    :cond-expr "attribute_exists(#id)"
+                                                                    :expr-attr-names {"#id" "id"}}]]}))))
+
+    (testing "Put"
+      (is (= {:cc-units {}}
+             (far/transact-write-items *client-opts*
+                                       {:items [[:put {:table-name ttable
+                                                       :item i2
+                                                       :cond-expr "attribute_not_exists(#id)"
+                                                       :expr-attr-names {"#id" "id"}}]
+                                                [:put {:table-name ttable
+                                                       :item i3
+                                                       :cond-expr "attribute_not_exists(#id)"
+                                                       :expr-attr-names {"#id" "id"}}]]}))))
+
+    (testing "Verify put results"
+      (is (= [i2 i3]
+             [(far/get-item *client-opts* ttable {:id 302})
+              (far/get-item *client-opts* ttable {:id 303})])))
+
+
+    (testing "Put transaction should fail"
+      (is (thrown? TransactionCanceledException
+                   (far/transact-write-items *client-opts*
+                                             {:items [[:put {:table-name ttable
+                                                             :item i4
+                                                             :cond-expr "attribute_not_exists(#id)"
+                                                             :expr-attr-names {"#id" "id"}}]
+                                                      [:put {:table-name ttable
+                                                             :item i3 ;; This already exists
+                                                             :cond-expr "attribute_not_exists(#id)"
+                                                             :expr-attr-names {"#id" "id"}}]]}))))
+
+    (testing "Verify that Put failed (it should not have been written)"
+      (is (nil?
+           (far/get-item *client-opts* ttable {:id 304}))))
+
+    (testing "Delete"
+      (is (= {:cc-units {}}
+             (far/transact-write-items *client-opts*
+                                       {:items [[:delete {:table-name ttable
+                                                          :prim-kvs {:id 302}
+                                                          :cond-expr "attribute_exists(#id)"
+                                                          :expr-attr-names {"#id" "id"}}]
+                                                [:delete {:table-name ttable
+                                                          :prim-kvs {:id 303}
+                                                          :cond-expr "attribute_exists(#id)"
+                                                          :expr-attr-names {"#id" "id"}}]]}))))
+
+    (testing "Verify delete results"
+      (is (= [nil nil]
+             [(far/get-item *client-opts* ttable {:id 302})
+              (far/get-item *client-opts* ttable {:id 303})])))
+
+    (testing "Update"
+      (is (= {:cc-units {:faraday.tests.main 4.0}}
+             (far/transact-write-items *client-opts*
+                                       {:return-cc? true
+                                        :items [[:update {:table-name ttable
+                                                          :prim-kvs {:id 300}
+                                                          :update-expr "SET #name = :name"
+                                                          :cond-expr "attribute_exists(#id) AND #name = :oldname"
+                                                          :expr-attr-names {"#id" "id", "#name" "name"}
+                                                          :expr-attr-vals {":oldname" "foo", ":name" "foofoo"}}]]}))))
+
+    (testing "Second update should fail"
+      (is (thrown? TransactionCanceledException
+                   (far/transact-write-items *client-opts*
+                                             {:items [[:update {:table-name ttable
+                                                                :prim-kvs {:id 300}
+                                                                :update-expr "SET #name = :name"
+                                                                :cond-expr "attribute_exists(#id) AND #name = :oldname"
+                                                                :expr-attr-names {"#id" "id", "#name" "name"}
+                                                                :expr-attr-vals {":oldname" "foo", ":name" "foobar"}}]]}))))
+
+    (testing "Verify first update results"
+      (is (= "foofoo"
+             (:name (far/get-item *client-opts* ttable {:id 300})))))
+
+
+
+    (testing "Transact Get Items"
+      (is (= {:cc-units {:faraday.tests.main 4.0}
+              :items [i5 i6]}
+             (far/transact-get-items *client-opts*
+                                     {:return-cc? true
+                                      :items [{:table-name ttable
+                                               :prim-kvs {:id 305}}
+                                              {:table-name ttable
+                                               :prim-kvs {:id 306}}]}))))))

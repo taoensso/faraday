@@ -15,7 +15,7 @@
             [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
-  (:import [clojure.lang BigInt Keyword IPersistentVector]
+  (:import [clojure.lang BigInt Keyword IPersistentVector LazySeq]
            [com.amazonaws.services.dynamodbv2.model
             AttributeDefinition
             AttributeValue
@@ -75,7 +75,6 @@
             StreamSpecification
             StreamViewType
             TableDescription
-            TimeToLiveDescription
             TimeToLiveSpecification
             UpdateItemRequest
             UpdateItemResult
@@ -94,7 +93,19 @@
             ResourceInUseException
             ResourceNotFoundException
             UpdateGlobalSecondaryIndexAction
-            BillingModeSummary]
+            BillingModeSummary
+            TransactWriteItemsResult
+            TransactGetItemsResult
+            ItemResponse
+            ConditionCheck
+            Put
+            Delete
+            Update
+            TransactWriteItem
+            TransactWriteItemsRequest
+            TransactGetItem
+            TransactGetItemsRequest
+            Get]
 
            com.amazonaws.ClientConfiguration
            com.amazonaws.auth.AWSCredentials
@@ -330,7 +341,7 @@
         (enc/revery? freeze?      s) (doto (AttributeValue.) (.setBS (mapv nt-freeze s)))
         :else (throw (Exception. "Invalid DynamoDB value: set of invalid type or more than one type")))))
 
-  clojure.lang.LazySeq
+  LazySeq
   (serialize [s]
     (if (.isRealized s)
       (doto (AttributeValue.) (.setL (mapv serialize s)))
@@ -408,6 +419,15 @@
   (as-map [r]
     {:unprocessed (.getUnprocessedItems r)
      :cc-units    (batch-cc-units (.getConsumedCapacity r))})
+
+  TransactWriteItemsResult
+  (as-map [r]
+    {:cc-units (batch-cc-units (.getConsumedCapacity r))})
+
+  TransactGetItemsResult
+  (as-map [r]
+    {:items (mapv #(utils/keyword-map as-map (.getItem ^ItemResponse %)) (.getResponses r))
+     :cc-units (batch-cc-units (.getConsumedCapacity r))})
 
   TableDescription
   (as-map [d]
@@ -1211,6 +1231,135 @@
                       :let [items (attr-multi-vs (table-request action))]]
                   (mapv (partial write-request action) items))))
             requests))))))
+
+(defmulti ^:private transact-write-item first)
+
+(defmethod transact-write-item :cond-check
+  [[_ {:keys [table-name prim-kvs cond-expr
+              expr-attr-names expr-attr-vals return] :as request
+       :or {return :none}}]]
+  (doto (TransactWriteItem.)
+    (.setConditionCheck
+     (doto-cond [g (ConditionCheck.)]
+                :always (.setTableName (name table-name))
+                :always (.setKey (clj-item->db-item prim-kvs))
+                :always (.setConditionExpression cond-expr)
+                expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+                expr-attr-vals (.withExpressionAttributeValues
+                                (clj->db-expr-vals-map expr-attr-vals))
+                return (.setReturnValuesOnConditionCheckFailure (utils/enum g))))))
+
+(defmethod transact-write-item :put
+  [[_ {:keys [table-name item cond-expr expr-attr-names expr-attr-vals return]
+     :or {return :none}}]]
+  (doto (TransactWriteItem.)
+    (.setPut (doto-cond [g (Put.)]
+                        :always (.setTableName (name table-name))
+                        :always (.setItem (clj-item->db-item item))
+                        cond-expr (.setConditionExpression cond-expr)
+                        expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+                        expr-attr-vals (.withExpressionAttributeValues
+                                        (clj->db-expr-vals-map expr-attr-vals))
+                        return (.setReturnValuesOnConditionCheckFailure (utils/enum g))))))
+
+(defmethod transact-write-item :delete
+  [[_ {:keys [table-name prim-kvs cond-expr expr-attr-names expr-attr-vals return]
+       :or {return :none}}]]
+  (doto (TransactWriteItem.)
+    (.setDelete (doto-cond [g (Delete.)]
+                           :always (.setTableName (name table-name))
+                           :always (.setKey (clj-item->db-item prim-kvs))
+                           cond-expr (.setConditionExpression cond-expr)
+                           expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+                           expr-attr-vals (.withExpressionAttributeValues
+                                           (clj->db-expr-vals-map expr-attr-vals))
+                           return (.setReturnValuesOnConditionCheckFailure (utils/enum g))))))
+
+(defmethod transact-write-item :update
+  [[_ {:keys [table-name prim-kvs update-expr
+              cond-expr expr-attr-names expr-attr-vals return]
+       :or {return :none}}]]
+  (doto (TransactWriteItem.)
+    (.setUpdate (doto-cond [g (Update.)]
+                           :always (.setTableName (name table-name))
+                           :always (.setKey (clj-item->db-item prim-kvs))
+                           :always (.setUpdateExpression update-expr)
+                           cond-expr (.setConditionExpression cond-expr)
+                           expr-attr-names (.withExpressionAttributeNames expr-attr-names)
+                           expr-attr-vals (.withExpressionAttributeValues
+                                           (clj->db-expr-vals-map expr-attr-vals))
+                           return (.setReturnValuesOnConditionCheckFailure (utils/enum g))))))
+
+(defn- transact-write-items-request
+  [{:keys [client-req-token return-cc? items]}]
+  (doto-cond [t (TransactWriteItemsRequest.)]
+    :always          (.setTransactItems (mapv transact-write-item items))
+    client-req-token (.setClientRequestToken client-req-token)
+    return-cc?       (.setReturnConsumedCapacity (utils/enum :total))))
+
+(defn transact-write-items
+  "Executes a transaction comprising puts, updates, deletes and cond-checks; either all succeed or all fail.
+   Execution order is the order in the items vector.
+
+   For example:
+   (far/transact-write-items client-opts
+                             {:items [[:cond-check {:table-name ttable
+                                                    :prim-kvs {:id 300}
+                                                    :cond-expr \"attribute_exists(#id)\"
+                                                    :expr-attr-names {\"#id\" \"id\"}}]
+                                      [:put {:table-name ttable
+                                             :item i2
+                                             :cond-expr \"attribute_not_exists(#id)\"
+                                             :expr-attr-names {\"#id\" \"id\"}}]
+                                      [:delete {:table-name ttable
+                                                :prim-kvs {:id 303}
+                                                :cond-expr \"attribute_exists(#id)\"
+                                                :expr-attr-names {\"#id\" \"id\"}}]
+                                      [:update {:table-name ttable
+                                                :prim-kvs {:id 300}
+                                                :update-expr \"SET #name = :name\"
+                                                :cond-expr \"attribute_exists(#id) AND #name = :oldname\"
+                                                :expr-attr-names {\"#id\" \"id\", \"#name\" \"name\"}
+                                                :expr-attr-vals {\":oldname\" \"foo\", \":name\" \"foobar\"}}]]})
+  returns {:cc-units {<table> <consumed-capacity>}}}"
+  [client-opts raw-req]
+  (as-map
+   (.transactWriteItems (db-client client-opts)
+     (transact-write-items-request raw-req))))
+
+(defn- transact-get-item
+  [{:keys [table-name prim-kvs expr-attr-names proj-expr]}]
+  (doto (TransactGetItem.)
+    (.setGet (doto-cond [g (Get.)]
+               :always         (.setTableName (name table-name))
+               :always         (.setKey (clj-item->db-item prim-kvs))
+               expr-attr-names (.setExpressionAttributeNames expr-attr-names)
+               proj-expr       (.setProjectionExpression proj-expr)))))
+
+(defn- transact-get-items-request
+  [{:keys [return-cc? items]}]
+  (doto-cond [t (TransactGetItemsRequest.)]
+    :always (.setTransactItems (mapv transact-get-item items))
+    return-cc?       (.setReturnConsumedCapacity (utils/enum :total))))
+
+(defn transact-get-items
+  [client-opts raw-req]
+  "Transactionally fetches requested items by primary key
+
+  e.g.
+  (far/transact-get-items client-opts
+                          {:return-cc? true
+                           :items [{:table-name ttable
+                                    :prim-kvs {:id 305}}
+                                   {:table-name ttable
+                                   :prim-kvs {:id 306}}]})
+  returns {:items [<item>] :cc-units {<table> <consumed-capacity>}}"
+
+
+  (as-map
+   (.transactGetItems (db-client client-opts)
+     (transact-get-items-request raw-req))))
+
 
 ;;;; API - queries & scans
 

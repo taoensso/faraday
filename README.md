@@ -121,6 +121,8 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 **Querying**: `query`, `scan`, `scan-parallel`.
 
+**Transactions**: `transact-write-items`, `transact-get-items`
+
 You can also check out the [official AWS DynamoDB documentation] though there's a lot of irrelevant Java-land complexity you won't need to deal with with Faraday. The most useful single doc is probably on the [DynamoDB data model].
 
 ## Development
