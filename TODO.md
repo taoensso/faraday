@@ -10,8 +10,9 @@
 
 ## Features
 - [x] Transactions
+- [ ] Lazy paging
 
-Table configuration
+### Table configuration
 - [x] TTL
 - [ ] Backup
 - [ ] Point-in-time recovery
