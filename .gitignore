@@ -6,6 +6,7 @@
 /docs
 /doc
 pom.xml
+pom.xml.asc
 *.jar
 *.class
 *.sh
