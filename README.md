@@ -1,14 +1,7 @@
-[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday) **[API Docs]** | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
+[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)  | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
 
-Current stable:
-```clojure
-[com.taoensso/faraday "1.10.1"]
-```
-
-Current unstable:
-```clojure
-[com.taoensso/faraday "1.11.0-alpha1"]
-```
+Current stable: `[com.taoensso/faraday "1.10.1"]`
+Current unstable: `[com.taoensso/faraday "1.11.0-alpha1"]`
 
 # Faraday
 
@@ -163,7 +156,6 @@ Copyright &copy; 2013-2019 [Peter Taoussanis] and contributors.
 [Donate]: http://taoensso.com/clojure/backers
 
 <!--- Standard links (repo specific) -->
-[API Docs]: http://taoensso.github.io/faraday/
 [GitHub issues page]: https://github.com/ptaoussanis/faraday/issues
 [GitHub contributors page]: https://github.com/ptaoussanis/faraday/graphs/contributors
 [EPL v1.0]: https://raw.githubusercontent.com/ptaoussanis/faraday/master/LICENSE
