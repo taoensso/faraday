@@ -1,12 +1,13 @@
-[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday) [API Docs](http://taoensso.github.io/faraday/) | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
+# Faraday [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
+## Clojure DynamoDB client
+
+**[API Docs](http://taoensso.github.io/faraday/)**
 
 Current stable: `[com.taoensso/faraday "1.10.1"]`
 
 Current unstable: `[com.taoensso/faraday "1.11.0-alpha1"]`
 
-# Faraday
 
-## Clojure DynamoDB client
 
 [DynamoDB] is *awesome* and makes a great companion for Clojure web apps that need a **simple, reliable way to scale with predictable performance and without the usual headaches**.
 
