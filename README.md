@@ -1,7 +1,13 @@
-**[API Docs]** | current [Break Version]:
+**[API Docs]** | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**:
 
+Current stable:
 ```clojure
-[com.taoensso/faraday "1.10.1"] ; see CHANGELOG for details
+[com.taoensso/faraday "1.10.1"]
+```
+
+Current unstable:
+```clojure
+[com.taoensso/faraday "1.11.0-alpha1"]
 ```
 
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
