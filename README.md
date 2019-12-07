@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)  | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
 
 Current stable: `[com.taoensso/faraday "1.10.1"]`
+
 Current unstable: `[com.taoensso/faraday "1.11.0-alpha1"]`
 
 # Faraday
