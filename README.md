@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)  | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
+[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday) [API Docs](http://taoensso.github.io/faraday/) | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**
 
 Current stable: `[com.taoensso/faraday "1.10.1"]`
 
