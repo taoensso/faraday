@@ -1,4 +1,4 @@
-**[API Docs]** | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)**:
+**[API Docs]** | **[Change log](https://github.com/Taoensso/faraday/blob/master/CHANGELOG.md)** | [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
 
 Current stable:
 ```clojure
@@ -9,8 +9,6 @@ Current unstable:
 ```clojure
 [com.taoensso/faraday "1.11.0-alpha1"]
 ```
-
-[![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
 
 # Faraday
 
