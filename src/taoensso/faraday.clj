@@ -436,7 +436,7 @@
      :item-count          (.getItemCount d)
      :size                (.getTableSizeBytes d)
      :throughput          (as-map (.getProvisionedThroughput d))
-     :billing-mode        (as-map (.getBillingModeSummary d))
+     :billing-mode        (as-map (or (.getBillingModeSummary d) (.. (BillingModeSummary.) (withBillingMode "PROVISIONED"))))
      :indexes             (as-map (.getLocalSecondaryIndexes d)) ; DEPRECATED
      :lsindexes           (as-map (.getLocalSecondaryIndexes d))
      :gsindexes           (as-map (.getGlobalSecondaryIndexes d))
