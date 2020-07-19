@@ -1179,8 +1179,7 @@
   :span-reqs - {:max _ :throttle-ms _} allows a number of requests to
   automatically be stitched together (to exceed throughput limits, for example)."
   [client-opts requests
-   & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts
-       :or   {span-reqs {:max 5}}}]]
+   & [{:keys [return-cc? span-reqs attr-multi-vs?] :as opts}]]
   (binding [*attr-multi-vs?* attr-multi-vs?]
     (let [run1
           (fn [raw-req]
