@@ -3,11 +3,7 @@
 
 **[API Docs](http://taoensso.github.io/faraday/)**
 
-Current stable: `[com.taoensso/faraday "1.10.1"]`
-
-Current unstable: `[com.taoensso/faraday "1.11.0-alpha1"]`
-
-
+`[com.taoensso/faraday "1.11.1"]`
 
 [DynamoDB] is *awesome* and makes a great companion for Clojure web apps that need a **simple, reliable way to scale with predictable performance and without the usual headaches**.
 
@@ -23,7 +19,7 @@ Faraday was originally adapted from the [Rotary client] by James Reeves.
 Add the necessary dependency to your project:
 
 ```clojure
-[com.taoensso/faraday "1.10.1"]
+[com.taoensso/faraday "1.11.1"]
 ```
 
 And setup your namespace imports:

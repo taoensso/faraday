@@ -1,4 +1,25 @@
-> This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md) as of **Aug 16, 2014**.
+**Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
+
+## v1.11.1 / 2020 Jul 19
+
+```clojure
+[com.taoensso/faraday "1.11.1"]
+```
+
+* **Change** `batch-get-item`, will no longer stitch requests together unless `span-reqs` is specified. To reinstate the old behaviour, pass `:span-reqs {:max 5}` in the options. See [#74](https://github.com/Taoensso/faraday/issues/74) and [#143](https://github.com/Taoensso/faraday/pull/143).
+
+## v1.11.0 / 2020 Jul 19
+
+```clojure
+[com.taoensso/faraday "1.11.0"]
+```
+
+* **New** `transact-get-items` and `transact-write-items` for transaction support
+* **New** `describe-ttl`, `update-ttl` and `ensure-ttl` to manage table TTL configuration
+* **New** `client-opts` may now specify `:region` as an alternative to `:endpoint`
+* **Change** `query`, `scan`, `batch-write-item`, will no longer stitch requests together unless `span-reqs` is specified. To reinstate the old behaviour, pass `:span-reqs {:max 5}` in the options. See [#74](https://github.com/Taoensso/faraday/issues/74) and [#143](https://github.com/Taoensso/faraday/pull/143).
+* **Change** `update-table` now uses current table description to validate GSI throughput updates
+* **Fix** `describe-table` now returns `:billing-mode :provisioned` instead of `:billing-mode nil`
 
 ## v1.10.1 / 2019 Nov 18
 
@@ -56,8 +77,6 @@
 
 ## v1.8.0 / 2015 September 26
 
-> This is a non-breaking feature release
-
 * **New**: add sanitization multimethod to strip empty values [@jeffh #67]
 * **New**: temp hack/workaround to get opt-out `attr-multi-vs` behaviour [#63]
 * **New**: support proxy username & password [@tokomakoma123 #68]
@@ -71,8 +90,6 @@
 
 
 ## v1.7.1 / 2015 June 4
-
-> This is a non-breaking maintenance release
 
 * **Deps**: stop unnecessarily pulling in entire AWS SDK [@jaley #61]
 * **Fix**: use DefaultAWSCredentialsProviderChain as provider [@MichaelBlume #59]
