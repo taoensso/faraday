@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.11.1-support-protocol"
+(defproject com.taoensso/faraday "1.11.1+protocol"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Clojure DynamoDB client"
   :url "https://github.com/ptaoussanis/faraday"
