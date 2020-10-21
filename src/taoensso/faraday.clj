@@ -107,6 +107,7 @@
             Get]
 
            com.amazonaws.ClientConfiguration
+           com.amazonaws.Protocol
            com.amazonaws.auth.AWSCredentials
            com.amazonaws.auth.AWSCredentialsProvider
            com.amazonaws.auth.BasicAWSCredentials
@@ -132,8 +133,8 @@
 (defn- client-params
   [{:as   client-opts
     :keys [provider creds access-key secret-key proxy-host proxy-port
-           proxy-username proxy-password
-           conn-timeout max-conns max-error-retry socket-timeout keep-alive?]}]
+           proxy-username proxy-password conn-timeout max-conns
+           max-error-retry socket-timeout keep-alive? protocol]}]
 
   (let [creds (or creds (:credentials client-opts)) ; Deprecated opt
 
@@ -148,6 +149,7 @@
 
         ^AWSCredentialsProvider provider
         (or provider (when-not aws-creds (DefaultAWSCredentialsProviderChain.)))
+        proto (Protocol/valueOf (name (or protocol :HTTPS)))
 
         client-config
         (doto-cond [g (ClientConfiguration.)]
@@ -159,7 +161,8 @@
           max-conns       (.setMaxConnections    g)
           max-error-retry (.setMaxErrorRetry     g)
           socket-timeout  (.setSocketTimeout     g)
-          keep-alive?     (.setUseTcpKeepAlive   g))]
+          keep-alive?     (.setUseTcpKeepAlive   g)
+          proto           (.setProtocol          g))]
 
     [aws-creds provider client-config]))
 
