@@ -314,9 +314,7 @@
   Keyword (serialize [kw] (serialize (enc/as-qname kw)))
   String
   (serialize [s]
-    (if (.isEmpty s)
-      (throw (Exception. "Invalid DynamoDB value: \"\" (empty string)"))
-      (doto (AttributeValue.) (.setS s))))
+    (doto (AttributeValue.) (.setS s)))
 
   IPersistentVector
   (serialize [v] (doto (AttributeValue.) (.setL (mapv serialize v))))
