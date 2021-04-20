@@ -1216,7 +1216,7 @@
              (far/get-item *client-opts* ttable {:id (:id item)}))))))
 
 (deftest removing-empty-attributes
-  (is (= {:b [{:a "b"}], :f false, :g "    "}
+  (is (= {:b [{:a "b"}], :empt-str "", :e #{""}, :f false, :g "    "}
          (far/remove-empty-attr-vals
           {:b [{:a "b" :c [[]] :d #{}}, {}] :a nil :empt-str "" :e #{""} :f false :g "    "}))))
 

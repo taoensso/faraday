@@ -1684,7 +1684,8 @@
 (def remove-empty-attr-vals
   "Alpha, subject to change.
   Util to help remove (or coerce to nil) empty val types prohibited by DDB,
-  Ref. http://goo.gl/Xg85pO. See also `freeze` as an alternative."
+  Ref. http://goo.gl/Xg85pO. Note that empty string and binary attributes are
+  now permitted: https://amzn.to/3szZ0E5 See also `freeze` as an alternative."
   (let [->?seq (fn [c] (when (seq c) c))]
     (fn f1 [x]
       (cond
@@ -1700,6 +1701,4 @@
             (fn rf [acc in] (let [v* (f1 in)] (if (nil? v*) acc (conj acc v*))))
             (if (sequential? x) [] (empty x)) x))
 
-        (string?    x) (when-not (.isEmpty ^String x)       x)
-        (enc/bytes? x) (when-not (zero? (alength ^bytes x)) x)
         :else x))))
