@@ -1,6 +1,8 @@
 pom.xml*
 .lein*
 .nrepl-port
+.lsp/
+.calva/
 *.jar
 *.class
 .env

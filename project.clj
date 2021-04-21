@@ -12,11 +12,12 @@
 
   :dependencies
   [[org.clojure/clojure "1.5.1"]
-   [com.taoensso/encore "2.116.0"]
-   [com.taoensso/nippy  "2.14.0"]
-   [joda-time           "2.10.5"]
-   [com.amazonaws/aws-java-sdk-dynamodb "1.11.664"
-    :exclusions [joda-time]]]
+   [com.taoensso/encore "2.127.0"]
+   [com.taoensso/nippy  "2.15.3"]
+   [joda-time           "2.10.10"]
+   [commons-logging     "1.2"]
+   [com.amazonaws/aws-java-sdk-dynamodb "1.11.1001"
+    :exclusions [joda-time commons-logging]]]
 
   :profiles
   {:server-jvm {:jvm-opts ^:replace ["-server"]}
@@ -25,9 +26,9 @@
    :1.7  {:dependencies [[org.clojure/clojure "1.7.0"]]}
    :1.8  {:dependencies [[org.clojure/clojure "1.8.0"]]}
    :1.9  {:dependencies [[org.clojure/clojure "1.9.0"]]}
-   :1.10 {:dependencies [[org.clojure/clojure "1.10.1"]]}
+   :1.10 {:dependencies [[org.clojure/clojure "1.10.3"]]}
    :dev
-   [:1.9 :server-jvm
+   [:1.10 :server-jvm
     {:plugins [[lein-ancient "0.6.14"]
                [lein-codox   "0.10.6"]
                [clj-dynamodb-local "0.1.2"]]}]}
