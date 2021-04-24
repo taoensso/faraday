@@ -10,8 +10,7 @@
     * Primary key - Partition (hash) key or
                     Partition (hash) AND sort (range) key"
   {:author "Peter Taoussanis & contributors"}
-  (:require [clojure.string         :as str]
-            [taoensso.encore        :as enc :refer (doto-cond)]
+  (:require [taoensso.encore        :as enc :refer (doto-cond)]
             [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
@@ -112,6 +111,9 @@
            com.amazonaws.auth.AWSCredentialsProvider
            com.amazonaws.auth.BasicAWSCredentials
            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+           [com.amazonaws.regions
+            Region
+            Regions]
            [com.amazonaws.services.dynamodbv2
             AmazonDynamoDB
             AmazonDynamoDBClient
@@ -173,12 +175,13 @@
        (AmazonDynamoDBClient.) ; Default client
        (let [[^AWSCredentials aws-creds
               ^AWSCredentialsProvider provider
-              ^ClientConfiguration client-config] (client-params client-opts)]
+              ^ClientConfiguration client-config] (client-params client-opts)
+             region-object (some-> region Regions/fromName Region/getRegion)]
          (doto-cond [g (cond client client
                              provider (AmazonDynamoDBClient. provider client-config)
                              :else (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)
-           region (.setRegion g)))))))
+           region-object (.setRegion g)))))))
 
 (def ^:private db-streams-client*
   "Returns a new AmazonDynamoDBStreamsClient instance for the given client opts:
@@ -191,12 +194,13 @@
         (AmazonDynamoDBStreamsClient.) ; Default client
         (let [[^AWSCredentials aws-creds
                ^AWSCredentialsProvider provider
-               ^ClientConfiguration client-config] (client-params client-opts)]
+               ^ClientConfiguration client-config] (client-params client-opts)
+              region-object (some-> region Regions/fromName Region/getRegion)]
           (doto-cond [g (cond client client
                               provider (AmazonDynamoDBStreamsClient. provider client-config)
                               :else (AmazonDynamoDBStreamsClient. aws-creds client-config))]
             endpoint (.setEndpoint g)
-            region (.setRegion g)))))))
+            region-object (.setRegion g)))))))
 
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
 (defn- db-streams-client ^AmazonDynamoDBStreams [client-opts] (db-streams-client* client-opts))

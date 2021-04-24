@@ -68,6 +68,10 @@
 
 (use-fixtures :each with-some-tables)
 
+(deftest client-creation
+  (is (#'far/db-client (assoc *client-opts* :region "us-east-1")))
+  (is (#'far/db-client (assoc *client-opts* :endpoint "http://localhost:6798"))))
+
 (deftest basic-api
   (let [i0 {:id 0 :name "foo"}
         i1 {:id 1 :name "bar"}]
