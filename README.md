@@ -1,4 +1,4 @@
-# Faraday, the Clojure DynamoDB client [![Build Status](https://travis-ci.org/Taoensso/faraday.svg?branch=master)](https://travis-ci.org/Taoensso/faraday)
+# Faraday, the Clojure DynamoDB client [![Build Status](https://github.com/Taoensso/faraday/actions/workflows/ci.yml/badge.svg)](https://github.com/Taoensso/faraday/actions/workflows/ci.yml)
 
 * [API Docs](http://taoensso.github.io/faraday/)
 * Leiningen: `[com.taoensso/faraday "1.11.1"]`

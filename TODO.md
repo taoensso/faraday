@@ -7,7 +7,7 @@
 - [x] Migrate to clojure.test 
 - [x] Release 1.10 GA
 - [x] Update the Changelog for 1.10 
-- [ ] Move from Travis CI to GitHub Actions
+- [x] Move from Travis CI to GitHub Actions
 - [ ] Add a GitHub Action for release
  
 ## Features
