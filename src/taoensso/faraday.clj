@@ -10,8 +10,7 @@
     * Primary key - Partition (hash) key or
                     Partition (hash) AND sort (range) key"
   {:author "Peter Taoussanis & contributors"}
-  (:require [clojure.string         :as str]
-            [taoensso.encore        :as enc :refer (doto-cond)]
+  (:require [taoensso.encore        :as enc :refer (doto-cond)]
             [taoensso.nippy         :as nippy]
             [taoensso.nippy.tools   :as nippy-tools]
             [taoensso.faraday.utils :as utils :refer (coll?*)])
@@ -113,6 +112,9 @@
            com.amazonaws.auth.AWSCredentialsProvider
            com.amazonaws.auth.BasicAWSCredentials
            com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+           [com.amazonaws.regions
+            Region
+            Regions]
            [com.amazonaws.services.dynamodbv2
             AmazonDynamoDB
             AmazonDynamoDBClient
@@ -176,12 +178,13 @@
        (AmazonDynamoDBClient.) ; Default client
        (let [[^AWSCredentials aws-creds
               ^AWSCredentialsProvider provider
-              ^ClientConfiguration client-config] (client-params client-opts)]
+              ^ClientConfiguration client-config] (client-params client-opts)
+             region-object (some-> region Regions/fromName Region/getRegion)]
          (doto-cond [g (cond client client
                              provider (AmazonDynamoDBClient. provider client-config)
                              :else (AmazonDynamoDBClient. aws-creds client-config))]
            endpoint (.setEndpoint g)
-           region (.setRegion g)))))))
+           region-object (.setRegion g)))))))
 
 (def ^:private db-streams-client*
   "Returns a new AmazonDynamoDBStreamsClient instance for the given client opts:
@@ -194,12 +197,13 @@
         (AmazonDynamoDBStreamsClient.) ; Default client
         (let [[^AWSCredentials aws-creds
                ^AWSCredentialsProvider provider
-               ^ClientConfiguration client-config] (client-params client-opts)]
+               ^ClientConfiguration client-config] (client-params client-opts)
+              region-object (some-> region Regions/fromName Region/getRegion)]
           (doto-cond [g (cond client client
                               provider (AmazonDynamoDBStreamsClient. provider client-config)
                               :else (AmazonDynamoDBStreamsClient. aws-creds client-config))]
             endpoint (.setEndpoint g)
-            region (.setRegion g)))))))
+            region-object (.setRegion g)))))))
 
 (defn- db-client ^AmazonDynamoDB [client-opts] (db-client* client-opts))
 (defn- db-streams-client ^AmazonDynamoDBStreams [client-opts] (db-streams-client* client-opts))
@@ -317,9 +321,7 @@
   Keyword (serialize [kw] (serialize (enc/as-qname kw)))
   String
   (serialize [s]
-    (if (.isEmpty s)
-      (throw (Exception. "Invalid DynamoDB value: \"\" (empty string)"))
-      (doto (AttributeValue.) (.setS s))))
+    (doto (AttributeValue.) (.setS s)))
 
   IPersistentVector
   (serialize [v] (doto (AttributeValue.) (.setL (mapv serialize v))))
@@ -1689,7 +1691,8 @@
 (def remove-empty-attr-vals
   "Alpha, subject to change.
   Util to help remove (or coerce to nil) empty val types prohibited by DDB,
-  Ref. http://goo.gl/Xg85pO. See also `freeze` as an alternative."
+  Ref. http://goo.gl/Xg85pO. Note that empty string and binary attributes are
+  now permitted: https://amzn.to/3szZ0E5 See also `freeze` as an alternative."
   (let [->?seq (fn [c] (when (seq c) c))]
     (fn f1 [x]
       (cond
@@ -1705,6 +1708,4 @@
             (fn rf [acc in] (let [v* (f1 in)] (if (nil? v*) acc (conj acc v*))))
             (if (sequential? x) [] (empty x)) x))
 
-        (string?    x) (when-not (.isEmpty ^String x)       x)
-        (enc/bytes? x) (when-not (zero? (alength ^bytes x)) x)
         :else x))))
