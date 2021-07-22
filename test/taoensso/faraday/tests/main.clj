@@ -70,7 +70,11 @@
 
 (deftest client-creation
   (is (#'far/db-client (assoc *client-opts* :region "us-east-1")))
-  (is (#'far/db-client (assoc *client-opts* :endpoint "http://localhost:6798"))))
+  (is (#'far/db-client (assoc *client-opts* :endpoint "http://localhost:6798")))
+  (is (#'far/db-client (assoc *client-opts* :protocol "HTTP")))
+  (is (#'far/db-client (assoc *client-opts* :protocol "HTTPS")))
+  (is (thrown? IllegalArgumentException
+               (#'far/db-client (assoc *client-opts* :protocol "random")))))
 
 (deftest basic-api
   (let [i0 {:id 0 :name "foo"}
