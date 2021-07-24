@@ -29,9 +29,14 @@ Add Faraday as a dependency to your project and import faraday into your namespa
 First thing is to start a DynamoDB Local instance. Once DynamoDB Local is up and running in your terminal, you should see something like:
 
 ```sh
-$ lein dynamodb-local
-dynamodb-local: Options {:port 6798, :in-memory? true, :db-path /home/.../.clj-dynamodb-local}
-dynamodb-local: Started DynamoDB Local
+$ docker run amazon/dynamodb-local
+Initializing DynamoDB Local with the following configuration:
+Port:		8000
+InMemory:	true
+DbPath:		null
+SharedDb:	false
+shouldDelayTransientStatuses:	false
+CorsParams:	*
 ```
 
 Then proceed to connecting with your local instance in the next section.
@@ -53,7 +58,7 @@ Ready?
 
    ;;; You may optionally override the default endpoint if you'd like to use DynamoDB
    ;;; Local or a different AWS Region (Ref. http://goo.gl/YmV80o), etc.:
-   ;; :endpoint "http://localhost:6798"                   ; For DynamoDB Local
+   ;; :endpoint "http://localhost:8000"                   ; For DynamoDB Local
    ;; :endpoint "http://dynamodb.eu-west-1.amazonaws.com" ; For EU West 1 AWS region
 
    ;;; You may optionally provide your own (pre-configured) instance of the Amazon
@@ -116,18 +121,24 @@ You can also check out the [official AWS DynamoDB documentation](http://aws.amaz
 
 ## Development
 
-This project uses the [dynamodb-local](https://github.com/dmcgillen/clj-dynamodb-local) lein plugin to manage downloading, starting and stopping an in-memory DynamoDB instance.
+This project uses [Testcontainers](https://www.testcontainers.org/) to manage starting and stopping a local DynamoDB instance in docker.
 
-To run all the tests locally, run:
+Run the tests locally with:
+
+```bash
+lein test
+```
+
+Or run tests from a REPL like:
+
+```clj
+taoensso.faraday.tests.main> (clojure.test/run-tests)
+```
+
+To run the entire test suite against all supported versions of Clojure, use:
 
 ```bash
 lein test-all
-```
-
-If you intend to run tests from a repl, you can start a local DynamoDB instance:
-
-```bash
-lein dynamodb-local
 ```
 
 ## Contributions
@@ -138,4 +149,4 @@ Please see GitHub issues for bugs, ideas, etc. **Pull requests welcome**. For a 
 
 Distributed under the [EPL v1.0](https://raw.githubusercontent.com/ptaoussanis/faraday/master/LICENSE) (same as Clojure).
 
-Copyright &copy; 2013-2020 [Peter Taoussanis](https://www.taoensso.com/) and contributors.
+Copyright &copy; 2013-2021 [Peter Taoussanis](https://www.taoensso.com/) and contributors.
