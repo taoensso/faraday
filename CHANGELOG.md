@@ -1,5 +1,14 @@
 **Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
 
+## v1.11.2 / 2021 Jul 24
+
+```clojure
+[com.taoensso/faraday "1.11.2"]
+```
+
+* **New** `client-opts` can now include `:protocol` (`:HTTP` or `:HTTPS`)
+* **Fix** `client-opts` parsing of `:region` is fixed
+
 ## v1.11.1 / 2020 Jul 19
 
 ```clojure
