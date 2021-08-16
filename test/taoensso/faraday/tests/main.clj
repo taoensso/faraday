@@ -1,6 +1,6 @@
 (ns taoensso.faraday.tests.main
   (:require
-   [clojure.test :refer :all]
+   [clojure.test :refer [deftest is testing use-fixtures]]
    [taoensso.encore :as encore]
    [taoensso.faraday :as far]
    [taoensso.nippy :as nippy])
@@ -11,7 +11,8 @@
    [com.amazonaws.services.dynamodbv2 AmazonDynamoDBClient AmazonDynamoDBStreamsClient]
    [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException TransactionCanceledException]
    [com.amazonaws AmazonServiceException]
-   (java.util Date)))
+   [java.util Date]
+   [org.testcontainers.containers GenericContainer]))
 
 (defmethod clojure.test/report :begin-test-var [m]
   (println "\u001B[32mTesting" (-> m :var meta :name) "\u001B[0m"))
@@ -26,6 +27,19 @@
   {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "")
    :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "")
    :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")})
+
+(defn- dynamodb-local
+  [t]
+  (let [dynamodb-port 8000
+        container (doto (GenericContainer. "amazon/dynamodb-local:1.16.0")
+                    (.addExposedPort (int dynamodb-port))
+                    (.start))
+        local-port (.getMappedPort container dynamodb-port)]
+    (with-open [_ container]
+      (with-bindings {#'*client-opts* (assoc *client-opts* :endpoint (format "http://localhost:%d" local-port))}
+        (t)))))
+
+(use-fixtures :once dynamodb-local)
 
 (def ttable :faraday.tests.main)
 (def range-table :faraday.tests.range)
