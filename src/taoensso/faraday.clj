@@ -1451,7 +1451,7 @@
             [:items]
             (fn [items] {table items})))
         result (merge-more run1 span-reqs (run1 last-prim-kvs))]
-    (with-meta (table result) (meta result))))
+    (with-meta (get result table) (meta result))))
 
 (defn- scan-request
   [table
@@ -1529,7 +1529,7 @@
             [:items]
             (fn [items] {table items})))
         result (merge-more run1 span-reqs (run1 last-prim-kvs))]
-    (with-meta (table result) (meta result))))
+    (with-meta (get result table) (meta result))))
 
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles

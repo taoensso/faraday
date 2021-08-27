@@ -133,11 +133,39 @@
                                                :consistent? true}})
                   ttable set))))
 
-    (testing " Batch delete"
+    (testing "Batch delete"
       (is (= [nil nil]
              (do (far/batch-write-item *client-opts* {ttable {:delete {:id [0 1]}}})
                  [(far/get-item *client-opts* ttable {:id 0})
                   (far/get-item *client-opts* ttable {:id 1})]))))))
+
+(deftest string-table-name
+  (let [bulk-table-str (name bulk-table)
+        i0             {:id 0 :group "group"}
+        i1             {:id 1 :group "group"}]
+    (far/batch-write-item *client-opts*
+                          {bulk-table {:delete [i0 i1]}})
+    (far/batch-write-item *client-opts*
+                          {bulk-table {:put [i0 i1]}})
+    (testing "query & scan requests can be made when table name given as a string"
+      (is (= #{i0 i1}
+             (->> (far/query *client-opts*
+                             bulk-table-str
+                             {:group [:eq "group"]
+                              :id    [:lt 3]}
+                             {:consistent? true
+                              :limit       100
+                              :span-reqs   {:max 25}
+                              :return      #{:id :group}})
+                  set)))
+      (is (= #{i0 i1}
+             (->> (far/scan *client-opts*
+                            bulk-table-str
+                            {:consistent? true
+                             :limit       100
+                             :span-reqs   {:max 25}
+                             :return      #{:id :group}})
+                  set))))))
 
 (deftest bulk-queries
   (let [num-items 100]
