@@ -322,8 +322,8 @@
              (far/get-item *client-opts* ttable {:id 2001} {:proj-expr "author"}))))
 
     (testing "Getting the tags for 1984"
-      (is (= {:details {:tags ["dystopia" "surveillance"]}})
-          (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"})))
+      (is (= {:details {:tags ["dystopia" "surveillance"]}}
+             (far/get-item *client-opts* ttable {:id 1984} {:proj-expr "details.tags"}))))
 
     (testing "Getting a specific character for 2001"
       (is (= {:details {:characters ["HAL 9000"]}}
