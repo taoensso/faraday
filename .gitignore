@@ -15,3 +15,5 @@ pom.xml*
 /docs/
 /doc/
 local-dynamo/
+.clj-kondo/.cache
+.#*

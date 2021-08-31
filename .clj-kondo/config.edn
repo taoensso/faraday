@@ -1,0 +1,3 @@
+{:lint-as {taoensso.encore/doto-cond clojure.core/let
+           taoensso.encore/defalias clojure.core/def
+           taoensso.faraday.tests.main/do-with-temp-table clojure.core/let}}
