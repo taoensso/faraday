@@ -29,7 +29,7 @@ Add Faraday as a dependency to your project and import faraday into your namespa
 First thing is to start a DynamoDB Local instance. Once DynamoDB Local is up and running in your terminal, you should see something like:
 
 ```sh
-$ docker run amazon/dynamodb-local
+$ docker run -p 8000:8000 amazon/dynamodb-local
 Initializing DynamoDB Local with the following configuration:
 Port:		8000
 InMemory:	true
