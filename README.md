@@ -1,8 +1,8 @@
 # Faraday, the Clojure DynamoDB client [![Build Status](https://github.com/Taoensso/faraday/actions/workflows/ci.yml/badge.svg)](https://github.com/Taoensso/faraday/actions/workflows/ci.yml)
 
 * [API Docs](http://taoensso.github.io/faraday/)
-* Leiningen: `[com.taoensso/faraday "1.11.2"]`
-* deps.edn: `com.taoensso/faraday {:mvn/version "1.11.2"}`
+* Leiningen: `[com.taoensso/faraday "1.11.3"]`
+* deps.edn: `com.taoensso/faraday {:mvn/version "1.11.3"}`
 
 DynamoDB makes a great companion for Clojure apps that need a **simple, reliable way to persist data, that scales with predictable performance**. Faraday is a small, fast and intuitive DynamoDB client library for Clojure, built around the AWS Java SDK and originally adapted from [Rotary](https://github.com/weavejester/rotary) by James Reeves.
 

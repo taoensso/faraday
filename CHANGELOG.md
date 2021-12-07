@@ -1,5 +1,13 @@
 **Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
 
+## v1.11.3 / 2021 Dec 7
+
+```clojure
+[com.taoensso/faraday "1.11.2"]
+```
+
+* **Fix** Allow string table names in `query` and `scan`
+
 ## v1.11.2 / 2021 Jul 24
 
 ```clojure
