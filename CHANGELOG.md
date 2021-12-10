@@ -1,9 +1,18 @@
 **Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
 
+## v1.11.4 / 2021 Dec 10
+
+```clojure
+[com.taoensso/faraday "1.11.4"]
+```
+
+* **Fix** Remove dev dependencies from release (see [technomancy/leiningen#2721](https://github.com/technomancy/leiningen/issues/2721))
+
+
 ## v1.11.3 / 2021 Dec 7
 
 ```clojure
-[com.taoensso/faraday "1.11.2"]
+[com.taoensso/faraday "1.11.3"]
 ```
 
 * **Fix** Allow string table names in `query` and `scan`
