@@ -1578,3 +1578,16 @@
                                                :prim-kvs {:id 305}}
                                               {:table-name ttable
                                                :prim-kvs {:id 306}}]}))))))
+
+(deftype MyType [^long val])
+
+(extend-protocol
+  far/ISerializable
+  MyType
+  (serialize [c]
+    (str "<MyType " (.val c) ">")))
+
+(deftest clj-item->db-item-extensions
+  (testing "Serialize custom types"
+    (is (= (far/clj-item->db-item {:item (MyType. 17)})
+           {"item" "<MyType 17>"}))))
