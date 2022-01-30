@@ -363,7 +363,8 @@
 ;;;; Object coercions
 
 (def db-item->clj-item (partial utils/keyword-map deserialize))
-(def clj-item->db-item (partial utils/name-map      serialize))
+(defn clj-item->db-item [item]
+  (utils/name-map serialize item))
 
 (defn- cc-units [^ConsumedCapacity cc] (some-> cc (.getCapacityUnits)))
 (defn- batch-cc-units [ccs]
