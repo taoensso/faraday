@@ -1088,8 +1088,7 @@
       _ @(index-status-watch *client-opts* temp-table :gsindexes "amount-index")
       del-idx @(far/update-table *client-opts* temp-table
                                  {:gsindexes {:operation :delete
-                                              :name "genre-index"
-                                              }})
+                                              :name "genre-index"}})
       _ @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
       ;; And get the final state
       fin-idx (far/describe-table *client-opts* temp-table)]
@@ -1099,12 +1098,10 @@
               (dissoc new-idx :gsindexes :prim-keys))))
      (testing "We have a new index"
        (is (= [{:name :genre-index
-                :size nil
-                :item-count nil
                 :key-schema [{:name :genre :type :hash}]
                 :projection {:projection-type "ALL" :non-key-attributes nil}
                 :throughput {:read 4 :write 2 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
-              (:gsindexes new-idx))))
+              (->> (:gsindexes new-idx) (map #(dissoc % :size :item-count))))))
      (testing "The updated index has the new throughput values, as well as a size and item-count since it was already created"
        (is (= [{:name :genre-index
                 :size 0
@@ -1113,34 +1110,26 @@
                 :projection {:projection-type "ALL" :non-key-attributes nil}
                 :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
               (:gsindexes inc-idx))))
-     (testing "The second index created comes back without a size or item count"
+     (testing "The second index created comes back"
        (is (= #{{:name :amount-index
-                 :size nil
-                 :item-count nil
                  :key-schema [{:name :amount :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
                  :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
                 {:name :genre-index
-                 :size 0
-                 :item-count 0
                  :key-schema [{:name :genre :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
                  :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}}
-              (set (:gsindexes amt-idx)))))
+              (set (->> (:gsindexes amt-idx) (map #(dissoc % :size :item-count)))))))
      (testing "When we request that the genre index be deleted, it returns that it's being destroyed"
        (is (= #{{:name :amount-index
-                 :size 0
-                 :item-count 0
                  :key-schema [{:name :amount :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
                  :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}
                 {:name :genre-index
-                 :size nil
-                 :item-count nil
                  :key-schema [{:name :genre :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
                  :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}}
-              (set (:gsindexes del-idx)))))
+              (set (->> (:gsindexes del-idx) (map #(dissoc % :size :item-count)))))))
      (testing "And finally, we were left only with the amount index"
        (is (= [{:name :amount-index
                 :size 0
