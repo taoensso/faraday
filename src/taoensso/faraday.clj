@@ -231,7 +231,7 @@
       ba ; No Nippy header => assume non-serialized binary data (e.g. other client)
       (try ; Header match _may_ have been a fluke (though v. unlikely)
         (nippy-tools/thaw ba)
-        (catch Exception e
+        (catch Exception _
           ba)))))
 
 (enc/defalias with-thaw-opts nippy-tools/with-thaw-opts)
@@ -248,16 +248,17 @@
            "arbitrary-precision binary serialization."))
     x))
 
-(defn- ddb-num? [x]
+(defn- ddb-num?
   "Is `x` a number type natively storable by DynamoDB? Note that DDB stores _all_
   numbers as exact-value strings with <= 38 digits of precision. For greater
   precision, use `freeze`.
   Ref. http://goo.gl/jzzsIW"
+  [x]
   (or (instance? Long    x)
       (instance? Double  x)
       (instance? Integer x)
       (instance? Float   x)
-      ;;; High-precision types:
+      ;; High-precision types:
       (and (instance? BigInt     x) (assert-precision x))
       (and (instance? BigDecimal x) (assert-precision x))
       (and (instance? BigInteger x) (assert-precision x))))
@@ -1117,21 +1118,20 @@
   [{<attr> <v-or-vs*> ...} ...]* -> [{<attr> <v> ...} ...] (* => optional vec)"
   [attr-multi-vs-map]
   (let [expand? *attr-multi-vs?*
-        expand? (if (nil? expand?) attr-multi-vs?-default expand?)]
-
-    (let [ensure-sequential (fn [x] (if (sequential? x) x [x]))]
-      (if-not expand?
-        (mapv clj-item->db-item (ensure-sequential attr-multi-vs-map))
-        (reduce
-          (fn [r attr-multi-vs]
-            (let [attrs (keys attr-multi-vs)
-                  vs    (mapv ensure-sequential (vals attr-multi-vs))]
-              (when (> (count (filter next vs)) 1)
-                (-> (Exception. "Can range over only a single attr's values")
-                  (throw)))
-              (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
-                        (apply utils/cartesian-product vs)))))
-          [] (ensure-sequential attr-multi-vs-map))))))
+        expand? (if (nil? expand?) attr-multi-vs?-default expand?)
+        ensure-sequential (fn [x] (if (sequential? x) x [x]))]
+    (if-not expand?
+      (mapv clj-item->db-item (ensure-sequential attr-multi-vs-map))
+      (reduce
+       (fn [r attr-multi-vs]
+         (let [attrs (keys attr-multi-vs)
+               vs    (mapv ensure-sequential (vals attr-multi-vs))]
+           (when (> (count (filter next vs)) 1)
+             (-> (Exception. "Can range over only a single attr's values")
+                 (throw)))
+           (into r (mapv (comp clj-item->db-item (partial zipmap attrs))
+                         (apply utils/cartesian-product vs)))))
+       [] (ensure-sequential attr-multi-vs-map)))))
 
 (defn- batch-request-items
   "Implementation detail.
@@ -1194,7 +1194,9 @@
                              (batch-get-item-request return-cc? raw-req))))]
       (merge-more run1 span-reqs (run1 (batch-request-items requests))))))
 
-(defn- write-request [action item] "Implementation detail."
+(defn- write-request
+  "Implementation detail."
+  [action item]
   (case action
     :put    (doto (WriteRequest.) (.setPutRequest    (doto (PutRequest.)    (.setItem item))))
     :delete (doto (WriteRequest.) (.setDeleteRequest (doto (DeleteRequest.) (.setKey  item))))))
@@ -1348,7 +1350,6 @@
     return-cc?       (.setReturnConsumedCapacity (utils/enum :total))))
 
 (defn transact-get-items
-  [client-opts raw-req]
   "Transactionally fetches requested items by primary key
 
   e.g.
@@ -1359,6 +1360,7 @@
                                    {:table-name ttable
                                    :prim-kvs {:id 306}}]})
   returns {:items [<item>] :cc-units {<table> <consumed-capacity>}}"
+  [client-opts raw-req]
 
 
   (as-map
