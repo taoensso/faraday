@@ -12,7 +12,7 @@
 
   :dependencies
   [[org.clojure/clojure "1.5.1"]
-   [com.taoensso/encore "2.127.0"]
+   [com.taoensso/encore "2.127.0" :exclusions [org.clojure/tools.reader]]
    [com.taoensso/nippy  "2.15.3"]
    [joda-time           "2.10.10"]
    [commons-logging     "1.2"]
