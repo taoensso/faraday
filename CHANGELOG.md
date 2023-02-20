@@ -1,5 +1,15 @@
 **Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
 
+## v1.12.0 / 2023 Feb 20
+
+```clojure
+[com.taoensso/faraday "1.12.0"]
+```
+
+* **BREAKING**: Drop support for Clojure 1.5 and 1.6 - Clojure 1.7+ now required.
+* **Change** `clj-item->db-item` no longer captures serialize function when namespace is loaded (`extend-protocol` can now be used to change serialize behaviour at any time).
+* **Change**: Upgrade dependencies, including upgrade to com.amazonaws/aws-java-sdk-dynamodb 1.12.410.
+
 ## v1.11.4 / 2021 Dec 10
 
 ```clojure
