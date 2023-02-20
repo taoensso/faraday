@@ -12,11 +12,11 @@
 
   :dependencies
   [[org.clojure/clojure "1.7.0"]
-   [com.taoensso/encore "3.24.0" :exclusions [org.clojure/tools.reader]]
+   [com.taoensso/encore "3.34.0" :exclusions [org.clojure/tools.reader]]
    [com.taoensso/nippy  "3.2.0"]
-   [joda-time           "2.10.14"]
+   [joda-time           "2.12.2"]
    [commons-logging     "1.2"]
-   [com.amazonaws/aws-java-sdk-dynamodb "1.12.263"
+   [com.amazonaws/aws-java-sdk-dynamodb "1.12.410"
     :exclusions [joda-time commons-logging]]]
 
   :profiles
@@ -27,11 +27,10 @@
    :1.10 {:dependencies [[org.clojure/clojure "1.10.3"]]}
    :dev
    [:1.10 :server-jvm
-    {:dependencies [[org.testcontainers/testcontainers "1.17.3" :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
+    {:dependencies [[org.testcontainers/testcontainers "1.17.6" :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
                     [org.slf4j/slf4j-simple "1.7.36"]]
-     :plugins [[lein-ancient "0.6.14"]
-               [lein-codox   "0.10.6"]]}]}
-
+     :plugins [[lein-ancient "0.7.0"]
+               [lein-codox   "0.10.8"]]}]}
   :test-paths ["test" "src"]
 
   :codox
