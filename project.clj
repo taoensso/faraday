@@ -8,7 +8,7 @@
    :url  "https://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies
-  [[com.taoensso/encore "3.34.0" :exclusions [org.clojure/tools.reader]]
+  [[com.taoensso/encore "3.62.1"]
    [com.taoensso/nippy  "3.2.0"]
    [joda-time           "2.12.2"]
    [commons-logging     "1.2"]
