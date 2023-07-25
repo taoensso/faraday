@@ -124,9 +124,7 @@
            (taoensso.nippy.tools WrappedForFreezing)
            (java.util Map Set ArrayList HashMap)))
 
-(if (vector? taoensso.encore/encore-version)
-  (enc/assert-min-encore-version [2 67 2])
-  (enc/assert-min-encore-version  2.67))
+(enc/assert-min-encore-version [3 34 0])
 
 ;;;; Connections
 
