@@ -1,4 +1,4 @@
-**Note:** This project uses [Break Versioning](https://github.com/ptaoussanis/encore/blob/master/BREAK-VERSIONING.md)
+This project uses Break Versioning (https://www.taoensso.com/break-versioning)
 
 ## v1.12.0 / 2023 Feb 20
 
