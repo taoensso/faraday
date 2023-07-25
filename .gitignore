@@ -12,8 +12,6 @@ pom.xml*
 /target/
 /checkouts/
 /logs/
-/docs/
-/doc/
 local-dynamo/
 .clj-kondo/.cache
 .#*
