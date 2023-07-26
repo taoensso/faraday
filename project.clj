@@ -1,7 +1,7 @@
 (defproject com.taoensso/faraday "1.12.1-SNAPSHOT"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Amazon DynamoDB client for Clojure"
-  :url "https://github.com/ptaoussanis/faraday"
+  :url "https://github.com/taoensso/faraday"
 
   :license
   {:name "Eclipse Public License - v 1.0"
