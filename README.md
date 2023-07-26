@@ -1,8 +1,13 @@
-# Faraday, the Clojure DynamoDB client [![Build Status](https://github.com/Taoensso/faraday/actions/workflows/ci.yml/badge.svg)](https://github.com/Taoensso/faraday/actions/workflows/ci.yml)
+# Faraday
 
-* [API Docs](http://taoensso.github.io/faraday/)
+#### Amazon DynamoDB client for Clojure
+
+* API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
 * Leiningen: `[com.taoensso/faraday "1.12.0"]`
 * deps.edn: `com.taoensso/faraday {:mvn/version "1.12.0"}`
+
+[![Main tests][Main tests SVG]][Main tests URL]
+[![Graal tests][Graal tests SVG]][Graal tests URL]
 
 DynamoDB makes a great companion for Clojure apps that need a **simple, reliable way to persist data, that scales with predictable performance**. Faraday is a small, fast and intuitive DynamoDB client library for Clojure, built around the AWS Java SDK and originally adapted from [Rotary](https://github.com/weavejester/rotary) by James Reeves.
 
@@ -147,6 +152,21 @@ Please see GitHub issues for bugs, ideas, etc. **Pull requests welcome**. For a 
 
 ## License
 
-Distributed under the [EPL v1.0](https://raw.githubusercontent.com/ptaoussanis/faraday/master/LICENSE) (same as Clojure).
+Copyright &copy; 2013-2023 [Peter Taoussanis][] and contributors, licensed under [EPL 1.0][] (same as Clojure).
 
-Copyright &copy; 2013-2021 [Peter Taoussanis](https://www.taoensso.com/) and contributors.
+<!--- Common links -->
+[EPL 1.0]: LICENSE
+[Peter Taoussanis]: https://www.taoensso.com
+
+<!--- Project links -->
+[Taoensso docs]: https://www.taoensso.com/faraday
+[Codox docs]: http://taoensso.github.io/faraday/
+[clj-doc docs]: https://cljdoc.org/d/com.taoensso/faraday/
+
+[Clojars SVG]: https://img.shields.io/clojars/v/com.taoensso/faraday.svg
+[Clojars URL]: https://clojars.org/com.taoensso/faraday
+
+[Main tests SVG]: https://github.com/taoensso/faraday/actions/workflows/main-tests.yml/badge.svg
+[Main tests URL]: https://github.com/taoensso/faraday/actions/workflows/main-tests.yml
+[Graal tests SVG]: https://github.com/taoensso/faraday/actions/workflows/graal-tests.yml/badge.svg
+[Graal tests URL]: https://github.com/taoensso/faraday/actions/workflows/graal-tests.yml
