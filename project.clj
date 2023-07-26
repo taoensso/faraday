@@ -29,6 +29,13 @@
      *assert*             true
      *unchecked-math*     false #_:warn-on-boxed}}
 
+   :graal-tests
+   {:dependencies [[org.clojure/clojure "1.11.1"]
+                   [com.github.clj-easy/graal-build-time "0.1.4"]]
+    :main taoensso.graal-tests
+    :aot [taoensso.graal-tests]
+    :uberjar-name "graal-tests.jar"}
+
    :dev
    [:c1.11 :test
     {:jvm-opts ["-server"]
