@@ -8,11 +8,11 @@
    :url  "https://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies
-  [[com.taoensso/encore "3.62.1"]
+  [[com.taoensso/encore "3.63.0"]
    [com.taoensso/nippy  "3.2.0"]
-   [joda-time           "2.12.2"]
+   [joda-time           "2.12.5"]
    [commons-logging     "1.2"]
-   [com.amazonaws/aws-java-sdk-dynamodb "1.12.410"
+   [com.amazonaws/aws-java-sdk-dynamodb "1.12.523"
     :exclusions [joda-time commons-logging]]]
 
   :profiles
@@ -40,7 +40,7 @@
    [:c1.11 :test
     {:jvm-opts ["-server"]
      :dependencies
-     [[org.testcontainers/testcontainers "1.17.6"
+     [[org.testcontainers/testcontainers "1.18.3"
        :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
       [org.slf4j/slf4j-simple "1.7.36"]]
 

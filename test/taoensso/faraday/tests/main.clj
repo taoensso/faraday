@@ -24,14 +24,14 @@
 ;;;; Config & setup
 
 (def ^:dynamic *client-opts*
-  {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "")
-   :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "")
+  {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "test")
+   :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "test")
    :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")})
 
 (defn- dynamodb-local
   [t]
   (let [dynamodb-port 8000
-        container (doto (GenericContainer. "amazon/dynamodb-local:1.16.0")
+        container (doto (GenericContainer. "amazon/dynamodb-local:2.0.0")
                     (.addExposedPort (int dynamodb-port))
                     (.start))
         local-port (.getMappedPort container dynamodb-port)]
