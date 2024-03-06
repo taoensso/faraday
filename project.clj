@@ -1,7 +1,7 @@
 (defproject com.taoensso/faraday "1.12.1-SNAPSHOT"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Amazon DynamoDB client for Clojure"
-  :url "https://github.com/taoensso/faraday"
+  :url "https://www.taoensso.com/faraday"
 
   :license
   {:name "Eclipse Public License - v 1.0"
@@ -15,6 +15,8 @@
    [com.amazonaws/aws-java-sdk-dynamodb "1.12.581"
     :exclusions [joda-time commons-logging]]]
 
+  :test-paths ["test" #_"src"]
+
   :profiles
   {;; :default [:base :system :user :provided :dev]
    :provided {:dependencies [[org.clojure/clojure "1.11.1"]]}
@@ -22,38 +24,36 @@
    :c1.10    {:dependencies [[org.clojure/clojure "1.10.3"]]}
    :c1.9     {:dependencies [[org.clojure/clojure "1.9.0"]]}
 
-   :test
-   {:jvm-opts ["-Dtaoensso.elide-deprecated=true"]
+   :graal-tests
+   {:source-paths ["test"]
+    :main taoensso.graal-tests
+    :aot [taoensso.graal-tests]
+    :uberjar-name "graal-tests.jar"
+    :dependencies
+    [[org.clojure/clojure                  "1.11.1"]
+     [com.github.clj-easy/graal-build-time "1.0.5"]]}
+
+   :dev
+   {:jvm-opts ["-server" "-Dtaoensso.elide-deprecated=true"]
+
     :global-vars
     {*warn-on-reflection* true
      *assert*             true
-     *unchecked-math*     false #_:warn-on-boxed}}
+     *unchecked-math*     false #_:warn-on-boxed}
 
-   :graal-tests
-   {:dependencies [[org.clojure/clojure "1.11.1"]
-                   [com.github.clj-easy/graal-build-time "0.1.4"]]
-    :main taoensso.graal-tests
-    :aot [taoensso.graal-tests]
-    :uberjar-name "graal-tests.jar"}
+    :dependencies
+    [[org.testcontainers/testcontainers "1.19.1"
+      :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
+     [org.slf4j/slf4j-simple "1.7.36"]]
 
-   :dev
-   [:c1.11 :test
-    {:jvm-opts ["-server"]
-     :dependencies
-     [[org.testcontainers/testcontainers "1.19.1"
-       :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
-      [org.slf4j/slf4j-simple "1.7.36"]]
+    :plugins
+    [[lein-pprint  "1.3.2"]
+     [lein-ancient "0.7.0"]
+     [com.taoensso.forks/lein-codox "0.10.11"]]
 
-     :plugins
-     [[lein-pprint  "1.3.2"]
-      [lein-ancient "0.7.0"]
-      [com.taoensso.forks/lein-codox "0.10.10"]]
-
-     :codox
-     {:language #{:clojure #_:clojurescript}
-      :base-language :clojure}}]}
-
-  :test-paths ["test" #_"src"]
+    :codox
+    {:language #{:clojure #_:clojurescript}
+     :base-language :clojure}}}
 
   :aliases
   {"start-dev"     ["with-profile" "+dev" "repl" ":headless"]
