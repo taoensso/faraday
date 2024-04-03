@@ -1,12 +1,12 @@
 This project uses Break Versioning (https://www.taoensso.com/break-versioning)
 
-## v1.12.1 / 2024 Apr 02
+## v1.12.2 / 2024 Apr 3
 
 ```clojure
-[com.taoensso/faraday "1.12.1"]
+[com.taoensso/faraday "1.12.2"]
 ```
 
-* **Change**: Upgrade dependencies, including upgrade to com.amazonaws/aws-java-sdk-dynamodb 1.12.581 to eliminate software.amazon.ion:ion-java@1.0.2 from transitive dependencies (see [CVE-2024-21634](https://nvd.nist.gov/vuln/detail/CVE-2024-21634) and [#169](https://github.com/Taoensso/faraday/issues/169)).
+* **Change**: Upgrade dependencies, including upgrade to com.amazonaws/aws-java-sdk-dynamodb 1.12.693 to eliminate software.amazon.ion:ion-java@1.0.2 from transitive dependencies (see [CVE-2024-21634](https://nvd.nist.gov/vuln/detail/CVE-2024-21634) and [#169](https://github.com/Taoensso/faraday/issues/169)).
 
 ## v1.12.0 / 2023 Feb 20
 
