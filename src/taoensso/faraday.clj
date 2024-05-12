@@ -836,13 +836,14 @@
   [table table-desc {:keys [throughput gsindexes stream-spec billing-mode] :as params}]
   (assert (not (and throughput
                (= :pay-per-request billing-mode))) "Can't specify :throughput and :pay-per-request billing-mode")
-  (let [attr-defs (keydefs nil nil nil [gsindexes])]
+  (let [gsindexes (cond-> gsindexes (map? gsindexes) vector)
+        attr-defs (keydefs nil nil nil gsindexes)]
     (doto-cond
       [_ (UpdateTableRequest.)]
       :always (.setTableName (name table))
       throughput (.setProvisionedThroughput (provisioned-throughput throughput))
       billing-mode (.setBillingMode (utils/enum billing-mode))
-      gsindexes (.setGlobalSecondaryIndexUpdates [(global-2nd-index-updates table-desc gsindexes)])
+      gsindexes (.setGlobalSecondaryIndexUpdates (mapv (partial global-2nd-index-updates table-desc) gsindexes))
       stream-spec (.setStreamSpecification (stream-specification stream-spec))
       (seq attr-defs) (.setAttributeDefinitions attr-defs))))
 

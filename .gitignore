@@ -15,3 +15,5 @@ pom.xml*
 local-dynamo/
 .clj-kondo/.cache
 .#*
+.idea
+*.iml

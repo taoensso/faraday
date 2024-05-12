@@ -1070,18 +1070,16 @@
                                               }})
       ;; We need to wait until the index is created before updating it, or the call will fail
       _ @(index-status-watch *client-opts* temp-table :gsindexes "genre-index")
-      inc-idx @(far/update-table *client-opts* temp-table
-                                 {:gsindexes {:operation :update
-                                              :name "genre-index"
-                                              :throughput {:read 6 :write 6}
-                                              }})
-      ;; We can create a second index right after
-      amt-idx @(far/update-table *client-opts* temp-table
-                                 {:gsindexes {:operation :create
-                                              :name "amount-index"
-                                              :hash-keydef [:amount :n]
-                                              :throughput {:read 1 :write 1}
-                                              }})
+      inc-and-amt-idxs @(far/update-table *client-opts* temp-table
+                                 {:gsindexes [{:operation :update
+                                               :name "genre-index"
+                                               :throughput {:read 6 :write 6}
+                                               }
+                                              {:operation :create
+                                               :name "amount-index"
+                                               :hash-keydef [:amount :n]
+                                               :throughput {:read 1 :write 1}
+                                               }]})
       ;; Let's wait until amount-index is created before deleting genre-index,
       ;; so that we can consistently evaluate the result (otherwise we might not
       ;; know if size/item-count are 0 or nil.
@@ -1103,14 +1101,6 @@
                 :throughput {:read 4 :write 2 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
               (->> (:gsindexes new-idx) (map #(dissoc % :size :item-count))))))
      (testing "The updated index has the new throughput values, as well as a size and item-count since it was already created"
-       (is (= [{:name :genre-index
-                :size 0
-                :item-count 0
-                :key-schema [{:name :genre :type :hash}]
-                :projection {:projection-type "ALL" :non-key-attributes nil}
-                :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
-              (:gsindexes inc-idx))))
-     (testing "The second index created comes back"
        (is (= #{{:name :amount-index
                  :key-schema [{:name :amount :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
@@ -1119,7 +1109,7 @@
                  :key-schema [{:name :genre :type :hash}]
                  :projection {:projection-type "ALL" :non-key-attributes nil}
                  :throughput {:read 6 :write 6 :last-decrease nil :last-increase nil :num-decreases-today nil}}}
-              (set (->> (:gsindexes amt-idx) (map #(dissoc % :size :item-count)))))))
+              (set (->> (:gsindexes inc-and-amt-idxs) (map #(dissoc % :size :item-count)))))))
      (testing "When we request that the genre index be deleted, it returns that it's being destroyed"
        (is (= #{{:name :amount-index
                  :key-schema [{:name :amount :type :hash}]
