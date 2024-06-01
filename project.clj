@@ -1,4 +1,4 @@
-(defproject com.taoensso/faraday "1.12.3-SNAPSHOT"
+(defproject com.taoensso/faraday "1.12.3"
   :author "Peter Taoussanis <https://www.taoensso.com>"
   :description "Amazon DynamoDB client for Clojure"
   :url "https://www.taoensso.com/faraday"
