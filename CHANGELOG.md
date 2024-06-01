@@ -1,5 +1,14 @@
 This project uses Break Versioning (https://www.taoensso.com/break-versioning)
 
+## v1.12.2 / 2024 Jun 1
+
+```clojure
+[com.taoensso/faraday "1.12.3"]
+```
+
+* **Change**: Allow multiple GSIs to be updated via `update-table` (now matches `create-table`).
+* **Change**: Upgrade Nippy (see [GHSA-vw78-267v-588h](https://github.com/taoensso/nippy/security/advisories/GHSA-vw78-267v-588h) and [CVE-2024-36114](https://nvd.nist.gov/vuln/detail/CVE-2024-36114)).
+
 ## v1.12.2 / 2024 Apr 3
 
 ```clojure

@@ -3,8 +3,8 @@
 #### Amazon DynamoDB client for Clojure
 
 * API reference: [Codox][Codox docs], [clj-doc][clj-doc docs]
-* Leiningen: `[com.taoensso/faraday "1.12.2"]`
-* deps.edn: `com.taoensso/faraday {:mvn/version "1.12.2"}`
+* Leiningen: `[com.taoensso/faraday "1.12.3"]`
+* deps.edn: `com.taoensso/faraday {:mvn/version "1.12.3"}`
 
 [![Main tests][Main tests SVG]][Main tests URL]
 [![Graal tests][Graal tests SVG]][Graal tests URL]
