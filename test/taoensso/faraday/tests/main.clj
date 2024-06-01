@@ -201,6 +201,102 @@
                                 :return #{:id}})
                      set count)])))))
 
+(deftest scan
+  (let [num-items 50]
+    (doseq [batch (partition 25 (range num-items))]
+      (far/batch-write-item *client-opts*
+                            {bulk-table {:delete (map (fn [i] {:group "group" :id i}) batch)}}))
+
+    (let [long-text (apply str (repeatedly 300000 (constantly "n")))]
+      (doseq [i (range num-items)]
+        (far/put-item *client-opts* bulk-table {:group "group"
+                                                :id i
+                                                :text long-text})))
+
+    (testing "scan returns the first page"
+      (is (= 4 (-> (far/scan *client-opts*
+                             bulk-table
+                             {:consistent? true
+                              :return #{:id}})
+                   set count))))
+
+    (testing "scan returns the first and second page"
+      (is (= 8 (-> (far/scan *client-opts*
+                             bulk-table
+                             {:consistent? true
+                              :span-reqs {:max 2}
+                              :return #{:id}})
+                   set count))))))
+
+(deftest scan-lazy-seq
+  (let [num-items 50]
+
+    (doseq [batch (partition 25 (range num-items))]
+      (far/batch-write-item *client-opts*
+                            {bulk-table {:delete (map (fn [i] {:group "group" :id i}) batch)}}))
+
+    (let [long-text (apply str (repeatedly 300000 (constantly "n")))]
+      (doseq [i (range num-items)]
+        (far/put-item *client-opts* bulk-table {:group "group"
+                                                :id i
+                                                :text long-text})))
+
+    (testing "scan-lazy-seq returns all items"
+      (is (= (set (for [i (range num-items)] {:id i}))
+             (set (far/scan-lazy-seq *client-opts*
+                                     bulk-table
+                                     {:consistent? true
+                                      :return #{:id}})))))
+
+    (testing "scan-lazy-seq returns at most :limit items"
+      (is (= 35
+             (count (far/scan-lazy-seq *client-opts*
+                                       bulk-table
+                                       {:consistent? true
+                                        :limit 35
+                                        :return #{:id}})))))
+
+    (testing "scan-lazy-seq can skip items"
+      (is (= (set (for [i (range 10 num-items)] {:id i}))
+             (set (far/scan-lazy-seq *client-opts*
+                                     bulk-table
+                                     {:consistent? true
+                                      :last-prim-kvs {:id 9 :group "group"}
+                                      :return #{:id}})))))
+
+    (testing "scan-lazy-seq is not eager"
+      (let [clientfn (fn [counter]
+                       (doto (proxy [AmazonDynamoDBClient] [(BasicAWSCredentials. (:access-key *client-opts*)
+                                                                                  (:secret-key *client-opts*))]
+                               (scan [scan-request]
+                                 (swap! counter inc)
+                                 (proxy-super scan scan-request)))
+                         (.setEndpoint (:endpoint *client-opts*))))]
+
+        ;; unconsumed seq
+        (let [calls (atom 0)]
+          (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
+                             bulk-table
+                             {:consistent? true
+                              :return #{:id}})
+          (is (= 0 @calls)))
+
+        ;; one 'page' of data, since pages contain 4 items
+        (let [calls (atom 0)]
+          (doall (take 3 (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
+                                            bulk-table
+                                            {:consistent? true
+                                             :return #{:id}})))
+          (is (= 1 @calls)))
+
+        ;; two 'pages' of data, since pages contain 4 items
+        (let [calls (atom 0)]
+          (doall (take 6 (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
+                                            bulk-table
+                                            {:consistent? true
+                                             :return #{:id}})))
+          (is (= 2 @calls)))))))
+
 (deftest updating-items
   (let [i {:id 10 :name "update me"}]
     (far/delete-item *client-opts* ttable {:id 10})

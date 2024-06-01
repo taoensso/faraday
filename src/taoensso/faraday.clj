@@ -1533,6 +1533,26 @@
         result (merge-more run1 span-reqs (run1 last-prim-kvs))]
     (with-meta (get result table) (meta result))))
 
+(defn scan-lazy-seq
+  "Returns a lazy sequence of items from table. Requests are stitched together to
+  produce a continuous sequence, with additional requests occurring only when
+  needed.
+
+  See scan for supported options. :span-reqs is ignored."
+  [client-opts table {:keys [limit] :as opts}]
+  (lazy-seq
+   (let [result (scan client-opts table (assoc opts :span-reqs {:max 0}))
+         {:keys [last-prim-kvs]} (meta result)
+         result-seq (if last-prim-kvs
+                      (lazy-cat result
+                                (scan-lazy-seq client-opts table (-> opts
+                                                                     (assoc :last-prim-kvs last-prim-kvs)
+                                                                     (dissoc :limit))))
+                      result)]
+     (if limit
+       (take limit result-seq)
+       result-seq))))
+
 (defn scan-parallel
   "Like `scan` but starts a number of worker threads and automatically handles
   parallel scan options (:total-segments and :segment). Returns a vector of
