@@ -725,7 +725,7 @@
 
 
 (deftest serialization
-  (let [data nippy/stress-data-comparable]
+  (let [data (nippy/stress-data {:comparable? true})]
     (is (= {:id 10 :nippy-data data}
            (do (far/put-item *client-opts* ttable {:id 10 :nippy-data (far/freeze data)})
                (far/get-item *client-opts* ttable {:id 10}))))))

@@ -8,8 +8,8 @@
    :url  "https://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies
-  [[com.taoensso/encore "3.73.0"]
-   [com.taoensso/nippy  "3.3.0"]
+  [[com.taoensso/encore "3.112.0"]
+   [com.taoensso/nippy  "3.4.2"]
    [joda-time           "2.12.5"]
    [commons-logging     "1.2"]
    [com.amazonaws/aws-java-sdk-dynamodb "1.12.693"
