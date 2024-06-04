@@ -26,12 +26,17 @@
             Condition
             ConsumedCapacity
             ComparisonOperator
+            ContinuousBackupsDescription
             CreateGlobalSecondaryIndexAction
             CreateTableRequest
+            UpdateContinuousBackupsRequest
+            UpdateContinuousBackupsResult
             CreateTableResult
             DeleteItemRequest
             DeleteItemResult
             DeleteRequest
+            DescribeContinuousBackupsRequest
+            DescribeContinuousBackupsResult
             DescribeStreamRequest
             DescribeStreamResult
             DeleteTableRequest
@@ -55,6 +60,7 @@
             GlobalSecondaryIndex
             GlobalSecondaryIndexDescription
             GlobalSecondaryIndexUpdate
+            PointInTimeRecoverySpecification
             Projection
             ProvisionedThroughput
             ProvisionedThroughputDescription
@@ -412,7 +418,7 @@
 
   QueryResult         (as-map [r] (am-query|scan-result r))
   ScanResult          (as-map [r] (am-query|scan-result r
-                                    {:scanned-count (.getScannedCount r)}))
+                                                        {:scanned-count (.getScannedCount r)}))
 
   BatchGetItemResult
   (as-map [r]
@@ -453,16 +459,22 @@
      (let [schema (as-map (.getKeySchema d))
            defs   (as-map (.getAttributeDefinitions d))]
        (merge-with merge
-         (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
-                    {} schema)
-         (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
-                    {} defs)))})
+                   (reduce-kv (fn [m k v] (assoc m (:name v) {:key-type  (:type v)}))
+                              {} schema)
+                   (reduce-kv (fn [m k v] (assoc m (:name v) {:data-type (:type v)}))
+                              {} defs)))})
 
   DescribeTableResult (as-map [r] (as-map (.getTable r)))
   CreateTableResult   (as-map [r] (as-map (.getTableDescription r)))
   UpdateTableResult   (as-map [r] (as-map (.getTableDescription r)))
   DeleteTableResult   (as-map [r] (as-map (.getTableDescription r)))
 
+  ContinuousBackupsDescription
+  (as-map [d] {:status (.getContinuousBackupsStatus d)})
+
+  DescribeContinuousBackupsResult (as-map [r] (as-map (.getContinuousBackupsDescription r)))
+  UpdateContinuousBackupsResult (as-map [r] (as-map (.getContinuousBackupsDescription r)))
+  
   Projection
   (as-map [p]
     {:projection-type    (.getProjectionType p)
@@ -1731,3 +1743,32 @@
             (if (sequential? x) [] (empty x)) x))
 
         :else x))))
+
+(defn- point-in-time-recovery-specification [{:keys [enable-recovery?]}]
+  (doto (PointInTimeRecoverySpecification.)
+    (.setPointInTimeRecoveryEnabled enable-recovery?)))
+
+(defn- update-continuous-backups-request
+  ^UpdateContinuousBackupsRequest [table-name opts]
+  (doto (UpdateContinuousBackupsRequest.)
+    (.setTableName (name table-name))
+    (.setPointInTimeRecoverySpecification
+     (point-in-time-recovery-specification opts))))
+
+(defn update-continuous-backups
+  "Updates Continuous Backups on a table with options:
+    :enable-recovery?  - <#{true false}>"
+  [client-opts table-name opts]
+  (as-map (.updateContinuousBackups (db-client client-opts)
+                                    (update-continuous-backups-request table-name opts))))
+
+(defn- describe-continuous-backups-request
+  ^DescribeContinuousBackupsRequest [table-name]
+  (doto (DescribeContinuousBackupsRequest.) (.setTableName (name table-name))))
+
+(defn describe-continuous-backups
+  " Checks the status of continuous backups and point in time recovery on the specified table. Returns a map of DescribeContinuousBackupsResult"
+  [client-opts table-name]
+  (try (as-map (.describeContinuousBackups (db-client client-opts)
+                                           (describe-continuous-backups-request table-name)))
+       (catch ResourceNotFoundException _ nil)))

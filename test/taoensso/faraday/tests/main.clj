@@ -1225,6 +1225,14 @@
                 :throughput {:read 1 :write 1 :last-decrease nil :last-increase nil :num-decreases-today nil}}]
               (:gsindexes fin-idx)))))))
 
+(deftest point-in-time-recovery
+  (testing "Describe Point-in-Time Recovery and Backups Before Update"
+    (is (= {:status "DISABLED"} (far/describe-continuous-backups *client-opts* ttable))))
+  (testing "Update Point-in-Time Recovery and Backups"
+    (is (= {:status "ENABLED"} (far/update-continuous-backups *client-opts* ttable {:enable-recovery? true}))))
+  (testing "Describe Point-in-Time Recovery and Backups After Update"
+    (is (= {:status "ENABLED"} (far/describe-continuous-backups *client-opts* ttable)))))
+
 (deftest querying-indexes
   (testing "We can scan with an index, and do projections"
     (do-with-temp-table
