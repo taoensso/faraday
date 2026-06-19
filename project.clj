@@ -10,19 +10,16 @@
   :dependencies
   [[com.taoensso/encore "3.112.0"]
    [com.taoensso/nippy  "3.4.2"]
-   [joda-time           "2.12.5"]
-   [commons-logging     "1.2"]
-   [com.amazonaws/aws-java-sdk-dynamodb "1.12.693"
-    :exclusions [joda-time commons-logging]]]
+   [software.amazon.awssdk/dynamodb "2.31.59"]]
 
   :test-paths ["test" #_"src"]
 
   :profiles
   {;; :default [:base :system :user :provided :dev]
-   :provided {:dependencies [[org.clojure/clojure "1.11.1"]]}
+   :provided {:dependencies [[org.clojure/clojure "1.12.0"]]}
+   :c1.12    {:dependencies [[org.clojure/clojure "1.12.0"]]}
    :c1.11    {:dependencies [[org.clojure/clojure "1.11.1"]]}
    :c1.10    {:dependencies [[org.clojure/clojure "1.10.3"]]}
-   :c1.9     {:dependencies [[org.clojure/clojure "1.9.0"]]}
 
    :graal-tests
    {:source-paths ["test"]
@@ -42,8 +39,7 @@
      *unchecked-math*     false #_:warn-on-boxed}
 
     :dependencies
-    [[org.testcontainers/testcontainers "1.19.1"
-      :exclusions [com.fasterxml.jackson.core/jackson-annotations]]
+    [[org.testcontainers/testcontainers "1.19.1"]
      [org.slf4j/slf4j-simple "1.7.36"]]
 
     :plugins
@@ -60,7 +56,7 @@
    ;; "build-once" ["do" ["clean"] ["cljsbuild" "once"]]
    "deploy-lib"    ["do" #_["build-once"] ["deploy" "clojars"] ["install"]]
 
-   "test-clj"     ["with-profile" "+c1.11:+c1.10:+c1.9" "test"]
+   "test-clj"     ["with-profile" "+c1.12:+c1.11:+c1.10" "test"]
    ;; "test-cljs" ["with-profile" "+test" "cljsbuild"   "test"]
    "test-all"     ["do" ["clean"] ["test-clj"] #_["test-cljs"]]}
 

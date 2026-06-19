@@ -24,7 +24,7 @@ Add Faraday as a dependency to your project and import faraday into your namespa
 
 ```clojure
 (ns my-ns
- (:require [taoensso.faraday :as far]))
+ (:require [taoensso.faraday2 :as far]))
 ```
 
 ### Preparing a database
@@ -124,6 +124,16 @@ Most of this stuff is controlled through optional arguments and is pretty easy t
 
 You can also check out the [official AWS DynamoDB documentation](http://aws.amazon.com/documentation/dynamodb/), though there's a lot of Java-land complexity that you won't need to deal with when using Faraday. The most useful single doc is probably on the [DynamoDB data model](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DataModel.html) and the [DynamoDB Best Practices](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html).
 
+## Upgrading to Faraday 2
+
+Faraday 1.x is dependent on v1 of the AWS Java SDK which will reach end-of-support on 2025-12-31. Consider the following breaking changes when upgrading:
+
+ * The whole API has moved to the `faraday2` namespace
+ * Client configuration/credentials must be replaced with config suitable for the underlying aws-api (see [connecting](#connecting))
+ * Any handling of exceptions from the v1 SDK must be replaced with new v2 equivalents (e.g. `com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException` -> `software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException`), though use of `taoensso.faraday/ex` can simply be replaced with `taoensso.faraday2/ex`
+ * The `:protocol` setting is [no longer supported](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/client-configuration.html#client-config-other-diffs) and should be specified in the scheme of `:endpoint-override`. It is still used, however, when proxying a connection with `:proxy-host` and `:proxy-port`
+ * Clojure 1.9 is no longer supported as it fails to invoke static methods of interfaces
+
 ## Development
 
 This project uses [Testcontainers](https://www.testcontainers.org/) to manage starting and stopping a local DynamoDB instance in docker.
@@ -137,7 +147,7 @@ lein test
 Or run tests from a REPL like:
 
 ```clj
-taoensso.faraday.tests.main> (clojure.test/run-tests)
+taoensso.faraday2.tests.main> (clojure.test/run-tests)
 ```
 
 To run the entire test suite against all supported versions of Clojure, use:

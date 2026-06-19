@@ -24,3 +24,48 @@
 - [ ] Global tables
 - [ ] Triggers
 - [ ] Tags
+
+## AWS SDK 2 migration
+
+- [x] Client/credentials
+- [ ] Non-blocking operations support
+- [x] Readme documentation
+
+### Migrate faraday 1 api
+
+- [x] query
+- [x] update-ttl
+- [x] ensure-table
+- [x] batch-write-item
+- [x] transact-write-items
+- [x] clj-item->db-item
+- [x] describe-ttl
+- [x] serialize
+- [x] get-stream-records
+- [x] create-table
+- [x] scan-parallel
+- [x] batch-get-item
+- [x] freeze
+- [x] update-table
+- [x] get-item
+- [x] without-attr-multi-vs
+- [x] with-attr-multi-vs
+- [x] transact-get-items
+- [x] update-item
+- [x] put-item
+- [x] items-by-attrs
+- [x] delete-item
+- [x] *attr-multi-vs?*
+- [x] scan-lazy-seq
+- [x] delete-table
+- [x] describe-table
+- [x] ensure-ttl
+- [x] list-streams
+- [x] list-tables
+- [x] shard-iterator
+- [x] describe-stream
+- [x] ex
+- [x] db-item->clj-item
+- [x] with-thaw-opts
+- [x] scan
+- [x] remove-empty-attr-vals

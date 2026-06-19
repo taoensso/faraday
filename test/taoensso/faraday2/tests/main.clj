@@ -1,18 +1,12 @@
-(ns taoensso.faraday.tests.main
-  (:require
-   [clojure.test :refer [deftest is testing use-fixtures]]
-   [taoensso.encore :as encore]
-   [taoensso.faraday :as far]
-   [taoensso.nippy :as nippy])
-
-  (:import
-   [com.amazonaws.auth BasicAWSCredentials]
-   [com.amazonaws.internal StaticCredentialsProvider]
-   [com.amazonaws.services.dynamodbv2 AmazonDynamoDBClient AmazonDynamoDBStreamsClient]
-   [com.amazonaws.services.dynamodbv2.model ConditionalCheckFailedException TransactionCanceledException]
-   [com.amazonaws AmazonServiceException]
-   [java.util Date]
-   [org.testcontainers.containers GenericContainer]))
+(ns taoensso.faraday2.tests.main
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [taoensso.encore :as encore]
+            [taoensso.faraday2 :as far]
+            [taoensso.nippy :as nippy])
+  (:import [java.util Date]
+           [org.testcontainers.containers GenericContainer]
+           [software.amazon.awssdk.auth.credentials AwsBasicCredentials StaticCredentialsProvider]
+           [software.amazon.awssdk.services.dynamodb.model ConditionalCheckFailedException DynamoDbException TransactionCanceledException]))
 
 (defmethod clojure.test/report :begin-test-var [m]
   (println "\u001B[32mTesting" (-> m :var meta :name) "\u001B[0m"))
@@ -26,7 +20,8 @@
 (def ^:dynamic *client-opts*
   {:access-key (or (get (System/getenv) "AWS_DYNAMODB_ACCESS_KEY") "test")
    :secret-key (or (get (System/getenv) "AWS_DYNAMODB_SECRET_KEY") "test")
-   :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")})
+   :endpoint (or (get (System/getenv) "AWS_DYNAMODB_ENDPOINT") "http://localhost:6798")
+   :region "local"})
 
 (defn- dynamodb-local
   [t]
@@ -85,10 +80,10 @@
 (deftest client-creation
   (is (#'far/db-client (assoc *client-opts* :region "us-east-1")))
   (is (#'far/db-client (assoc *client-opts* :endpoint "http://localhost:6798")))
-  (is (#'far/db-client (assoc *client-opts* :protocol "HTTP")))
-  (is (#'far/db-client (assoc *client-opts* :protocol "HTTPS")))
+  (is (#'far/db-client (assoc *client-opts* :protocol "HTTP" :proxy-host "localhost")))
+  (is (#'far/db-client (assoc *client-opts* :protocol "HTTPS" :proxy-host "localhost")))
   (is (thrown? IllegalArgumentException
-               (#'far/db-client (assoc *client-opts* :protocol "random")))))
+               (#'far/db-client (assoc *client-opts* :protocol "random" :proxy-host "localhost")))))
 
 (deftest basic-api
   (let [i0 {:id 0 :name "foo"}
@@ -265,36 +260,35 @@
                                       :return #{:id}})))))
 
     (testing "scan-lazy-seq is not eager"
-      (let [clientfn (fn [counter]
-                       (doto (proxy [AmazonDynamoDBClient] [(BasicAWSCredentials. (:access-key *client-opts*)
-                                                                                  (:secret-key *client-opts*))]
-                               (scan [scan-request]
-                                 (swap! counter inc)
-                                 (proxy-super scan scan-request)))
-                         (.setEndpoint (:endpoint *client-opts*))))]
+      (let [scan-request @#'far/scan-request
+            instrumented-scan-request-fn (fn [counter]
+                                           #(do (swap! counter inc) (apply scan-request %&)))]
 
         ;; unconsumed seq
         (let [calls (atom 0)]
-          (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
-                             bulk-table
-                             {:consistent? true
-                              :return #{:id}})
+          (with-redefs [far/scan-request (instrumented-scan-request-fn calls)]
+            (far/scan-lazy-seq *client-opts*
+                               bulk-table
+                               {:consistent? true
+                                :return #{:id}}))
           (is (= 0 @calls)))
 
         ;; one 'page' of data, since pages contain 4 items
         (let [calls (atom 0)]
-          (doall (take 3 (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
-                                            bulk-table
-                                            {:consistent? true
-                                             :return #{:id}})))
+          (with-redefs [far/scan-request (instrumented-scan-request-fn calls)]
+            (doall (take 3 (far/scan-lazy-seq *client-opts*
+                                              bulk-table
+                                              {:consistent? true
+                                               :return #{:id}}))))
           (is (= 1 @calls)))
 
         ;; two 'pages' of data, since pages contain 4 items
         (let [calls (atom 0)]
-          (doall (take 6 (far/scan-lazy-seq (assoc *client-opts* :client (clientfn calls))
-                                            bulk-table
-                                            {:consistent? true
-                                             :return #{:id}})))
+          (with-redefs [far/scan-request (instrumented-scan-request-fn calls)]
+            (doall (take 6 (far/scan-lazy-seq *client-opts*
+                                              bulk-table
+                                              {:consistent? true
+                                               :return #{:id}}))))
           (is (= 2 @calls)))))))
 
 (deftest updating-items
@@ -729,7 +723,7 @@
                          :expr-attr-vals {":cnt" 4}}))))
 
     (testing "If we specify a condition that isn't fulfilled, we get an exception when deleting"
-      (is (thrown? AmazonServiceException
+      (is (thrown? ConditionalCheckFailedException
                    (far/delete-item *client-opts* book-table
                                     {:name "Nineteen Eighty-Four"
                                      :author "George Orwell"}
@@ -755,7 +749,7 @@
                          :author "George Orwell"}
                         )))
     (testing "But we can't just embed the value in the condition expression"
-      (is (thrown? AmazonServiceException
+      (is (thrown? DynamoDbException
                    (far/delete-item *client-opts* book-table
                                     {:name "Animal Farm"
                                      :author "George Orwell"}
@@ -853,12 +847,13 @@
     (let [i0 {:id 0 :name "foo"}
           i1 {:id 1 :name "bar"}
           i2 {:id 2 :name "baz"}
-          creds (BasicAWSCredentials. (:access-key *client-opts*)
-                                      (:secret-key *client-opts*))
-          provider (StaticCredentialsProvider. creds)]
+          creds (AwsBasicCredentials/create (:access-key *client-opts*)
+                                            (:secret-key *client-opts*))
+          provider (StaticCredentialsProvider/create creds)]
 
       (binding [*client-opts* {:provider provider
-                               :endpoint endpoint}]
+                               :endpoint endpoint
+                               :region "local"}]
 
         (testing "Batch put"
           (is (= [i0 i1 nil]
@@ -1423,23 +1418,8 @@
      (is (= 2 (-> described :gsindexes count))))))
 
 (deftest custom-client
-  (let [calls (atom 0)
-        client (proxy [AmazonDynamoDBClient] [(BasicAWSCredentials. (:access-key *client-opts*)
-                                                                    (:secret-key *client-opts*))]
-                 (describeTable [describe-table-request]
-                   (swap! calls inc)
-                   (proxy-super describeTable describe-table-request)))]
-    (.setEndpoint client (:endpoint *client-opts*))
-    (far/describe-table (assoc *client-opts* :client client) ttable)
-    (is (= 1 @calls)))
-  (let [calls (atom 0)
-        client (proxy [AmazonDynamoDBStreamsClient] [(BasicAWSCredentials. (:access-key *client-opts*)
-                                                                           (:secret-key *client-opts*))]
-                 (listStreams [list-streams-request]
-                   (swap! calls inc)
-                   (proxy-super listStreams list-streams-request)))]
-    (doall (far/list-streams (assoc *client-opts* :client client) {:table-name ttable}))
-    (is (= 1 @calls))))
+  (is (= "custom" (#'far/db-client (assoc *client-opts* :client "custom"))))
+  (is (= "custom" (#'far/db-streams-client (assoc *client-opts* :client "custom")))))
 
 (deftest attribute-not-exists
   ;;https://github.com/Taoensso/faraday/issues/106

@@ -30,6 +30,7 @@
     (shell (executable bin-dir "gu") "install" "native-image")
     (shell (executable bin-dir "native-image")
       "--features=clj_easy.graal_build_time.InitClojureClasses"
+      "--initialize-at-build-time=org.slf4j.LoggerFactory"
       "--no-fallback" "-jar" "target/graal-tests.jar" "graal_tests")))
 
 (defn run-tests []
